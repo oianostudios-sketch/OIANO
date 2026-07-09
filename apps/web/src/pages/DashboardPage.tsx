@@ -107,18 +107,18 @@ function SessionCountdown({ session }: { session: any }) {
 
   return (
     <div style={{
-      background: '#0f0d08', border: '1px solid #C9A84C33',
+      background: '#0f0d08', border: '1px solid #5A9BCB33',
       borderRadius: 12, padding: '16px 20px', position: 'relative', overflow: 'hidden',
     }}>
       {/* Glow */}
-      <div style={{ position: 'absolute', top: -60, right: -60, width: 200, height: 200, borderRadius: '50%', background: 'radial-gradient(circle, #C9A84C0d 0%, transparent 70%)', pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', top: -60, right: -60, width: 200, height: 200, borderRadius: '50%', background: 'radial-gradient(circle, #5A9BCB0d 0%, transparent 70%)', pointerEvents: 'none' }} />
 
       <div style={{ position: 'relative' }}>
         <p style={{ fontSize: 9, color: '#555', letterSpacing: '0.14em', textTransform: 'uppercase', fontFamily: 'monospace', marginBottom: 8 }}>
           {isPast ? 'Session in progress' : 'Next session'}
         </p>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
-          <span style={{ fontFamily: 'monospace', fontSize: 22, color: '#C9A84C', fontWeight: 700 }}>{label}</span>
+          <span style={{ fontFamily: 'monospace', fontSize: 22, color: '#5A9BCB', fontWeight: 700 }}>{label}</span>
           {!isPast && <span style={{ fontSize: 11, color: '#555' }}>until your session</span>}
         </div>
         <p style={{ fontSize: 12, color: '#e4e4e7', fontWeight: 500, marginBottom: 2 }}>
@@ -129,7 +129,7 @@ function SessionCountdown({ session }: { session: any }) {
         </p>
         {/* Progress bar */}
         <div style={{ marginTop: 12, height: 2, background: '#1e1e1e', borderRadius: 2 }}>
-          <div style={{ height: '100%', width: `${Math.round(progress * 100)}%`, background: 'linear-gradient(90deg, #C9A84C, #E2C97E)', borderRadius: 2, transition: 'width 10s linear' }} />
+          <div style={{ height: '100%', width: `${Math.round(progress * 100)}%`, background: 'linear-gradient(90deg, #5A9BCB, #8BBEDD)', borderRadius: 2, transition: 'width 10s linear' }} />
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 9, color: '#3a3a3a', fontFamily: 'monospace' }}>
           <span>Now</span>
@@ -171,7 +171,7 @@ function StudioBar() {
       display: 'flex', alignItems: 'center', gap: 10,
       padding: '8px 14px', borderRadius: 8,
       background: isLive ? '#120d08' : '#0f0f0f',
-      border: `1px solid ${isLive ? '#C9A84C22' : '#1a1a1a'}`,
+      border: `1px solid ${isLive ? '#5A9BCB22' : '#1a1a1a'}`,
       fontSize: 11, fontFamily: 'monospace',
     }}>
       <span style={{
@@ -181,7 +181,7 @@ function StudioBar() {
         animation: isLive ? 'db-pulse 1s ease-in-out infinite' : 'none',
       }} />
       {isLive ? (
-        <span style={{ color: '#C9A84C' }}>
+        <span style={{ color: '#5A9BCB' }}>
           Studio live · {(activeSession as any)?.artist?.name ?? 'Session in progress'}
         </span>
       ) : next ? (
@@ -354,10 +354,10 @@ export default function DashboardPage() {
 
       {/* Studio announcement bar */}
       {latestAnnouncement && announcementDismissed !== latestAnnouncement.id && (
-        <div style={{ background: 'rgba(201,168,76,0.08)', borderBottom: '1px solid rgba(201,168,76,0.15)', padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ background: 'rgba(90,155,203,0.08)', borderBottom: '1px solid rgba(90,155,203,0.15)', padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 14 }}>📢</span>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: '#C9A84C' }}>{latestAnnouncement.title}</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: '#5A9BCB' }}>{latestAnnouncement.title}</span>
             <span style={{ fontSize: 12, color: '#888', marginLeft: 10 }}>{latestAnnouncement.body}</span>
           </div>
           <button onClick={() => setAnnouncementDismissed(latestAnnouncement.id)}
@@ -377,7 +377,7 @@ export default function DashboardPage() {
             </p>
             <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 32, color: '#e4e4e7', fontWeight: 600, lineHeight: 1.2 }}>
               {greeting()},<br />
-              <span style={{ color: '#C9A84C' }}>{artist?.alias ?? artist?.name ?? user?.email?.split('@')[0]}</span>
+              <span style={{ color: '#5A9BCB' }}>{artist?.alias ?? artist?.name ?? user?.email?.split('@')[0]}</span>
             </h1>
             {(passport as any)?.bio && (
               <p style={{ marginTop: 10, fontSize: 13, color: '#555', maxWidth: 480, lineHeight: 1.6 }}>
@@ -394,7 +394,7 @@ export default function DashboardPage() {
               { label: 'Completed', value: Math.round(cCompleted) },
             ].map((s, i) => (
               <div key={s.label} className="metric-enter" style={{ textAlign: 'right', animationDelay: `${i * 80}ms` }}>
-                <p style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, color: '#C9A84C', fontWeight: 700, lineHeight: 1 }}>
+                <p style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, color: '#5A9BCB', fontWeight: 700, lineHeight: 1 }}>
                   {loadingBookings ? '—' : s.value}
                 </p>
                 <p style={{ fontSize: 10, color: '#3a3a3a', fontFamily: 'monospace', marginTop: 3 }}>{s.label}</p>
@@ -431,7 +431,7 @@ export default function DashboardPage() {
             ) : (
               <div style={{ background: '#111', border: '1px solid #1a1a1a', borderRadius: 12, padding: 24, textAlign: 'center' }}>
                 <p style={{ color: '#444', fontSize: 12 }}>Complete your profile to unlock your passport</p>
-                <button onClick={() => setEditOpen(true)} style={{ marginTop: 12, fontSize: 11, color: '#C9A84C', background: 'none', border: '1px solid #C9A84C30', padding: '6px 14px', borderRadius: 6, cursor: 'pointer' }}>
+                <button onClick={() => setEditOpen(true)} style={{ marginTop: 12, fontSize: 11, color: '#5A9BCB', background: 'none', border: '1px solid #5A9BCB30', padding: '6px 14px', borderRadius: 6, cursor: 'pointer' }}>
                   Set up profile →
                 </button>
               </div>
@@ -439,7 +439,7 @@ export default function DashboardPage() {
 
             {/* Quick actions */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <Link to="/book" style={{ display: 'block', textAlign: 'center', background: '#C9A84C', color: '#000', fontSize: 13, fontWeight: 700, padding: '11px 0', borderRadius: 8, textDecoration: 'none' }}>
+              <Link to="/book" style={{ display: 'block', textAlign: 'center', background: '#5A9BCB', color: '#000', fontSize: 13, fontWeight: 700, padding: '11px 0', borderRadius: 8, textDecoration: 'none' }}>
                 Book a session →
               </Link>
               <div className="db-inner-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -460,7 +460,7 @@ export default function DashboardPage() {
             {/* Profile completion nudge */}
             <div style={{ background: '#0f0f0f', border: '1px solid #1a1200', borderRadius: 10, padding: '14px 16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <p style={{ fontSize: 10, color: '#C9A84C', fontFamily: 'monospace', letterSpacing: '0.1em', margin: 0 }}>PASSPORT STRENGTH</p>
+                <p style={{ fontSize: 10, color: '#5A9BCB', fontFamily: 'monospace', letterSpacing: '0.1em', margin: 0 }}>PASSPORT STRENGTH</p>
                 <span style={{ fontSize: 12, fontWeight: 700, color: profileScore >= 80 ? '#4ade80' : '#C9A84C' }}>{profileScore}%</span>
               </div>
               <div style={{ height: 4, background: '#1a1a1a', borderRadius: 2, overflow: 'hidden', marginBottom: 10 }}>
@@ -477,7 +477,7 @@ export default function DashboardPage() {
                   👁 Viewed {(passport as any).profile_views} time{(passport as any).profile_views !== 1 ? 's' : ''} by engineers
                 </p>
               )}
-              <button onClick={() => setEditOpen(true)} style={{ fontSize: 11, color: '#C9A84C', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+              <button onClick={() => setEditOpen(true)} style={{ fontSize: 11, color: '#5A9BCB', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
                 {profileScore < 100 ? 'Complete profile →' : 'Edit profile →'}
               </button>
             </div>
@@ -493,7 +493,7 @@ export default function DashboardPage() {
                 )}
               </div>
               {balance > 0 ? (
-                <p style={{ fontFamily: "'Playfair Display', serif", fontSize: 26, color: '#C9A84C', fontWeight: 600, margin: 0 }}>
+                <p style={{ fontFamily: "'Playfair Display', serif", fontSize: 26, color: '#5A9BCB', fontWeight: 600, margin: 0 }}>
                   ${balance.toFixed(2)}
                 </p>
               ) : (
@@ -512,7 +512,7 @@ export default function DashboardPage() {
               )}
               <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                 <button onClick={() => setTopUpOpen(true)}
-                  style={{ flex: 1, fontSize: 11, fontWeight: 600, color: '#000', background: '#C9A84C', border: 'none', padding: '8px 0', borderRadius: 6, cursor: 'pointer' }}>
+                  style={{ flex: 1, fontSize: 11, fontWeight: 600, color: '#000', background: '#5A9BCB', border: 'none', padding: '8px 0', borderRadius: 6, cursor: 'pointer' }}>
                   + Add credits
                 </button>
                 <button onClick={() => requestCredit.mutate()}
@@ -535,7 +535,7 @@ export default function DashboardPage() {
                   <div className="db-topup-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
                     {TOP_UP_PRESETS.map(amt => (
                       <button key={amt} onClick={() => { setTopUpAmount(amt); setTopUpCustom(false); }}
-                        style={{ padding: '14px 0', borderRadius: 10, border: `2px solid ${!topUpCustom && topUpAmount === amt ? '#C9A84C' : '#222'}`, background: !topUpCustom && topUpAmount === amt ? '#C9A84C15' : '#0a0a0a', color: !topUpCustom && topUpAmount === amt ? '#C9A84C' : '#555', fontSize: 18, fontWeight: 700, cursor: 'pointer' }}>
+                        style={{ padding: '14px 0', borderRadius: 10, border: `2px solid ${!topUpCustom && topUpAmount === amt ? '#5A9BCB' : '#222'}`, background: !topUpCustom && topUpAmount === amt ? '#5A9BCB15' : '#0a0a0a', color: !topUpCustom && topUpAmount === amt ? '#5A9BCB' : '#555', fontSize: 18, fontWeight: 700, cursor: 'pointer' }}>
                         ${amt}
                       </button>
                     ))}
@@ -543,7 +543,7 @@ export default function DashboardPage() {
                   {/* Custom amount */}
                   <div style={{ marginBottom: 20 }}>
                     <p style={{ fontSize: 11, color: '#444', margin: '0 0 6px' }}>Or enter a custom amount</p>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#0a0a0a', border: `1px solid ${topUpCustom ? '#C9A84C' : '#222'}`, borderRadius: 10, padding: '0 14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#0a0a0a', border: `1px solid ${topUpCustom ? '#5A9BCB' : '#222'}`, borderRadius: 10, padding: '0 14px' }}>
                       <span style={{ color: '#555', fontSize: 16 }}>$</span>
                       <input
                         type="number"
@@ -563,7 +563,7 @@ export default function DashboardPage() {
                   <button
                     onClick={handleTopUp}
                     disabled={topUpLoading || topUpAmount === '' || Number(topUpAmount) < TOP_UP_MIN || Number(topUpAmount) > TOP_UP_MAX}
-                    style={{ width: '100%', padding: '14px 0', background: '#C9A84C', color: '#000', fontWeight: 700, fontSize: 14, borderRadius: 10, border: 'none', cursor: 'pointer', opacity: (topUpLoading || topUpAmount === '' || Number(topUpAmount) < TOP_UP_MIN) ? 0.5 : 1 }}>
+                    style={{ width: '100%', padding: '14px 0', background: '#5A9BCB', color: '#000', fontWeight: 700, fontSize: 14, borderRadius: 10, border: 'none', cursor: 'pointer', opacity: (topUpLoading || topUpAmount === '' || Number(topUpAmount) < TOP_UP_MIN) ? 0.5 : 1 }}>
                     {topUpLoading ? 'Redirecting to Stripe…' : `Pay $${topUpAmount || '—'} via Stripe →`}
                   </button>
                   <button onClick={() => { setTopUpOpen(false); setTopUpCustom(false); setTopUpAmount(100); }}
@@ -586,7 +586,7 @@ export default function DashboardPage() {
                 <p style={{ fontSize: 10, color: '#2a2a2a', fontFamily: 'monospace', letterSpacing: '0.1em', marginBottom: 8 }}>NEXT SESSION</p>
                 <p style={{ fontSize: 12, color: '#3a3a3a' }}>No upcoming sessions</p>
                 <p style={{ fontSize: 11, color: '#2a2a2a', marginTop: 4 }}>The studio is ready when you are</p>
-                <Link to="/book" style={{ display: 'inline-block', marginTop: 10, fontSize: 11, color: '#C9A84C', border: '1px solid #C9A84C30', padding: '6px 14px', borderRadius: 6, textDecoration: 'none' }}>
+                <Link to="/book" style={{ display: 'inline-block', marginTop: 10, fontSize: 11, color: '#5A9BCB', border: '1px solid #5A9BCB30', padding: '6px 14px', borderRadius: 6, textDecoration: 'none' }}>
                   Book now →
                 </Link>
               </div>
@@ -628,7 +628,7 @@ export default function DashboardPage() {
               {!genres.length && !vocalType && !energyProfile && (
                 <div style={{ textAlign: 'center', padding: '12px 0' }}>
                   <p style={{ fontSize: 11, color: '#2a2a2a' }}>No creative profile yet</p>
-                  <button onClick={() => setEditOpen(true)} style={{ marginTop: 8, fontSize: 11, color: '#C9A84C', background: 'none', border: 'none', cursor: 'pointer' }}>
+                  <button onClick={() => setEditOpen(true)} style={{ marginTop: 8, fontSize: 11, color: '#5A9BCB', background: 'none', border: 'none', cursor: 'pointer' }}>
                     Build your creative DNA →
                   </button>
                 </div>
@@ -666,7 +666,7 @@ export default function DashboardPage() {
             <p style={{ fontSize: 11, color: '#888', fontWeight: 500 }}>Find artists to collaborate with</p>
             <p style={{ fontSize: 10, color: '#3a3a3a', marginTop: 2 }}>Browse the Dreamz Music Lab roster by creative DNA match</p>
           </div>
-          <Link to="/discover" style={{ fontSize: 11, color: '#C9A84C', border: '1px solid #C9A84C30', padding: '7px 14px', borderRadius: 7, textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0, marginLeft: 12 }}>
+          <Link to="/discover" style={{ fontSize: 11, color: '#5A9BCB', border: '1px solid #5A9BCB30', padding: '7px 14px', borderRadius: 7, textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0, marginLeft: 12 }}>
             Discover →
           </Link>
         </div>
@@ -686,7 +686,7 @@ export default function DashboardPage() {
         <div className="db-fade db-fade-2">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
             <p style={{ fontSize: 11, color: '#3a3a3a', fontFamily: 'monospace', letterSpacing: '0.1em' }}>SESSION HISTORY</p>
-            <Link to="/book" style={{ fontSize: 11, color: '#C9A84C', textDecoration: 'none' }}>+ Book</Link>
+            <Link to="/book" style={{ fontSize: 11, color: '#5A9BCB', textDecoration: 'none' }}>+ Book</Link>
           </div>
 
           {loadingBookings ? (
@@ -697,7 +697,7 @@ export default function DashboardPage() {
             <div style={{ background: '#0f0f0f', border: '1px solid #141414', borderRadius: 10, padding: '28px', textAlign: 'center' }}>
               <p style={{ fontFamily: "'Playfair Display', serif", fontSize: 16, color: '#3a3a3a', marginBottom: 6 }}>The studio is listening.</p>
               <p style={{ fontSize: 12, color: '#2a2a2a' }}>Book your first session and start building your story here.</p>
-              <Link to="/book" style={{ display: 'inline-block', marginTop: 14, background: '#C9A84C', color: '#000', fontSize: 12, fontWeight: 700, padding: '9px 20px', borderRadius: 7, textDecoration: 'none' }}>
+              <Link to="/book" style={{ display: 'inline-block', marginTop: 14, background: '#5A9BCB', color: '#000', fontSize: 12, fontWeight: 700, padding: '9px 20px', borderRadius: 7, textDecoration: 'none' }}>
                 Book a session →
               </Link>
             </div>
@@ -717,13 +717,13 @@ export default function DashboardPage() {
                       display: 'flex', alignItems: 'center', gap: 14,
                       padding: '12px 16px', borderBottom: '1px solid #0f0f0f',
                       background: i === 0 && isActive ? '#0f0d08' : 'transparent',
-                      borderLeft: i === 0 && isActive ? '2px solid #C9A84C' : '2px solid transparent',
+                      borderLeft: i === 0 && isActive ? '2px solid #5A9BCB' : '2px solid transparent',
                       borderRadius: i === 0 ? '8px 8px 0 0' : undefined,
                       transition: 'background 0.12s',
                     }}>
                       {/* Date column */}
                       <div style={{ width: 44, flexShrink: 0, textAlign: 'right' }}>
-                        <p style={{ fontSize: 11, color: '#C9A84C', fontFamily: 'monospace' }}>{fmtDateShort(b.starts_at)}</p>
+                        <p style={{ fontSize: 11, color: '#5A9BCB', fontFamily: 'monospace' }}>{fmtDateShort(b.starts_at)}</p>
                         <p style={{ fontSize: 10, color: '#3a3a3a', fontFamily: 'monospace' }}>{fmtTime(b.starts_at)}</p>
                       </div>
 
@@ -758,8 +758,8 @@ export default function DashboardPage() {
 
                       {/* Message thread badge */}
                       {(b._count?.messages ?? 0) > 0 && (
-                        <div title="This session has a message thread" style={{ flexShrink: 0, width: 18, height: 18, borderRadius: '50%', background: 'rgba(201,168,76,0.15)', border: '1px solid rgba(201,168,76,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        <div title="This session has a message thread" style={{ flexShrink: 0, width: 18, height: 18, borderRadius: '50%', background: 'rgba(90,155,203,0.15)', border: '1px solid rgba(90,155,203,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#5A9BCB" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                         </div>
                       )}
                     </div>
@@ -780,8 +780,8 @@ export default function DashboardPage() {
               </p>
             </div>
             <button onClick={() => setEditOpen(true)} style={{
-              fontSize: 11, color: '#C9A84C', border: '1px solid #C9A84C30',
-              background: '#C9A84C0a', padding: '7px 14px', borderRadius: 7, cursor: 'pointer', whiteSpace: 'nowrap',
+              fontSize: 11, color: '#5A9BCB', border: '1px solid #5A9BCB30',
+              background: '#5A9BCB0a', padding: '7px 14px', borderRadius: 7, cursor: 'pointer', whiteSpace: 'nowrap',
             }}>
               Complete profile →
             </button>
