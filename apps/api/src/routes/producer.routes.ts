@@ -8,6 +8,7 @@ import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
 import { isR2Configured, uploadToR2, deleteFromR2 } from '../lib/r2';
 import { getImageUpload } from '../lib/imageUpload';
+import { getAudioUpload } from '../lib/audioUpload';
 
 export const producerRouter = Router();
 producerRouter.use(authenticate);
@@ -261,5 +262,69 @@ producerRouter.get('/discover', async (_req, res, next) => {
     }));
 
     res.json(mapped);
+  } catch (err) { next(err); }
+});
+
+// ── GET /api/producer/tracks — own catalogue ──────────────────────────────────
+producerRouter.get('/tracks', requireRole('PRODUCER'), async (req: any, res, next) => {
+  try {
+    const producer = await db.producer.findUnique({ where: { user_id: req.userId } });
+    if (!producer) throw new AppError('Producer not found', 404);
+
+    const tracks = await db.track.findMany({
+      where: { producer_id: producer.id, is_active: true },
+      orderBy: { created_at: 'desc' },
+    });
+    res.json(tracks);
+  } catch (err) { next(err); }
+});
+
+// ── POST /api/producer/tracks — upload a beat/sample ──────────────────────────
+producerRouter.post('/tracks', requireRole('PRODUCER'), async (req: any, res, next) => {
+  const upload = getAudioUpload();
+  if (!upload) return next(new AppError('Audio upload not configured', 501));
+
+  upload.single('audio')(req, res, async (err: any) => {
+    if (err) return next(new AppError(err.message ?? 'Upload failed', 400));
+    try {
+      const producer = await db.producer.findUnique({ where: { user_id: req.userId } });
+      if (!producer) throw new AppError('Producer not found', 404);
+
+      const file = req.file;
+      if (!file) throw new AppError('No audio file provided', 400);
+
+      const data = z.object({
+        title:        z.string().min(1).max(200),
+        bpm:          z.coerce.number().int().positive().optional(),
+        genre:        z.string().max(80).optional(),
+        tags:         z.string().optional().transform(s => s ? JSON.parse(s) : []),
+        duration_sec: z.coerce.number().int().positive().optional(),
+      }).parse(req.body);
+
+      const file_url = isR2Configured && (file as any).buffer
+        ? await uploadToR2((file as any).buffer, `tracks/${producer.id}`, file.originalname || 'track.mp3', file.mimetype)
+        : `/uploads/tracks/${(file as any).filename}`;
+
+      const track = await db.track.create({
+        data: { ...data, file_url, producer_id: producer.id },
+      });
+      res.status(201).json(track);
+    } catch (e) { next(e); }
+  });
+});
+
+// ── DELETE /api/producer/tracks/:id — archive (soft delete) ──────────────────
+producerRouter.delete('/tracks/:id', requireRole('PRODUCER'), async (req: any, res, next) => {
+  try {
+    const producer = await db.producer.findUnique({ where: { user_id: req.userId } });
+    if (!producer) throw new AppError('Producer not found', 404);
+
+    const existing = await db.track.findFirst({
+      where: { id: req.params.id, producer_id: producer.id },
+    });
+    if (!existing) throw new AppError('Track not found', 404);
+
+    await db.track.update({ where: { id: req.params.id }, data: { is_active: false } });
+    res.json({ success: true });
   } catch (err) { next(err); }
 });

@@ -376,6 +376,7 @@ model Producer {
   avatar_url   String?
   passport     ProducerPassport?
   projects     Project[]
+  tracks       Track[]
   open_to_collabs Boolean        @default(true)
   created_at   DateTime          @default(now())
 
@@ -395,6 +396,29 @@ model ProducerPassport {
   updated_at        DateTime  @updatedAt
 
   @@map("producer_passports")
+}
+
+// ─── Beat/Sample Catalogue ──────────────────────────────────────────────────────
+// Pass 1: preview-only catalogue. price_usd/license_type sit unused until
+// checkout + file-protection are built.
+model Track {
+  id           String   @id @default(uuid())
+  producer_id  String
+  producer     Producer @relation(fields: [producer_id], references: [id])
+  title        String
+  file_url     String
+  waveform_url String?
+  duration_sec Int?
+  bpm          Int?
+  genre        String?
+  tags         Json     @default("[]")  // string[]
+  price_usd    Int?
+  license_type String?
+  play_count   Int      @default(0)
+  is_active    Boolean  @default(true)
+  created_at   DateTime @default(now())
+
+  @@map("tracks")
 }
 
 // ─── Projects ─────────────────────────────────────────────────────────────────
