@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
 import { useToast } from '../components/Toast';
+import { getPersonality } from '../lib/personality';
 
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 
@@ -391,7 +392,7 @@ export default function ArtistProfilePage() {
                     {dna.energy_profile && (
                       <div style={{ background:'#0a0a0a', borderRadius:8, padding:'10px 12px' }}>
                         <p style={{ fontSize:9, color:'#2a2a2a', fontFamily:"'JetBrains Mono',monospace", letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:4 }}>Energy</p>
-                        <p style={{ fontSize:12, color:'#888' }}>{dna.energy_profile}</p>
+                        <p style={{ fontSize:12, color: getPersonality(dna.energy_profile).color }}>{getPersonality(dna.energy_profile).label}</p>
                       </div>
                     )}
                   </div>
