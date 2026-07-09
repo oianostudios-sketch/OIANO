@@ -51,6 +51,16 @@ function SSEProvider() {
   return null;
 }
 
+// The onboarding sequence (Screens 1-5) must read as "no navigation chrome
+// visible" per the wireframe spec — hide the app's persistent widgets/nav
+// while on those routes instead of threading a flag through each of them.
+const CHROME_FREE_ROUTES = ['/enter', '/onboarding'];
+function Chrome({ children }: { children: React.ReactNode }) {
+  const { pathname } = useLocation();
+  if (CHROME_FREE_ROUTES.includes(pathname)) return null;
+  return <>{children}</>;
+}
+
 // ── Route transition wrapper ──────────────────────────────────────────────────
 // Each pathname change swaps the key, triggering the page-enter CSS animation
 function AnimatedRoutes() {
@@ -100,12 +110,14 @@ export default function App() {
     <StudioStateProvider>
       <SSEProvider />
       <LiveBarSync />
-      <StudioTicker />
-      <SessionLiveBar />
-      <StudioPulseWidget />
-      <ArtistStatusToggle />
-      <MobileBottomNav />
-      <CommandPalette />
+      <Chrome>
+        <StudioTicker />
+        <SessionLiveBar />
+        <StudioPulseWidget />
+        <ArtistStatusToggle />
+        <MobileBottomNav />
+        <CommandPalette />
+      </Chrome>
       <AnimatedRoutes />
     </StudioStateProvider>
   );

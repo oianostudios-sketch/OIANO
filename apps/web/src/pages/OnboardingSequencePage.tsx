@@ -46,13 +46,25 @@ function IdentityStep({ onAdvance }: { onAdvance: (s: Partial<SharedState>) => v
 
   function selectGenre(g: string) {
     setGenre(g);
+    const trimmedName = name.trim();
     // Auto-advance the moment a genre is picked — name/photo can be filled
     // later, this isn't gated on completeness.
     api.patch('/passport/profile', {
-      name: name.trim() || undefined,
+      name: trimmedName || undefined,
       creative_dna: { genres: [g] },
+    }).then(() => {
+      // The auth store's cached user snapshot is never refetched after
+      // signup — update it locally so PassportPage etc. don't show the
+      // pre-onboarding placeholder name right after the user just set it.
+      const { user, token } = useAuthStore.getState();
+      if (user?.artist && token) {
+        useAuthStore.getState().setAuth(token, {
+          ...user,
+          artist: { ...user.artist, name: trimmedName || user.artist.name },
+        });
+      }
     }).catch((err) => console.error('[onboarding] profile save failed:', err?.message));
-    onAdvance({ name: name.trim() || undefined, genre: g });
+    onAdvance({ name: trimmedName || undefined, genre: g });
   }
 
   return (
