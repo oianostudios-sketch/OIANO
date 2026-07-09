@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
 import { useToast } from './Toast';
+import { PERSONALITIES, getPersonality, type PersonalityKey } from '../lib/personality';
 
 // Refresh auth store after profile save
 async function refreshMe(setAuth: (token: string, user: any) => void, token: string | null) {
@@ -109,14 +110,20 @@ function ChipInput({ chips, onChange, placeholder = 'Type and press Enter…', s
 
 // ── SingleChipSelect ──────────────────────────────────────────────────────────
 
+interface ChipSuggestion { label: string; value: string; }
+
 interface SingleChipSelectProps {
   value: string;
   onChange: (value: string) => void;
-  suggestions: string[];
+  suggestions: (string | ChipSuggestion)[];
   placeholder?: string;
+  // Overrides how the committed value renders in the pill — for suggestions
+  // where the stored value is a machine key but the chip showed a friendly
+  // label (e.g. energy_profile: 'high' displaying as "Radiant").
+  displayLabel?: string;
 }
 
-function SingleChipSelect({ value, onChange, suggestions, placeholder = 'Type or pick one…' }: SingleChipSelectProps) {
+function SingleChipSelect({ value, onChange, suggestions, placeholder = 'Type or pick one…', displayLabel }: SingleChipSelectProps) {
   const [input, setInput] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -135,8 +142,9 @@ function SingleChipSelect({ value, onChange, suggestions, placeholder = 'Type or
     }
   }
 
-  const filtered = suggestions.filter(
-    (s) => !input || s.toLowerCase().includes(input.toLowerCase())
+  const items: ChipSuggestion[] = suggestions.map(s => typeof s === 'string' ? { label: s, value: s } : s);
+  const filtered = items.filter(
+    (s) => !input || s.label.toLowerCase().includes(input.toLowerCase())
   );
 
   return (
@@ -144,7 +152,7 @@ function SingleChipSelect({ value, onChange, suggestions, placeholder = 'Type or
       {value ? (
         <div className="flex items-center gap-2">
           <span className="flex items-center gap-1.5 bg-gold/10 border border-gold/30 text-gold text-sm px-3.5 py-1.5 rounded-full">
-            {value}
+            {displayLabel ?? value}
             <button
               type="button"
               onClick={() => onChange('')}
@@ -170,12 +178,12 @@ function SingleChipSelect({ value, onChange, suggestions, placeholder = 'Type or
             <div className="flex flex-wrap gap-1.5 mt-2">
               {filtered.map((s) => (
                 <button
-                  key={s}
+                  key={s.value}
                   type="button"
-                  onClick={() => commit(s)}
+                  onClick={() => commit(s.value)}
                   className="text-xs px-2.5 py-1 rounded-full border border-studio-border bg-studio-bg text-zinc-500 hover:border-zinc-500 hover:text-zinc-300 transition-colors"
                 >
-                  {s}
+                  {s.label}
                 </button>
               ))}
             </div>
@@ -211,10 +219,13 @@ const VOCAL_SUGGESTIONS = [
   'Vocalist', 'Rapper', 'Producer', 'Songwriter', 'Instrumentalist',
   'Multi-hyphenate', 'Beatmaker', 'DJ', 'Composer', 'Arranger',
 ];
-const ENERGY_SUGGESTIONS = [
-  'High energy', 'Mid tempo', 'Chill / laid-back', 'Experimental',
-  'Dark / brooding', 'Euphoric', 'Spiritual', 'Street',
-];
+// Chip label is the friendly personality name; committed value is the
+// canonical energy_profile storage key (high/medium/low/chaotic) — the same
+// one ArtistPassportCard and DiscoverPage read to color the passport. Free
+// text is still allowed for anything outside the four, it just won't pick
+// up a personality color (see lib/personality.ts).
+const ENERGY_SUGGESTIONS: ChipSuggestion[] = (Object.keys(PERSONALITIES) as PersonalityKey[])
+  .map(key => ({ label: PERSONALITIES[key].label, value: key }));
 const THEME_SUGGESTIONS = [
   'loyalty', 'love', 'growth', 'street life', 'struggle', 'faith',
   'identity', 'freedom', 'family', 'ambition', 'healing', 'nostalgia',
@@ -351,7 +362,12 @@ export default function ProfileEditDrawer({ open, onClose, initialData }: Props)
               value={energyProfile}
               onChange={setEnergyProfile}
               suggestions={ENERGY_SUGGESTIONS}
-              placeholder="High energy, Chill, Experimental…"
+              placeholder="Radiant, Steady, Introspective, Volatile…"
+              displayLabel={
+                energyProfile && energyProfile.toLowerCase() in PERSONALITIES
+                  ? getPersonality(energyProfile).label
+                  : undefined
+              }
             />
           </div>
 
