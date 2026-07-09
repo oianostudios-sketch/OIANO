@@ -9,6 +9,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { useToast } from './Toast';
 import { useAuthStore } from '../store/auth.store';
+import { getPersonality } from '../lib/personality';
 
 const API_ORIGIN = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
 
@@ -35,13 +36,6 @@ interface PassportCardProps {
   size?: 'sm' | 'md' | 'lg';
 }
 
-const ENERGY_COLORS: Record<string, string> = {
-  high:    '#C9A84C',
-  medium:  '#7c9e6e',
-  low:     '#6e7c9e',
-  chaotic: '#9e6e7c',
-};
-
 export default function ArtistPassportCard({ artist, editable = false, size = 'md' }: PassportCardProps) {
   const [flipped, setFlipped] = useState(false);
   const [hover, setHover] = useState(false);
@@ -54,7 +48,8 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
   const strength = artist.passport?.profile_strength ?? 0;
   const code = artist.passport?.passport_code ?? 'OIANO-????';
   const energy = dna.energy_profile ?? '';
-  const energyColor = ENERGY_COLORS[energy] ?? '#C9A84C';
+  const personality = getPersonality(energy);
+  const energyColor = personality.color;
 
   const cardWidth  = size === 'sm' ? 260 : size === 'lg' ? 380 : 320;
   const cardHeight = size === 'sm' ? 360 : size === 'lg' ? 530 : 440;
@@ -107,15 +102,20 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
           0%   { transform: translateX(-120%) rotate(8deg); }
           100% { transform: translateX(120%) rotate(8deg); }
         }
+        @keyframes apc-shimmer-stutter {
+          0%,100% { transform: translateX(-130%) rotate(8deg); opacity: 0.9; }
+          45%     { transform: translateX(10%) rotate(8deg);   opacity: 0.3; }
+          55%     { transform: translateX(20%) rotate(8deg);   opacity: 0.9; }
+          100%    { transform: translateX(130%) rotate(8deg); }
+        }
         @keyframes apc-upload-pulse {
           0%   { box-shadow: 0 0 0 0 rgba(90,155,203,0.55); }
           70%  { box-shadow: 0 0 0 14px rgba(90,155,203,0); }
           100% { box-shadow: 0 0 0 0 rgba(90,155,203,0); }
         }
-        .apc-shimmer { animation: apc-shimmer-sweep 6s ease-in-out infinite; }
         .apc-avatar-pulse { animation: apc-upload-pulse 1.2s ease-out; }
         @media (prefers-reduced-motion: reduce) {
-          .apc-shimmer { animation: none; }
+          .apc-shimmer { animation: none !important; }
           .apc-avatar-pulse { animation: none; }
         }
       `}</style>
@@ -158,17 +158,21 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
                 width: '40%',
                 height: '200%',
                 background: hover
-                  ? 'linear-gradient(125deg, transparent 20%, rgba(90,155,203,0.14) 50%, transparent 80%)'
-                  : 'linear-gradient(125deg, transparent 20%, rgba(90,155,203,0.05) 50%, transparent 80%)',
+                  ? `linear-gradient(125deg, transparent 20%, rgba(${personality.rgb},0.14) 50%, transparent 80%)`
+                  : `linear-gradient(125deg, transparent 20%, rgba(${personality.rgb},0.05) 50%, transparent 80%)`,
                 transition: 'background 0.4s ease',
+                animationName: personality.shimmerKeyframe,
+                animationDuration: personality.shimmerDuration,
+                animationTimingFunction: personality.shimmerEasing,
+                animationIterationCount: 'infinite',
               }}
             />
           </div>
 
-          {/* Top strip */}
+          {/* Top strip — personality-colored */}
           <div style={{
             height: 4,
-            background: 'linear-gradient(90deg, #3D6A8A, #5A9BCB, #8BBEDD, #5A9BCB, #3D6A8A)',
+            background: `linear-gradient(90deg, rgba(${personality.rgb},0.5), rgba(${personality.rgb},1), rgba(${personality.rgb},0.6), rgba(${personality.rgb},1), rgba(${personality.rgb},0.5))`,
           }} />
 
           {/* Header row */}
@@ -373,10 +377,10 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
             boxShadow: '0 16px 48px rgba(0,0,0,0.6), 0 0 0 1px rgba(90,155,203,0.15)',
           }}
         >
-          {/* Top strip */}
+          {/* Top strip — personality-colored, matches front */}
           <div style={{
             height: 4,
-            background: 'linear-gradient(90deg, #3D6A8A, #5A9BCB, #8BBEDD, #5A9BCB, #3D6A8A)',
+            background: `linear-gradient(90deg, rgba(${personality.rgb},0.5), rgba(${personality.rgb},1), rgba(${personality.rgb},0.6), rgba(${personality.rgb},1), rgba(${personality.rgb},0.5))`,
           }} />
 
           <div style={{ padding: '18px 22px', height: 'calc(100% - 4px)', display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -426,7 +430,7 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
               )}
 
               {energy && (
-                <DnaRow label="ENERGY" value={energy.toUpperCase()}>
+                <DnaRow label="ENERGY" value={personality.label.toUpperCase()}>
                   <span style={{
                     display: 'inline-block',
                     width: 8,

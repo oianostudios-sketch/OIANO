@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import ArtistFacetMark from '../components/ArtistFacetMark';
 import { useAuthStore } from '../store/auth.store';
+import { getPersonality } from '../lib/personality';
 
 interface DiscoverArtist {
   id: string;
@@ -28,14 +29,6 @@ interface DiscoverArtist {
     key_themes?: string[];
   };
 }
-
-const ENERGY_COLORS: Record<string, string> = {
-  'Introspective': '#6366f1',
-  'Chill':         '#06b6d4',
-  'Mid-tempo':     '#C9A84C',
-  'High-energy':   '#f97316',
-  'Explosive':     '#ef4444',
-};
 
 function StrengthBar({ pct }: { pct: number }) {
   const color = pct >= 70 ? '#22c55e' : pct >= 40 ? '#C9A84C' : '#555';
@@ -146,9 +139,9 @@ export default function DiscoverPage() {
             }}>{g}</button>
           ))}
           <div style={{ width: 1, background: '#222', margin: '0 4px', flexShrink: 0 }} />
-          {/* Energy chips */}
+          {/* Energy chips — filter on the raw stored value, display the friendly personality label */}
           {allEnergies.map(e => {
-            const ec = ENERGY_COLORS[e] ?? '#C9A84C';
+            const ec = getPersonality(e).color;
             return (
               <button key={e} onClick={() => setActiveEnergy(activeEnergy === e ? null : e)} style={{
                 padding: '4px 12px', borderRadius: 16, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap',
@@ -156,7 +149,7 @@ export default function DiscoverPage() {
                 border: `1px solid ${activeEnergy === e ? ec : '#222'}`,
                 color: activeEnergy === e ? ec : '#555',
                 transition: 'all 0.15s',
-              }}>{e}</button>
+              }}>{getPersonality(e).label}</button>
             );
           })}
           {hasFilters && (
@@ -208,7 +201,7 @@ export default function DiscoverPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {filtered.map((a) => {
                 const energy = a.creative_dna.energy_profile;
-                const energyColor = energy ? (ENERGY_COLORS[energy] ?? '#C9A84C') : null;
+                const energyColor = energy ? getPersonality(energy).color : null;
 
                 return (
                   <div key={a.id} style={{
@@ -257,7 +250,7 @@ export default function DiscoverPage() {
                               fontSize: 10, padding: '1px 7px', borderRadius: 8,
                               background: energyColor + '18', border: `1px solid ${energyColor}44`, color: energyColor,
                               fontFamily: 'monospace',
-                            }}>{energy}</span>
+                            }}>{getPersonality(energy).label}</span>
                           )}
                         </div>
 
