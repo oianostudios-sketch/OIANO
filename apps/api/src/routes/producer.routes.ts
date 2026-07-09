@@ -9,6 +9,7 @@ import { AppError } from '../lib/errors';
 import { isR2Configured, uploadToR2, deleteFromR2 } from '../lib/r2';
 import { getImageUpload } from '../lib/imageUpload';
 import { getAudioUpload } from '../lib/audioUpload';
+import { generatePassportCode } from '../lib/passport';
 
 export const producerRouter = Router();
 producerRouter.use(authenticate);
@@ -92,7 +93,7 @@ producerRouter.post('/setup', async (req: any, res, next) => {
     const existing = await db.producer.findUnique({ where: { user_id: req.userId } });
     if (existing) return res.json(existing);
 
-    const code = `PROD-${Math.random().toString(36).slice(2,6).toUpperCase()}`;
+    const code = await generatePassportCode();
     const producer = await db.producer.create({
       data: {
         user_id: req.userId,

@@ -86,6 +86,8 @@ model Studio {
   phone             String?
   email             String?
   logo_url          String?
+  mint_letter       String    @default("Z")  // passport code mint letter for this studio, e.g. OIA-Z0001
+  passport_seq      Int       @default(0)    // atomically incremented on each passport mint
   rooms             Room[]
   engineers         Engineer[]
   services          ServiceOffering[]

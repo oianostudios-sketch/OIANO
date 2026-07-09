@@ -45,8 +45,7 @@ export async function signup(req: Request, res: Response, next: NextFunction) {
     const role = data.role ?? 'ARTIST';
     const name = data.name?.trim() || data.email.split('@')[0];
 
-    // Only generate a passport code for artists (not needed for producers at signup)
-    const passportCode = role === 'ARTIST' ? await generatePassportCode() : null;
+    const passportCode = await generatePassportCode();
 
     const user = await prisma.user.create({
       data: {
@@ -60,7 +59,7 @@ export async function signup(req: Request, res: Response, next: NextFunction) {
               alias: data.alias,
               passport: {
                 create: {
-                  passport_code: passportCode!,
+                  passport_code: passportCode,
                   profile_strength: 10,
                   creative_dna: {
                     genres: [],
@@ -82,7 +81,7 @@ export async function signup(req: Request, res: Response, next: NextFunction) {
               alias: data.alias ?? null,
               passport: {
                 create: {
-                  passport_code: `PROD-${Math.random().toString(36).slice(2, 7).toUpperCase()}`,
+                  passport_code: passportCode,
                   genres_produced: [],
                   signature_tags: [],
                   profile_strength: 10,
