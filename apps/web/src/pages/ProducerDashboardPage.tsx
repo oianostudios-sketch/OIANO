@@ -66,6 +66,18 @@ function initials(name: string): string {
   return name.split(' ').slice(0, 2).map(w => w[0]?.toUpperCase()).join('');
 }
 
+// last_session_at was fetched into every project object and never shown —
+// updated_at fires on any edit (moving a phase pill counts), so it can't
+// tell you whether the artist has actually been in the room recently.
+function sessionWarmth(lastSessionAt: string | null): { text: string; color: string } | null {
+  if (!lastSessionAt) return null;
+  const days = Math.floor((Date.now() - new Date(lastSessionAt).getTime()) / 86_400_000);
+  if (days < 1)  return { text: 'Session today',              color: '#5A9BCB' };
+  if (days < 7)  return { text: `Last session ${days}d ago`,  color: '#666' };
+  if (days < 14) return { text: `${days}d since last session`, color: '#888' };
+  return { text: `Cold — ${days}d since last session`, color: '#D6567F' };
+}
+
 // ── Setup gate — shown when no producer profile exists ───────────────────────
 function ProducerSetupGate({ onSetup }: { onSetup: (p: ProducerProfile) => void }) {
   const [name, setName] = useState('');
@@ -148,14 +160,36 @@ function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [title, setTitle] = useState('');
   const [phase, setPhase] = useState<Phase>('PRE_PRODUCTION');
   const [notes, setNotes] = useState('');
+  const [artistId, setArtistId] = useState<string | null>(null);
+  const [artistQuery, setArtistQuery] = useState('');
+  const [artistPickerOpen, setArtistPickerOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
+
+  // Reuses the artist roster (now reachable by producers too) as the source
+  // for this picker — the API already accepts artist_id on create, there was
+  // just never a field for it. Note: /artists/discover returns `avatar`, not
+  // `avatar_url` like the project.artist shape elsewhere in this file.
+  const { data: artists = [] } = useQuery<Array<{ id: string; name: string; alias: string | null; avatar: string | null }>>({
+    queryKey: ['discover'],
+    queryFn: async () => (await api.get('/artists/discover')).data,
+  });
+  const selectedArtist = artists.find(a => a.id === artistId) ?? null;
+  const filteredArtists = artistQuery.trim()
+    ? artists.filter(a => {
+        const q = artistQuery.trim().toLowerCase();
+        return a.name.toLowerCase().includes(q) || (a.alias ?? '').toLowerCase().includes(q);
+      })
+    : artists;
 
   const handleCreate = async () => {
     if (!title.trim()) { setErr('Title is required'); return; }
     setLoading(true); setErr('');
     try {
-      const { data } = await api.post('/producer/projects', { title: title.trim(), phase, notes: notes.trim() || undefined });
+      const { data } = await api.post('/producer/projects', {
+        title: title.trim(), phase, notes: notes.trim() || undefined,
+        artist_id: artistId ?? undefined,
+      });
       onCreated(data);
     } catch (e: any) {
       setErr(e?.response?.data?.error ?? 'Failed to create project');
@@ -171,6 +205,51 @@ function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreate
             <label style={{ display: 'block', marginBottom: 6, fontSize: '0.8rem', color: '#888', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Title *</label>
             <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Project title" autoFocus
               style={{ width: '100%', padding: '0.75rem 1rem', background: 'var(--bg, #0a0a0a)', border: '1px solid var(--border, #1e1e1e)', borderRadius: 8, color: '#fff', fontSize: '0.95rem', outline: 'none', boxSizing: 'border-box' }} />
+          </div>
+          <div style={{ position: 'relative' }}>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: '0.8rem', color: '#888', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Artist</label>
+            {selectedArtist ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0.6rem 0.9rem', background: 'var(--bg, #0a0a0a)', border: '1px solid var(--border, #1e1e1e)', borderRadius: 8 }}>
+                {selectedArtist.avatar ? (
+                  <img src={selectedArtist.avatar} alt="" style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover' }} />
+                ) : (
+                  <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(90,155,203,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#5A9BCB', fontWeight: 700 }}>
+                    {initials(selectedArtist.name)}
+                  </div>
+                )}
+                <span style={{ flex: 1, fontSize: '0.9rem', color: '#fff' }}>{selectedArtist.alias ?? selectedArtist.name}</span>
+                <button onClick={() => setArtistId(null)} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: '0.9rem' }}>✕</button>
+              </div>
+            ) : (
+              <input
+                value={artistQuery}
+                onChange={e => { setArtistQuery(e.target.value); setArtistPickerOpen(true); }}
+                onFocus={() => setArtistPickerOpen(true)}
+                placeholder="Search the roster — optional, add later if you like"
+                style={{ width: '100%', padding: '0.75rem 1rem', background: 'var(--bg, #0a0a0a)', border: '1px solid var(--border, #1e1e1e)', borderRadius: 8, color: '#fff', fontSize: '0.95rem', outline: 'none', boxSizing: 'border-box' }}
+              />
+            )}
+            {artistPickerOpen && !selectedArtist && filteredArtists.length > 0 && (
+              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, maxHeight: 220, overflowY: 'auto', background: 'var(--surface, #141414)', border: '1px solid var(--border, #1e1e1e)', borderRadius: 8, zIndex: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
+                {filteredArtists.slice(0, 8).map(a => (
+                  <div key={a.id}
+                    onClick={() => { setArtistId(a.id); setArtistPickerOpen(false); setArtistQuery(''); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0.55rem 0.9rem', cursor: 'pointer', fontSize: '0.88rem', color: '#ccc' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.04)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                  >
+                    {a.avatar ? (
+                      <img src={a.avatar} alt="" style={{ width: 20, height: 20, borderRadius: '50%', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'rgba(90,155,203,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#5A9BCB', fontWeight: 700 }}>
+                        {initials(a.name)}
+                      </div>
+                    )}
+                    {a.alias ?? a.name}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div>
             <label style={{ display: 'block', marginBottom: 6, fontSize: '0.8rem', color: '#888', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Phase</label>
@@ -270,6 +349,14 @@ function ProjectCard({ project, onAdvance, onArchive }: {
           {project.notes}
         </p>
       )}
+
+      {/* Session warmth — distinct from updated_at, which fires on any edit */}
+      {(() => {
+        const warmth = sessionWarmth(project.last_session_at);
+        return warmth && (
+          <div style={{ fontSize: '0.72rem', color: warmth.color, marginBottom: '0.5rem' }}>{warmth.text}</div>
+        );
+      })()}
 
       {/* Footer */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'space-between' }}>
@@ -401,6 +488,13 @@ export default function ProducerDashboardPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['producer', 'me'] }),
   });
 
+  // "Open to collabs" toggle — PATCH /producer/me already accepted this field,
+  // there was just no control anywhere that could flip it.
+  const collabsMut = useMutation({
+    mutationFn: (open_to_collabs: boolean) => api.patch('/producer/me', { open_to_collabs }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['producer', 'me'] }),
+  });
+
   const handleAdvance = useCallback((id: string, phase: Phase) => {
     advanceMut.mutate({ id, phase });
   }, [advanceMut]);
@@ -455,11 +549,19 @@ export default function ProducerDashboardPage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          {producer.open_to_collabs && (
-            <span style={{ padding: '0.4rem 0.9rem', background: 'rgba(29,158,117,0.1)', border: '1px solid rgba(29,158,117,0.25)', borderRadius: 99, color: '#1D9E75', fontSize: '0.75rem', fontWeight: 600 }}>
-              Open to collabs
-            </span>
-          )}
+          <button
+            onClick={() => collabsMut.mutate(!producer.open_to_collabs)}
+            disabled={collabsMut.isPending}
+            title="Whether other producers/artists can see you're open to new work"
+            style={{
+              padding: '0.4rem 0.9rem', borderRadius: 99, fontSize: '0.75rem', fontWeight: 600,
+              cursor: collabsMut.isPending ? 'wait' : 'pointer', transition: 'all 0.15s',
+              background: producer.open_to_collabs ? 'rgba(29,158,117,0.1)' : 'rgba(255,255,255,0.04)',
+              border: `1px solid ${producer.open_to_collabs ? 'rgba(29,158,117,0.25)' : 'rgba(255,255,255,0.1)'}`,
+              color: producer.open_to_collabs ? '#1D9E75' : '#666',
+            }}>
+            {producer.open_to_collabs ? '● Open to collabs' : '○ Not taking new work'}
+          </button>
           <button
             onClick={() => navigate('/producer/passport')}
             style={{ padding: '0.6rem 1.2rem', background: 'none', border: '1px solid rgba(201,168,76,0.25)', borderRadius: 8, color: '#C9A84C', fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer' }}>

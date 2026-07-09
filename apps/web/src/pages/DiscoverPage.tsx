@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import ArtistFacetMark from '../components/ArtistFacetMark';
+import { useAuthStore } from '../store/auth.store';
 
 interface DiscoverArtist {
   id: string;
@@ -50,6 +51,11 @@ function StrengthBar({ pct }: { pct: number }) {
 
 export default function DiscoverPage() {
   const navigate = useNavigate();
+  const user = useAuthStore(s => s.user);
+  // Connect is artist-to-artist only for now (see the producer retention
+  // study) — a producer viewer gets the roster and passports, just not a
+  // button that would 404 against an endpoint that requires an Artist record.
+  const canConnect = user?.role === 'ARTIST';
   const [search, setSearch]         = useState('');
   const [activeGenre, setActiveGenre] = useState<string | null>(null);
   const [activeEnergy, setActiveEnergy] = useState<string | null>(null);
@@ -299,14 +305,16 @@ export default function DiscoverPage() {
                         fontSize: 12, color: '#888', background: 'none', border: 'none',
                         cursor: 'pointer', padding: 0,
                       }}>View passport →</button>
-                      <button onClick={() => navigate(`/connect/${a.id}`)} style={{
-                        marginLeft: 'auto', fontSize: 12,
-                        background: '#C9A84C14', border: '1px solid #C9A84C33', color: '#C9A84C',
-                        padding: '6px 14px', borderRadius: 8, cursor: 'pointer', transition: 'all 0.15s',
-                      }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#C9A84C22'; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '#C9A84C14'; }}
-                      >💬 Connect</button>
+                      {canConnect && (
+                        <button onClick={() => navigate(`/connect/${a.id}`)} style={{
+                          marginLeft: 'auto', fontSize: 12,
+                          background: '#C9A84C14', border: '1px solid #C9A84C33', color: '#C9A84C',
+                          padding: '6px 14px', borderRadius: 8, cursor: 'pointer', transition: 'all 0.15s',
+                        }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#C9A84C22'; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '#C9A84C14'; }}
+                        >💬 Connect</button>
+                      )}
                     </div>
                   </div>
                 );

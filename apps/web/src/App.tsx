@@ -73,7 +73,7 @@ function AnimatedRoutes() {
         <Route path="/login"        element={<Navigate to="/enter" replace />} />
         <Route path="/signup"       element={<Navigate to="/enter" replace />} />
         <Route path="/dashboard"    element={<RequireAuth><ErrorBoundary><SmartDashboard /></ErrorBoundary></RequireAuth>} />
-        <Route path="/discover"     element={<RequireAuth role="ARTIST"><DiscoverPage /></RequireAuth>} />
+        <Route path="/discover"     element={<RequireAuth roles={['ARTIST', 'PRODUCER']}><DiscoverPage /></RequireAuth>} />
         <Route path="/artists/:id"  element={<RequireAuth><ErrorBoundary><ArtistProfilePage /></ErrorBoundary></RequireAuth>} />
         <Route path="/book"         element={<RequireAuth><BookingPage /></RequireAuth>} />
         <Route path="/bookings/:id" element={<RequireAuth><BookingDetailPage /></RequireAuth>} />
