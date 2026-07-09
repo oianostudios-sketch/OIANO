@@ -25,6 +25,7 @@ import PassportPage from './pages/PassportPage';
 import CalendarPage from './pages/CalendarPage';
 import RunsheetPage from './pages/RunsheetPage';
 import DiscoverPage from './pages/DiscoverPage';
+import ProducerDiscoverPage from './pages/ProducerDiscoverPage';
 import NotificationsPage from './pages/NotificationsPage';
 import ProducerDashboardPage from './pages/ProducerDashboardPage';
 import ConnectPage from './pages/ConnectPage';
@@ -74,6 +75,7 @@ function AnimatedRoutes() {
         <Route path="/signup"       element={<Navigate to="/enter" replace />} />
         <Route path="/dashboard"    element={<RequireAuth><ErrorBoundary><SmartDashboard /></ErrorBoundary></RequireAuth>} />
         <Route path="/discover"     element={<RequireAuth roles={['ARTIST', 'PRODUCER']}><DiscoverPage /></RequireAuth>} />
+        <Route path="/producers"   element={<RequireAuth><ProducerDiscoverPage /></RequireAuth>} />
         <Route path="/artists/:id"  element={<RequireAuth><ErrorBoundary><ArtistProfilePage /></ErrorBoundary></RequireAuth>} />
         <Route path="/book"         element={<RequireAuth><BookingPage /></RequireAuth>} />
         <Route path="/bookings/:id" element={<RequireAuth><BookingDetailPage /></RequireAuth>} />

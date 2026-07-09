@@ -671,6 +671,17 @@ export default function DashboardPage() {
           </Link>
         </div>
 
+        {/* ── D2: Browse producers CTA ── */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#111', border: '1px solid #1a1a1a', borderRadius: 10, padding: '14px 18px', marginTop: 8 }}>
+          <div>
+            <p style={{ fontSize: 11, color: '#888', fontWeight: 500 }}>Find a producer for your next session</p>
+            <p style={{ fontSize: 10, color: '#3a3a3a', marginTop: 2 }}>Browse profiles and preview their beat catalogue</p>
+          </div>
+          <Link to="/producers" style={{ fontSize: 11, color: '#5A9BCB', border: '1px solid rgba(90,155,203,0.3)', padding: '7px 14px', borderRadius: 7, textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0, marginLeft: 12 }}>
+            Producers →
+          </Link>
+        </div>
+
         {/* ── Session history timeline ── */}
         <div className="db-fade db-fade-2">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>

@@ -11,6 +11,7 @@ export function ProducerNav({ passportCode }: { passportCode?: string | null }) 
   const onProjects = location.pathname === '/producer';
   const onPassport = location.pathname === '/producer/passport';
   const onDiscover = location.pathname === '/discover';
+  const onProducers = location.pathname === '/producers';
 
   const navLink = (label: string, path: string, active: boolean) => (
     <button
@@ -64,6 +65,7 @@ export function ProducerNav({ passportCode }: { passportCode?: string | null }) 
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
         {navLink('Projects', '/producer', onProjects)}
         {navLink('Discover', '/discover', onDiscover)}
+        {navLink('Producers', '/producers', onProducers)}
         {navLink('Passport', '/producer/passport', onPassport)}
       </div>
 

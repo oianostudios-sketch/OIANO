@@ -244,6 +244,12 @@ producerRouter.get('/discover', async (_req, res, next) => {
       include: {
         passport: true,
         projects: { where: { is_active: true }, select: { id: true } },
+        tracks: {
+          where: { is_active: true },
+          orderBy: { created_at: 'desc' },
+          take: 3,
+          select: { id: true, title: true, file_url: true, duration_sec: true, bpm: true, genre: true },
+        },
       },
       orderBy: { created_at: 'desc' },
     });
@@ -259,6 +265,7 @@ producerRouter.get('/discover', async (_req, res, next) => {
       genres_produced: p.passport?.genres_produced ?? [],
       signature_tags:  p.passport?.signature_tags  ?? [],
       active_projects: p.projects.length,
+      tracks:          p.tracks,
     }));
 
     res.json(mapped);
