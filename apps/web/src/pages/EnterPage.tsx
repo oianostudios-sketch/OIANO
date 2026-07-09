@@ -126,20 +126,20 @@ export default function EnterPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
             <input type="email" placeholder="Email or phone" value={email}
               autoComplete="email" onChange={e => setEmail(e.target.value)}
-              onFocus={e  => { setFocused(true); e.currentTarget.style.borderColor = '#C9A84C'; }}
+              onFocus={e  => { setFocused(true); e.currentTarget.style.borderColor = '#5A9BCB'; }}
               onBlur={e   => { setFocused(false); e.currentTarget.style.borderColor = '#1e1e1e'; }}
               style={inputStyle} />
             <input type="password" placeholder="Password" value={password}
               autoComplete="current-password" onChange={e => setPassword(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleEnter()}
-              onFocus={e  => { setFocused(true); e.currentTarget.style.borderColor = '#C9A84C'; }}
+              onFocus={e  => { setFocused(true); e.currentTarget.style.borderColor = '#5A9BCB'; }}
               onBlur={e   => { setFocused(false); e.currentTarget.style.borderColor = '#1e1e1e'; }}
               style={inputStyle} />
           </div>
 
           <button onClick={handleEnter} disabled={loading || !email || !password}
             style={{
-              width: '100%', background: loading ? '#8a722a' : '#C9A84C',
+              width: '100%', background: loading ? '#3d6a8a' : '#5A9BCB',
               color: '#000', fontWeight: 700, fontSize: 14,
               padding: '14px 20px', borderRadius: 10, border: 'none',
               cursor: loading ? 'wait' : 'pointer',

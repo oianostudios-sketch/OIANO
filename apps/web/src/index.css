@@ -15,6 +15,13 @@
   --border:      #1e1e1e;
   --muted:       #2a2a2a;
 
+  /* Oia theme study — primary accent, replacing gold on "ready/available" states.
+     --amber above already does the "sunset/live" job correctly; left as-is. */
+  --dome:        #5A9BCB;
+  --dome-dim:    #5A9BCB40;
+  --bougain:     #D6567F;   /* rare — one alert, never a background */
+  --bougain-dim: #D6567F30;
+
   /* State-driven color temperature — idle default */
   --live-accent:     var(--gold);
   --live-accent-dim: var(--gold-dim);
@@ -261,7 +268,7 @@ body.session-live .studio-pulse-widget {
 .artist-status-toggle:hover { border-color: #2a2a2a; background: #141414; }
 
 .ast-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-.ast-dot-available   { background: #22c55e; box-shadow: 0 0 4px #22c55e; }
+.ast-dot-available   { background: var(--dome); box-shadow: 0 0 4px var(--dome); }
 .ast-dot-in-session  { background: var(--live-accent, #E8823A); box-shadow: 0 0 5px var(--live-accent, #E8823A); }
 .ast-dot-unavailable { background: #6b7280; }
 
@@ -670,14 +677,14 @@ body.session-live .pulse-topbar {
 }
 .onb-status-dial:active { transform: scale(0.96); }
 .onb-status-dial-available {
-  border-color: rgba(201,168,76,0.4);
-  color: #C9A84C;
+  border-color: var(--dome-dim);
+  color: var(--dome);
 }
 .onb-status-glow {
   position: absolute;
   inset: -20%;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(201,168,76,0.25) 0%, transparent 65%);
+  background: radial-gradient(circle, var(--dome-dim) 0%, transparent 65%);
   animation: onb-status-pulse 2.4s ease-in-out infinite;
 }
 @keyframes onb-status-pulse {

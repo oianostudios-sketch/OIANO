@@ -10,7 +10,11 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
 
-const GOLD = '#C9A84C';
+// Dome (Aegean blue) is the everyday primary — selection states, confirm
+// actions. Sunset (warm amber, matches --amber/--live-accent) is reserved for
+// the one intentional "loud" moment: the confirmation payoff.
+const DOME = '#5A9BCB';
+const SUNSET = '#E8823A';
 const GENRES = [
   'Hip-Hop', 'R&B', 'Afrobeats', 'Pop', 'Electronic', 'Trap',
   'Drill', 'Soul', 'Gospel', 'Jazz', 'Rock', 'Amapiano',
@@ -82,7 +86,7 @@ function IdentityStep({ onAdvance }: { onAdvance: (s: Partial<SharedState>) => v
           {!avatarPreview && (
             <span style={{
               position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
-              justifyContent: 'center', color: GOLD, fontSize: 22, opacity: 0.6,
+              justifyContent: 'center', color: DOME, fontSize: 22, opacity: 0.6,
             }}>+</span>
           )}
           <input type="file" accept="image/*" onChange={handlePhoto} style={{ display: 'none' }} />
@@ -104,9 +108,9 @@ function IdentityStep({ onAdvance }: { onAdvance: (s: Partial<SharedState>) => v
           {visibleGenres.map((g) => (
             <span key={g} onClick={() => selectGenre(g)} style={{
               padding: '8px 16px', borderRadius: 20, fontSize: 13, cursor: 'pointer',
-              border: `1px solid ${genre === g ? GOLD : '#2a2a2a'}`,
-              background: genre === g ? `${GOLD}22` : 'transparent',
-              color: genre === g ? GOLD : '#999',
+              border: `1px solid ${genre === g ? DOME : '#2a2a2a'}`,
+              background: genre === g ? `${DOME}22` : 'transparent',
+              color: genre === g ? DOME : '#999',
               transition: 'all 0.15s',
             }}>{g}</span>
           ))}
@@ -230,9 +234,9 @@ function CalendarStep({ onAdvance }: { onAdvance: (slot: SharedState['bookingSlo
                       style={{
                         padding: '8px 4px', borderRadius: 6, fontSize: 11, textAlign: 'center',
                         cursor: taken ? 'default' : 'pointer',
-                        background: taken ? 'repeating-linear-gradient(45deg, #161616, #161616 4px, #1c1c1c 4px, #1c1c1c 8px)' : (isExpanded ? `${GOLD}22` : '#141414'),
-                        border: `1px solid ${isExpanded ? GOLD : '#222'}`,
-                        color: taken ? '#3a3a3a' : (isExpanded ? GOLD : '#999'),
+                        background: taken ? 'repeating-linear-gradient(45deg, #161616, #161616 4px, #1c1c1c 4px, #1c1c1c 8px)' : (isExpanded ? `${DOME}22` : '#141414'),
+                        border: `1px solid ${isExpanded ? DOME : '#222'}`,
+                        color: taken ? '#3a3a3a' : (isExpanded ? DOME : '#999'),
                       }}
                     >
                       {hour > 12 ? hour - 12 : hour}{hour >= 12 ? 'pm' : 'am'}
@@ -240,14 +244,14 @@ function CalendarStep({ onAdvance }: { onAdvance: (slot: SharedState['bookingSlo
                     {isExpanded && (
                       <div className="onb-slot-expand" style={{
                         marginTop: 4, padding: '8px', borderRadius: 6,
-                        background: '#0d0d0d', border: `1px solid ${GOLD}`, textAlign: 'center',
+                        background: '#0d0d0d', border: `1px solid ${DOME}`, textAlign: 'center',
                       }}>
                         <button
                           disabled={booking}
                           onClick={() => confirmSlot(day, hour)}
                           style={{
                             width: '100%', padding: '8px', borderRadius: 6, border: 'none',
-                            background: GOLD, color: '#000', fontWeight: 700, fontSize: 11,
+                            background: DOME, color: '#000', fontWeight: 700, fontSize: 11,
                             cursor: booking ? 'wait' : 'pointer',
                           }}
                         >{booking ? '…' : 'Confirm'}</button>
@@ -280,11 +284,11 @@ function ConfirmationStep({ state, onDone }: { state: SharedState; onDone: () =>
       alignItems: 'center', justifyContent: 'center', cursor: 'pointer', textAlign: 'center',
     }}>
       <svg width="120" height="120" viewBox="0 0 120 120" className="onb-diamond">
-        <polygon points="60,8 100,40 84,108 36,108 20,40" fill="none" stroke={GOLD} strokeWidth="1.4" />
-        <polygon points="60,8 100,40 60,52 20,40" fill={`${GOLD}22`} stroke={GOLD} strokeWidth="1" />
-        <polygon points="20,40 60,52 36,108" fill={`${GOLD}14`} stroke={GOLD} strokeWidth="1" />
-        <polygon points="100,40 84,108 60,52" fill={`${GOLD}1a`} stroke={GOLD} strokeWidth="1" />
-        <line x1="60" y1="52" x2="60" y2="8" stroke={GOLD} strokeWidth="0.6" opacity="0.6" />
+        <polygon points="60,8 100,40 84,108 36,108 20,40" fill="none" stroke={SUNSET} strokeWidth="1.4" />
+        <polygon points="60,8 100,40 60,52 20,40" fill={`${SUNSET}22`} stroke={SUNSET} strokeWidth="1" />
+        <polygon points="20,40 60,52 36,108" fill={`${SUNSET}14`} stroke={SUNSET} strokeWidth="1" />
+        <polygon points="100,40 84,108 60,52" fill={`${SUNSET}1a`} stroke={SUNSET} strokeWidth="1" />
+        <line x1="60" y1="52" x2="60" y2="8" stroke={SUNSET} strokeWidth="0.6" opacity="0.6" />
       </svg>
 
       <p style={{
@@ -292,7 +296,7 @@ function ConfirmationStep({ state, onDone }: { state: SharedState; onDone: () =>
         color: '#f0ede8', margin: '20px 0 6px',
       }}>You're in The Rough.</p>
 
-      <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: '0.1em', color: GOLD, marginBottom: 24 }}>
+      <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: '0.1em', color: SUNSET, marginBottom: 24 }}>
         {state.name || 'Artist'} {state.genre ? `· ${state.genre}` : ''}
       </p>
 
