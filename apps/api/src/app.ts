@@ -70,7 +70,16 @@ app.use(cors({
 // When R2_ACCOUNT_ID is set, files are served directly from R2's public URL
 // and this route is unused for new uploads. Kept for backwards-compatibility
 // with any files uploaded before R2 was configured.
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+//
+// Helmet's default Cross-Origin-Resource-Policy: same-origin blocks <img>
+// tags from ever rendering these — the frontend (5173) and API (4000) are
+// different origins. Confirmed live: fetch() could read the bytes fine,
+// but new Image() failed to load, for every uploaded avatar. Relaxed only
+// for this route; the rest of the API keeps Helmet's stricter defaults.
+app.use('/uploads', (_req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(path.join(process.cwd(), 'uploads')));
 
 // Raw body for Stripe — must be before express.json()
 app.use('/api/webhooks', express.raw({ type: 'application/json' }));

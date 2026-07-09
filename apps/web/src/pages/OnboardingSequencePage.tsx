@@ -45,6 +45,20 @@ function IdentityStep({ onAdvance }: { onAdvance: (s: Partial<SharedState>) => v
     const form = new FormData();
     form.append('avatar', file);
     api.patch('/passport/avatar', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+      .then((res) => {
+        // Same class of bug as the name field below: the local blob preview
+        // makes this screen look correct, but the Zustand auth store never
+        // hears about the new avatar_url, so it reverts to blank everywhere
+        // else in the app (Passport, Dashboard, Discover...) the moment this
+        // screen unmounts.
+        const { user, token } = useAuthStore.getState();
+        if (user?.artist && token) {
+          useAuthStore.getState().setAuth(token, {
+            ...user,
+            artist: { ...user.artist, avatar_url: res.data.avatar_url },
+          });
+        }
+      })
       .catch((err) => console.error('[onboarding] avatar upload failed:', err?.message));
   }
 
