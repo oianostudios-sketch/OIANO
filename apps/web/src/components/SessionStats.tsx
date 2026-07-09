@@ -63,7 +63,7 @@ export default function SessionStats() {
                 <div className="w-full flex items-end justify-center" style={{ height: 44 }}>
                   {m.sessions > 0 && (
                     <div
-                      className={`w-full rounded-sm transition-all ${isCurrent ? 'bg-gold' : 'bg-studio-border'}`}
+                      className={`w-full rounded-sm transition-all ${isCurrent ? 'bg-dome' : 'bg-studio-border'}`}
                       style={{ height: `${Math.max(heightPct, 8)}%` }}
                       title={`${MONTH_SHORT[m.month]}: ${m.sessions} session${m.sessions !== 1 ? 's' : ''}, ${m.hours}h`}
                     />
@@ -72,7 +72,7 @@ export default function SessionStats() {
                     <div className="w-full rounded-sm bg-studio-border/30" style={{ height: '4%' }} />
                   )}
                 </div>
-                <span className={`text-[9px] font-mono ${isCurrent ? 'text-gold' : 'text-zinc-700'}`}>
+                <span className={`text-[9px] font-mono ${isCurrent ? 'text-dome' : 'text-zinc-700'}`}>
                   {MONTH_SHORT[m.month]}
                 </span>
               </div>
