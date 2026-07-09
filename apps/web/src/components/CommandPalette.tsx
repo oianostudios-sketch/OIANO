@@ -265,10 +265,10 @@ const PALETTE_CSS = `
     top: 15vh; left: 50%; transform: translateX(-50%);
     width: min(560px, 92vw);
     background: #0f0f0f;
-    border: 1px solid #C9A84C28;
+    border: 1px solid #5A9BCB28;
     border-radius: 12px;
     overflow: hidden;
-    box-shadow: 0 24px 80px rgba(0,0,0,0.7), 0 0 0 1px #C9A84C08;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.7), 0 0 0 1px #5A9BCB08;
     animation: cp-modal-in 150ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
     display: flex; flex-direction: column;
     max-height: 68vh;
@@ -320,13 +320,13 @@ const PALETTE_CSS = `
   .cp-item:hover { background: #161616; }
   .cp-item-sel {
     background: #0f0d08 !important;
-    border-left-color: #C9A84C !important;
+    border-left-color: #5A9BCB !important;
   }
   .cp-item-icon {
     font-size: 14px; width: 22px; text-align: center;
     color: #555; flex-shrink: 0; line-height: 1;
   }
-  .cp-item-sel .cp-item-icon { color: #C9A84C; }
+  .cp-item-sel .cp-item-icon { color: #5A9BCB; }
   .cp-item-label {
     flex: 1; font-size: 13px; color: #d4d4d8; line-height: 1;
   }
@@ -338,7 +338,7 @@ const PALETTE_CSS = `
     padding: 2px 6px; border-radius: 4px;
     flex-shrink: 0;
   }
-  .cp-item-sel .cp-hint { color: #C9A84C88; border-color: #C9A84C22; background: #C9A84C0a; }
+  .cp-item-sel .cp-hint { color: #5A9BCB88; border-color: #5A9BCB22; background: #5A9BCB0a; }
 
   .cp-footer {
     display: flex; align-items: center; gap: 14px;

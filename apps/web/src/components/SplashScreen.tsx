@@ -49,7 +49,7 @@ export default function SplashScreen({ onDone }: Props) {
               width: 340,
               height: 340,
               borderRadius: '50%',
-              border: '1px solid #C9A84C',
+              border: '1px solid #5A9BCB',
               animation: `splashPulseRing 3.2s ease-out ${i * 0.9}s infinite`,
               opacity: 0,
             }}
@@ -66,7 +66,7 @@ export default function SplashScreen({ onDone }: Props) {
             fontFamily: '"Playfair Display", serif',
             fontSize: 'clamp(52px, 8vw, 72px)',
             fontWeight: 700,
-            color: '#C9A84C',
+            color: '#5A9BCB',
             letterSpacing: '0.22em',
             lineHeight: 1,
             marginBottom: 6,
@@ -82,7 +82,7 @@ export default function SplashScreen({ onDone }: Props) {
         {/* Divider line */}
         <div style={{
           height: 1,
-          background: 'linear-gradient(90deg, transparent, #C9A84C44, transparent)',
+          background: 'linear-gradient(90deg, transparent, #5A9BCB44, transparent)',
           width: '100%',
           marginBottom: 10,
           animation: phase !== 'enter' ? 'splashSubReveal 0.6s 0.3s ease both' : 'none',
@@ -108,7 +108,7 @@ export default function SplashScreen({ onDone }: Props) {
                 style={{
                   width: 3,
                   height: `${h}%`,
-                  background: `linear-gradient(to top, #C9A84C, #E2C97E88)`,
+                  background: `linear-gradient(to top, #5A9BCB, #8BBEDD88)`,
                   borderRadius: 2,
                   transformOrigin: 'bottom',
                   animation: `${isAlt ? 'waveBarAlt' : 'waveBar'} ${0.8 + (i % 4) * 0.22}s ${delay}s ease-in-out infinite`,
@@ -161,7 +161,7 @@ export default function SplashScreen({ onDone }: Props) {
         right: 28,
         fontSize: 10,
         letterSpacing: '0.12em',
-        color: '#C9A84C',
+        color: '#5A9BCB',
         opacity: 0.3,
         fontFamily: '"JetBrains Mono", monospace',
       }}>

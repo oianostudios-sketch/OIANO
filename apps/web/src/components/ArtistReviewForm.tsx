@@ -44,14 +44,14 @@ export default function ArtistReviewForm({ bookingId, engineerName, existing }: 
         </div>
         {hasReview && !open ? (
           <div className="flex items-center gap-2">
-            <span className="text-gold text-sm">{'★'.repeat(existing!.artist_rating!)}</span>
+            <span className="text-dome text-sm">{'★'.repeat(existing!.artist_rating!)}</span>
             <button onClick={() => setOpen(true)} className="text-zinc-500 text-xs hover:text-white transition-colors">Edit</button>
           </div>
         ) : (
           !open && (
             <button
               onClick={() => setOpen(true)}
-              className="text-xs bg-gold/10 border border-gold/20 text-gold px-3 py-1.5 rounded-lg hover:bg-gold/20 transition-colors"
+              className="text-xs bg-dome/10 border border-dome/20 text-dome px-3 py-1.5 rounded-lg hover:bg-dome/20 transition-colors"
             >
               Leave review
             </button>
@@ -72,7 +72,7 @@ export default function ArtistReviewForm({ bookingId, engineerName, existing }: 
                   onMouseLeave={() => setHover(0)}
                   onClick={() => setRating(r === rating ? 0 : r)}
                   className={`text-2xl transition-colors ${
-                    r <= (hover || rating) ? 'text-gold' : 'text-studio-border'
+                    r <= (hover || rating) ? 'text-dome' : 'text-studio-border'
                   }`}
                 >
                   ★
@@ -97,7 +97,7 @@ export default function ArtistReviewForm({ bookingId, engineerName, existing }: 
               placeholder={`What made ${engineerName} great to work with?`}
               rows={3}
               maxLength={500}
-              className="w-full bg-studio-muted border border-studio-border text-white placeholder-zinc-600 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-gold transition-colors resize-none"
+              className="w-full bg-studio-muted border border-studio-border text-white placeholder-zinc-600 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-dome transition-colors resize-none"
             />
             <p className="text-zinc-700 text-xs text-right mt-0.5">{text.length}/500</p>
           </div>
@@ -110,7 +110,7 @@ export default function ArtistReviewForm({ bookingId, engineerName, existing }: 
             <button
               onClick={() => submit.mutate()}
               disabled={!rating || submit.isPending}
-              className="flex-1 bg-gold text-black font-semibold py-2 rounded-lg text-sm hover:bg-gold-light transition-colors disabled:opacity-40"
+              className="flex-1 bg-dome text-black font-semibold py-2 rounded-lg text-sm hover:bg-dome-light transition-colors disabled:opacity-40"
             >
               {submit.isPending ? 'Saving…' : 'Submit review'}
             </button>

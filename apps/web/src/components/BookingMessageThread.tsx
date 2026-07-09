@@ -61,7 +61,7 @@ export default function BookingMessageThread({ bookingId }: { bookingId: string 
   return (
     <div className="bg-studio-surface border border-studio-border rounded-xl overflow-hidden">
       <div className="px-5 py-3.5 border-b border-studio-border flex items-center gap-2">
-        <span className="w-1.5 h-1.5 rounded-full bg-gold animate-pulse" />
+        <span className="w-1.5 h-1.5 rounded-full bg-dome animate-pulse" />
         <p className="label-mono">Session thread</p>
         <span className="ml-auto text-zinc-600 text-xs">{messages.length} message{messages.length !== 1 ? 's' : ''}</span>
       </div>
@@ -80,7 +80,7 @@ export default function BookingMessageThread({ bookingId }: { bookingId: string 
         {messages.map((msg) => (
           <div key={msg.id} className={`flex gap-2.5 ${isMe(msg) ? 'flex-row-reverse' : ''}`}>
             <div className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold ${
-              isMe(msg) ? 'bg-gold/20 text-gold' : 'bg-studio-muted text-zinc-400'
+              isMe(msg) ? 'bg-dome/20 text-dome' : 'bg-studio-muted text-zinc-400'
             }`}>
               {senderName(msg).charAt(0).toUpperCase()}
             </div>
@@ -90,7 +90,7 @@ export default function BookingMessageThread({ bookingId }: { bookingId: string 
               </span>
               <div className={`px-3.5 py-2 rounded-2xl text-sm leading-relaxed ${
                 isMe(msg)
-                  ? 'bg-gold/10 border border-gold/20 text-white rounded-tr-sm'
+                  ? 'bg-dome/10 border border-dome/20 text-white rounded-tr-sm'
                   : 'bg-studio-muted border border-studio-border text-zinc-300 rounded-tl-sm'
               }`}>
                 {msg.body}
@@ -117,12 +117,12 @@ export default function BookingMessageThread({ bookingId }: { bookingId: string 
             }
           }}
           placeholder="Reference tracks, goals, questions…"
-          className="flex-1 bg-studio-muted border border-studio-border text-white placeholder-zinc-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold transition-colors"
+          className="flex-1 bg-studio-muted border border-studio-border text-white placeholder-zinc-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-dome transition-colors"
         />
         <button
           onClick={() => text.trim() && send.mutate(text.trim())}
           disabled={send.isPending || !text.trim()}
-          className="bg-gold text-black font-semibold text-xs px-4 py-2 rounded-lg hover:bg-gold-light transition-colors disabled:opacity-40"
+          className="bg-dome text-black font-semibold text-xs px-4 py-2 rounded-lg hover:bg-dome-light transition-colors disabled:opacity-40"
         >
           Send
         </button>

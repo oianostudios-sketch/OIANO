@@ -265,9 +265,9 @@ function getRoomSession(sessions: Session[], pattern: string): { active: Session
 function MainStudioCard({ sessions }: { sessions: Session[] }) {
   const { active, next } = getRoomSession(sessions, 'main');
   const isLive = !!active;
-  const GOLD = '#C9A84C';
+  const LIVE = '#5A9BCB';
   const TEAL = '#1D9E75';
-  const accent = isLive ? GOLD : TEAL;
+  const accent = isLive ? LIVE : TEAL;
 
   const minsLeft = active
     ? Math.max(0, Math.floor((new Date(active.ends_at!).getTime() - Date.now()) / 60_000))
@@ -589,8 +589,8 @@ export default function PulseDashboard() {
               <span className="cmd-section-label">{activeSession ? 'Recording' : 'Studio online'}</span>
               <span style={{
                 width:6, height:6, borderRadius:'50%', flexShrink:0,
-                background: activeSession ? '#C9A84C' : '#22c55e',
-                boxShadow: `0 0 6px ${activeSession ? '#C9A84C' : '#22c55e'}`,
+                background: activeSession ? '#5A9BCB' : '#22c55e',
+                boxShadow: `0 0 6px ${activeSession ? '#5A9BCB' : '#22c55e'}`,
                 animation: activeSession ? 'breath 1.8s ease-in-out infinite' : 'none',
                 display:'inline-block',
               }} />
@@ -636,7 +636,7 @@ export default function PulseDashboard() {
               </div>
               {pulseData.trending_genre && (
                 <p style={{ fontSize:10, color:'#2a2a2a' }}>
-                  Trending <span style={{ color:'#C9A84C60' }}>{pulseData.trending_genre.genre}</span>
+                  Trending <span style={{ color:'#5A9BCB60' }}>{pulseData.trending_genre.genre}</span>
                 </p>
               )}
             </div>
@@ -774,8 +774,8 @@ export default function PulseDashboard() {
                           <span className="csr-end">{fmtTime(s.ends_at)}</span>
                         </div>
                         <div className="csr-dot" style={{
-                          background: isActive ? '#C9A84C' : (statusColors[s.status ?? ''] ?? '#2a2a2a'),
-                          boxShadow: isActive ? '0 0 6px #C9A84C' : 'none',
+                          background: isActive ? '#5A9BCB' : (statusColors[s.status ?? ''] ?? '#2a2a2a'),
+                          boxShadow: isActive ? '0 0 6px #5A9BCB' : 'none',
                           animation: isActive ? 'breath 1.8s ease-in-out infinite' : 'none',
                         }} />
                         <div className="csr-info">
@@ -810,7 +810,7 @@ export default function PulseDashboard() {
                   </div>
                   <div className="cmd-rev-divider" />
                   <div className="cmd-rev-item">
-                    <span className="cmd-rev-val" style={{ color: revenueOutstanding > 0 ? '#C9A84C' : '#3f3f46' }}>
+                    <span className="cmd-rev-val" style={{ color: revenueOutstanding > 0 ? '#5A9BCB' : '#3f3f46' }}>
                       {fmtCurrency(revenueOutstanding)}
                     </span>
                     <span className="cmd-rev-lbl">Outstanding</span>
@@ -855,7 +855,7 @@ const CSS = `
     content:'';
     position:fixed; top:-180px; right:-180px;
     width:520px; height:520px; border-radius:50%;
-    background: radial-gradient(circle, #C9A84C 0%, transparent 70%);
+    background: radial-gradient(circle, #5A9BCB 0%, transparent 70%);
     pointer-events:none; z-index:0;
     animation: idle-glow 7s ease-in-out infinite;
     opacity: 0.03;
@@ -875,11 +875,11 @@ const CSS = `
   .cmd-mark {
     width:26px; height:26px; flex-shrink:0;
     display:grid; place-items:center;
-    border:1px solid #C9A84C33; color:#C9A84C;
+    border:1px solid #5A9BCB33; color:#5A9BCB;
     font-weight:700; font-size:12px; font-family:'Playfair Display',serif;
     transition: border-color .5s, box-shadow .5s;
   }
-  .cmd-mark.cmd-mark-live { border-color:#C9A84C; box-shadow:0 0 14px #C9A84C33; }
+  .cmd-mark.cmd-mark-live { border-color:#5A9BCB; box-shadow:0 0 14px #5A9BCB33; }
   .cmd-brand strong { display:block; font-size:11px; color:#d4d4d8; letter-spacing:.02em; }
   .cmd-brand span   { display:block; font-size:9px;  color:#333; margin-top:1px; letter-spacing:.04em; }
   .cmd-vu-block { padding:12px; border-bottom:1px solid #111; flex-shrink:0; }
@@ -895,7 +895,7 @@ const CSS = `
     font-family:inherit; transition:background .12s, color .12s;
   }
   .cmd-nav-btn:hover { background:#111; color:#a1a1aa; }
-  .cmd-nav-btn.active { background:#1a1a1a; color:#C9A84C; }
+  .cmd-nav-btn.active { background:#1a1a1a; color:#5A9BCB; }
   .cmd-sidebar-pulse { padding:12px; margin-top:auto; border-top:1px solid #111; flex-shrink:0; }
 
   /* ── Main ── */
@@ -912,14 +912,14 @@ const CSS = `
   .cmd-topbar-date  { font-size:11px; color:#3a3a3a; font-family:'JetBrains Mono',monospace; letter-spacing:.04em; }
   .cmd-topbar-divider { width:1px; height:16px; background:#1e1e1e; }
   .cmd-clock {
-    font-family:'JetBrains Mono',monospace; font-size:13px; color:#C9A84C; letter-spacing:.1em;
+    font-family:'JetBrains Mono',monospace; font-size:13px; color:#5A9BCB; letter-spacing:.1em;
   }
   .cmd-clock-sec { font-size:11px; color:#555; }
   .cmd-badge {
     font-size:9px; font-weight:700; letter-spacing:.12em;
     padding:3px 10px; border-radius:12px; font-family:'JetBrains Mono',monospace;
   }
-  .badge-live { color:#C9A84C; background:#C9A84C12; border:1px solid #C9A84C30; animation:breath 2s ease-in-out infinite; }
+  .badge-live { color:#5A9BCB; background:#5A9BCB12; border:1px solid #5A9BCB30; animation:breath 2s ease-in-out infinite; }
   .badge-open { color:#1D9E75; background:#1D9E7510; border:1px solid #1D9E7522; }
 
   .cmd-btn {
@@ -928,7 +928,7 @@ const CSS = `
     transition: border-color .15s, color .15s;
   }
   .cmd-btn:hover { color:#a1a1aa; border-color:#333; }
-  .cmd-btn.primary { background:#C9A84C; color:#000; border-color:transparent; font-weight:700; }
+  .cmd-btn.primary { background:#5A9BCB; color:#000; border-color:transparent; font-weight:700; }
   .cmd-btn.primary:hover { background:#d9bb62; }
   .cmd-btn-sm {
     font-size:10px; color:#3a3a3a; background:none; border:1px solid #1a1a1a;
@@ -945,19 +945,19 @@ const CSS = `
     flex-shrink:0; min-height:72px; position:relative; overflow:hidden;
     gap:24px;
   }
-  .hero-live { background:linear-gradient(90deg,#0f0d07 0%,#0a0a0a 100%); border-bottom-color:#C9A84C22; }
+  .hero-live { background:linear-gradient(90deg,#0f0d07 0%,#0a0a0a 100%); border-bottom-color:#5A9BCB22; }
   .hero-idle { background:#090909; }
   .hero-glow {
     position:absolute; top:-40px; left:-40px;
     width:200px; height:200px; border-radius:50%;
-    background:radial-gradient(circle,#C9A84C0c 0%,transparent 70%);
+    background:radial-gradient(circle,#5A9BCB0c 0%,transparent 70%);
     pointer-events:none;
   }
   .hero-left  { display:flex; flex-direction:column; gap:3px; position:relative; flex:1; min-width:0; }
   .hero-right { display:flex; flex-direction:column; align-items:flex-end; flex-shrink:0; }
   .hero-live-pill {
     font-size:9px; font-weight:700; letter-spacing:.16em;
-    color:#C9A84C; font-family:'JetBrains Mono',monospace;
+    color:#5A9BCB; font-family:'JetBrains Mono',monospace;
     animation:breath 2s ease-in-out infinite;
   }
   .hero-idle-pill {
@@ -973,7 +973,7 @@ const CSS = `
   .hero-detail { font-size:11px; color:#52525b; font-family:'JetBrains Mono',monospace; letter-spacing:.04em; }
   .hero-time-range { font-size:12px; color:#555; font-family:'JetBrains Mono',monospace; letter-spacing:.06em; }
   .hero-countdown {
-    font-family:'JetBrains Mono',monospace; font-size:20px; color:#C9A84C; font-weight:700; letter-spacing:.04em; line-height:1;
+    font-family:'JetBrains Mono',monospace; font-size:20px; color:#5A9BCB; font-weight:700; letter-spacing:.04em; line-height:1;
   }
   .hero-countdown-sub { font-size:10px; color:#3a3a3a; font-family:'JetBrains Mono',monospace; letter-spacing:.1em; margin-top:3px; }
   .hero-empty { display:flex; align-items:center; gap:20px; }
@@ -1065,7 +1065,7 @@ const CSS = `
   /* Session progress bar */
   .sp-wrap { display:flex; flex-direction:column; gap:5px; }
   .sp-track { height:3px; background:#141414; border-radius:2px; overflow:hidden; }
-  .sp-fill  { height:100%; background:linear-gradient(90deg,#C9A84C,#E2C97E); border-radius:2px; transition:width 10s linear; box-shadow:0 0 6px #C9A84C60; }
+  .sp-fill  { height:100%; background:linear-gradient(90deg,#5A9BCB,#8BBEDD); border-radius:2px; transition:width 10s linear; box-shadow:0 0 6px #5A9BCB60; }
   .sp-labels { display:flex; justify-content:space-between; font-size:10px; color:#3a3a3a; font-family:'JetBrains Mono',monospace; }
 
   /* Wave bar animations */
@@ -1082,13 +1082,13 @@ const CSS = `
   .rwb-active {
     animation: rwb-bounce .65s ease-in-out infinite;
     animation-delay: var(--rwb-delay,0s);
-    background-color: var(--rwb-color,#C9A84C);
+    background-color: var(--rwb-color,#5A9BCB);
     opacity:.9;
   }
   .rwb-idle {
     animation: rwb-idle 2.4s ease-in-out infinite;
     animation-delay: var(--rwb-delay,0s);
-    background-color: var(--rwb-color,#C9A84C);
+    background-color: var(--rwb-color,#5A9BCB);
   }
   .rwb-over {
     animation: wave-over .7s ease-in-out infinite;
@@ -1110,7 +1110,7 @@ const CSS = `
     background:#0a0a0a; border-radius:3px;
     border:1px solid #141414; overflow:hidden; margin-bottom:4px;
   }
-  .tl-now  { position:absolute; top:0; bottom:0; width:1px; background:#C9A84C; z-index:2; box-shadow:0 0 4px #C9A84C; }
+  .tl-now  { position:absolute; top:0; bottom:0; width:1px; background:#5A9BCB; z-index:2; box-shadow:0 0 4px #5A9BCB; }
   .tl-block { position:absolute; top:3px; bottom:3px; border-radius:2px; z-index:1; min-width:2px; }
   .tl-labels { display:flex; justify-content:space-between; font-size:9px; color:#2a2a2a; font-family:'JetBrains Mono',monospace; }
 
@@ -1130,9 +1130,9 @@ const CSS = `
     transition: background .1s;
   }
   .cmd-session-row:hover { background:#0d0d0d; }
-  .cmd-session-row.row-active { background:#0f0d07; border-left-color:#C9A84C; }
+  .cmd-session-row.row-active { background:#0f0d07; border-left-color:#5A9BCB; }
   .csr-time { width:48px; flex-shrink:0; }
-  .csr-time span { display:block; font-family:'JetBrains Mono',monospace; font-size:11px; color:#C9A84C; }
+  .csr-time span { display:block; font-family:'JetBrains Mono',monospace; font-size:11px; color:#5A9BCB; }
   .csr-end  { font-size:10px; color:#3a3a3a !important; }
   .csr-dot  { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
   .csr-info { flex:1; min-width:0; }
@@ -1141,7 +1141,7 @@ const CSS = `
   .csr-right { display:flex; flex-direction:column; align-items:flex-end; flex-shrink:0; gap:3px; }
   .csr-amount { font-size:12px; color:#555; font-family:'JetBrains Mono',monospace; }
   .csr-pill { font-size:9px; font-family:'JetBrains Mono',monospace; letter-spacing:.04em; padding:2px 7px; border-radius:4px; }
-  .pill-live  { color:#C9A84C; background:#C9A84C10; border:1px solid #C9A84C30; animation:breath 2s ease-in-out infinite; }
+  .pill-live  { color:#5A9BCB; background:#5A9BCB10; border:1px solid #5A9BCB30; animation:breath 2s ease-in-out infinite; }
   .pill-green { color:#1D9E75; background:#1D9E7510; border:1px solid #1D9E7520; }
   .pill-gold  { color:#C9A84C; background:#C9A84C10; border:1px solid #C9A84C20; }
   .pill-grey  { color:#52525b; background:#52525b10; border:1px solid #52525b20; }
@@ -1213,5 +1213,5 @@ const CSS = `
   .rcb-dot    { width:5px; height:5px; border-radius:50%; flex-shrink:0; transition:background .4s, box-shadow .4s; }
   .rcb-artist { font-size:10px; color:#1e3050; font-family:'JetBrains Mono',monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .rcb-live .rcb-artist { color:#3B8BFF60; }
-  body.session-live .cmd-topbar  { border-bottom-color:#C9A84C14; }
+  body.session-live .cmd-topbar  { border-bottom-color:#5A9BCB14; }
 `;

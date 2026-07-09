@@ -128,7 +128,7 @@ export default function NotificationsPage() {
           style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: 14, padding: 0 }}>
           ← Back
         </button>
-        <h1 style={{ margin: 0, fontFamily: 'Playfair Display, serif', fontSize: 20, color: '#C9A84C', fontWeight: 600 }}>
+        <h1 style={{ margin: 0, fontFamily: 'Playfair Display, serif', fontSize: 20, color: '#5A9BCB', fontWeight: 600 }}>
           Inbox
         </h1>
         {unread > 0 && tab === 'notifications' && (
@@ -148,15 +148,15 @@ export default function NotificationsPage() {
               style={{
                 flex: 1, background: 'none', border: 'none', padding: '12px 16px',
                 fontSize: 13, fontWeight: 500, cursor: 'pointer',
-                color: tab === t ? '#C9A84C' : '#555',
-                borderBottom: `2px solid ${tab === t ? '#C9A84C' : 'transparent'}`,
+                color: tab === t ? '#5A9BCB' : '#555',
+                borderBottom: `2px solid ${tab === t ? '#5A9BCB' : 'transparent'}`,
                 transition: 'all 0.15s',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
               }}
             >
               {t === 'notifications' ? 'Notifications' : 'Messages'}
               {t === 'notifications' && unread > 0 && (
-                <span style={{ background: '#C9A84C', color: '#000', borderRadius: 8, fontSize: 9, fontWeight: 700, padding: '1px 5px', fontFamily: 'monospace' }}>{unread}</span>
+                <span style={{ background: '#5A9BCB', color: '#000', borderRadius: 8, fontSize: 9, fontWeight: 700, padding: '1px 5px', fontFamily: 'monospace' }}>{unread}</span>
               )}
               {t === 'messages' && pendingConns.length > 0 && (
                 <span style={{ background: '#8B5CF6', color: '#fff', borderRadius: 8, fontSize: 9, fontWeight: 700, padding: '1px 5px', fontFamily: 'monospace' }}>{pendingConns.length}</span>
@@ -184,7 +184,7 @@ export default function NotificationsPage() {
                 <p style={{ color: '#555', fontSize: 15, margin: '0 0 8px' }}>No notifications yet.</p>
                 <p style={{ color: '#333', fontSize: 13 }}>Book a session and you'll hear from us here.</p>
                 {isArtist && (
-                  <Link to="/book" style={{ display: 'inline-block', marginTop: 20, padding: '10px 24px', background: '#C9A84C', color: '#000', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
+                  <Link to="/book" style={{ display: 'inline-block', marginTop: 20, padding: '10px 24px', background: '#5A9BCB', color: '#000', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
                     Book a session →
                   </Link>
                 )}
@@ -200,8 +200,8 @@ export default function NotificationsPage() {
                   const inner = (
                     <div style={{
                       display: 'flex', alignItems: 'flex-start', gap: 14, padding: '16px 18px',
-                      background: isUnread ? 'rgba(201,168,76,0.03)' : 'transparent',
-                      borderRadius: 12, border: `1px solid ${isUnread ? 'rgba(201,168,76,0.08)' : '#141414'}`,
+                      background: isUnread ? 'rgba(90,155,203,0.03)' : 'transparent',
+                      borderRadius: 12, border: `1px solid ${isUnread ? 'rgba(90,155,203,0.08)' : '#141414'}`,
                       cursor: link ? 'pointer' : 'default', transition: 'background 0.15s',
                       animation: `fade-in 0.3s ease both`, animationDelay: `${i * 0.04}s`,
                     }}>
@@ -216,7 +216,7 @@ export default function NotificationsPage() {
                         <p style={{ margin: '4px 0 0', fontSize: 13, color: '#666', lineHeight: 1.5 }}>{notif.body}</p>
                         {link && <p style={{ margin: '6px 0 0', fontSize: 11, color, fontFamily: 'JetBrains Mono, monospace' }}>View →</p>}
                       </div>
-                      {isUnread && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#C9A84C', flexShrink: 0, marginTop: 6 }} />}
+                      {isUnread && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#5A9BCB', flexShrink: 0, marginTop: 6 }} />}
                     </div>
                   );
                   return link ? (
@@ -245,7 +245,7 @@ export default function NotificationsPage() {
                 <div style={{ fontSize: 40, marginBottom: 16 }}>💬</div>
                 <p style={{ color: '#555', fontSize: 15, margin: '0 0 8px' }}>No messages yet.</p>
                 <p style={{ color: '#333', fontSize: 13 }}>Discover artists and start connecting.</p>
-                <Link to="/discover" style={{ display: 'inline-block', marginTop: 20, padding: '10px 24px', background: '#C9A84C', color: '#000', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
+                <Link to="/discover" style={{ display: 'inline-block', marginTop: 20, padding: '10px 24px', background: '#5A9BCB', color: '#000', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
                   Discover artists →
                 </Link>
               </div>

@@ -59,19 +59,19 @@ function ChipInput({ chips, onChange, placeholder = 'Type and press Enter…', s
     <div>
       {/* Chips + text input container */}
       <div
-        className="flex flex-wrap gap-1.5 bg-studio-muted border border-studio-border rounded-lg px-3 py-2.5 min-h-[44px] cursor-text focus-within:border-gold transition-colors"
+        className="flex flex-wrap gap-1.5 bg-studio-muted border border-studio-border rounded-lg px-3 py-2.5 min-h-[44px] cursor-text focus-within:border-dome transition-colors"
         onClick={() => inputRef.current?.focus()}
       >
         {chips.map((chip) => (
           <span
             key={chip}
-            className="flex items-center gap-1 bg-gold/10 border border-gold/30 text-gold text-xs px-2.5 py-1 rounded-full"
+            className="flex items-center gap-1 bg-dome/10 border border-dome/30 text-dome text-xs px-2.5 py-1 rounded-full"
           >
             {chip}
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); removeChip(chip); }}
-              className="text-gold/60 hover:text-gold leading-none ml-0.5"
+              className="text-dome/60 hover:text-dome leading-none ml-0.5"
             >
               ×
             </button>
@@ -151,12 +151,12 @@ function SingleChipSelect({ value, onChange, suggestions, placeholder = 'Type or
     <div>
       {value ? (
         <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1.5 bg-gold/10 border border-gold/30 text-gold text-sm px-3.5 py-1.5 rounded-full">
+          <span className="flex items-center gap-1.5 bg-dome/10 border border-dome/30 text-dome text-sm px-3.5 py-1.5 rounded-full">
             {displayLabel ?? value}
             <button
               type="button"
               onClick={() => onChange('')}
-              className="text-gold/60 hover:text-gold leading-none"
+              className="text-dome/60 hover:text-dome leading-none"
             >
               ×
             </button>
@@ -172,7 +172,7 @@ function SingleChipSelect({ value, onChange, suggestions, placeholder = 'Type or
             onKeyDown={handleKeyDown}
             onBlur={() => { if (input.trim()) commit(input); }}
             placeholder={placeholder}
-            className="w-full bg-studio-muted border border-studio-border text-white placeholder-zinc-600 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-gold transition-colors"
+            className="w-full bg-studio-muted border border-studio-border text-white placeholder-zinc-600 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-dome transition-colors"
           />
           {filtered.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-2">
@@ -285,7 +285,7 @@ export default function ProfileEditDrawer({ open, onClose, initialData }: Props)
           <div className="flex items-center gap-4">
             <div className="text-right">
               <p className="text-zinc-500 text-xs">Strength preview</p>
-              <p className="text-gold font-display text-lg">{previewStrength}%</p>
+              <p className="text-dome font-display text-lg">{previewStrength}%</p>
             </div>
             <button onClick={onClose} className="text-zinc-500 hover:text-white transition-colors text-xl leading-none">×</button>
           </div>
@@ -294,7 +294,7 @@ export default function ProfileEditDrawer({ open, onClose, initialData }: Props)
         {/* Strength bar */}
         <div className="px-6 pt-4 pb-0">
           <div className="w-full h-1 bg-studio-border rounded-full">
-            <div className="h-full bg-gold rounded-full transition-all duration-300" style={{ width: `${previewStrength}%` }} />
+            <div className="h-full bg-dome rounded-full transition-all duration-300" style={{ width: `${previewStrength}%` }} />
           </div>
         </div>
 
@@ -309,28 +309,28 @@ export default function ProfileEditDrawer({ open, onClose, initialData }: Props)
               value={alias}
               onChange={(e) => setAlias(e.target.value)}
               placeholder="e.g. DJ Nova, The Kid"
-              className="w-full bg-studio-muted border border-studio-border text-white placeholder-zinc-600 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-gold transition-colors"
+              className="w-full bg-studio-muted border border-studio-border text-white placeholder-zinc-600 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-dome transition-colors"
             />
           </div>
 
           {/* Bio */}
           <div>
             <label className="label-mono block mb-2">
-              Bio <span className="text-gold normal-case">+20%</span>
+              Bio <span className="text-dome normal-case">+20%</span>
             </label>
             <textarea
               value={bio}
               onChange={(e) => setBio(e.target.value)}
               placeholder="Tell your story — where you're from, what drives your sound, where you're headed..."
               rows={4}
-              className="w-full bg-studio-muted border border-studio-border text-white placeholder-zinc-600 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-gold transition-colors resize-none"
+              className="w-full bg-studio-muted border border-studio-border text-white placeholder-zinc-600 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-dome transition-colors resize-none"
             />
           </div>
 
           {/* Genres */}
           <div>
             <label className="label-mono block mb-2">
-              Genres <span className="text-gold normal-case">+20%</span>
+              Genres <span className="text-dome normal-case">+20%</span>
             </label>
             <ChipInput
               chips={genres}
@@ -343,7 +343,7 @@ export default function ProfileEditDrawer({ open, onClose, initialData }: Props)
           {/* Vocal / Role type */}
           <div>
             <label className="label-mono block mb-2">
-              You are a… <span className="text-gold normal-case">+20%</span>
+              You are a… <span className="text-dome normal-case">+20%</span>
             </label>
             <SingleChipSelect
               value={vocalType}
@@ -356,7 +356,7 @@ export default function ProfileEditDrawer({ open, onClose, initialData }: Props)
           {/* Energy profile */}
           <div>
             <label className="label-mono block mb-2">
-              Energy <span className="text-gold normal-case">+20%</span>
+              Energy <span className="text-dome normal-case">+20%</span>
             </label>
             <SingleChipSelect
               value={energyProfile}
@@ -374,7 +374,7 @@ export default function ProfileEditDrawer({ open, onClose, initialData }: Props)
           {/* Key themes */}
           <div>
             <label className="label-mono block mb-2">
-              Key themes <span className="text-gold normal-case">+20%</span>
+              Key themes <span className="text-dome normal-case">+20%</span>
             </label>
             <ChipInput
               chips={keyThemes}
@@ -397,7 +397,7 @@ export default function ProfileEditDrawer({ open, onClose, initialData }: Props)
           <button
             onClick={() => saveProfile.mutate()}
             disabled={saveProfile.isPending}
-            className="flex-1 bg-gold text-black font-semibold py-3 rounded-lg text-sm hover:bg-gold-light transition-colors disabled:opacity-50"
+            className="flex-1 bg-dome text-black font-semibold py-3 rounded-lg text-sm hover:bg-dome-light transition-colors disabled:opacity-50"
           >
             {saveProfile.isPending ? 'Saving…' : 'Save profile'}
           </button>

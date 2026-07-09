@@ -107,7 +107,7 @@ const BAR_CSS = `
     display: flex; align-items: center; gap: 10px;
     padding: 0 16px;
     background: linear-gradient(90deg, #0f0d08 0%, #131008 60%, #0f0d08 100%);
-    border-bottom: 1px solid #C9A84C30;
+    border-bottom: 1px solid #5A9BCB30;
     cursor: pointer;
     overflow: hidden;
   }
@@ -118,7 +118,7 @@ const BAR_CSS = `
   .slb-bar::before {
     content: '';
     position: absolute; inset: 0;
-    background: linear-gradient(90deg, transparent 0%, #C9A84C06 50%, transparent 100%);
+    background: linear-gradient(90deg, transparent 0%, #5A9BCB06 50%, transparent 100%);
     background-size: 200% 100%;
     animation: slb-shimmer 3s linear infinite;
   }
@@ -129,25 +129,25 @@ const BAR_CSS = `
 
   .slb-dot {
     width: 6px; height: 6px; border-radius: 50%;
-    background: #C9A84C; box-shadow: 0 0 6px #C9A84C;
+    background: #5A9BCB; box-shadow: 0 0 6px #5A9BCB;
     flex-shrink: 0; position: relative;
     animation: slb-dot-pulse 1.6s ease-in-out infinite;
   }
   @keyframes slb-dot-pulse {
-    0%, 100% { box-shadow: 0 0 4px #C9A84C; }
-    50%       { box-shadow: 0 0 12px #C9A84C, 0 0 24px #C9A84C40; }
+    0%, 100% { box-shadow: 0 0 4px #5A9BCB; }
+    50%       { box-shadow: 0 0 12px #5A9BCB, 0 0 24px #5A9BCB40; }
   }
 
   .slb-pill {
     font-family: 'JetBrains Mono', monospace;
     font-size: 9px; letter-spacing: 0.12em;
-    color: #C9A84C; flex-shrink: 0;
+    color: #5A9BCB; flex-shrink: 0;
   }
   .slb-divider { color: #2a2a2a; font-size: 10px; flex-shrink: 0; }
   .slb-artist  { font-size: 12px; color: #e4e4e7; font-weight: 600; flex-shrink: 0; }
   .slb-room    { font-size: 11px; color: #71717a; flex-shrink: 0; }
   .slb-time    { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #555; flex-shrink: 0; }
-  .slb-remaining { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #C9A84C88; flex-shrink: 0; }
+  .slb-remaining { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #5A9BCB88; flex-shrink: 0; }
   .slb-click-hint { font-size: 10px; color: #2a2a2a; flex-shrink: 0; transition: color 0.15s; }
-  .slb-bar:hover .slb-click-hint { color: #C9A84C88; }
+  .slb-bar:hover .slb-click-hint { color: #5A9BCB88; }
 `;

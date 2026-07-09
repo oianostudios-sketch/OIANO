@@ -56,7 +56,7 @@ function StripePayButton({ bookingId }: { bookingId: string }) {
       <button onClick={handlePay} disabled={loading}
         className="w-full py-3 rounded-lg font-semibold text-sm transition-all"
         style={{
-          background: loading ? '#1a1a1a' : '#C9A84C',
+          background: loading ? '#1a1a1a' : '#5A9BCB',
           color: loading ? '#555' : '#000',
           border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
           letterSpacing: '0.04em',
@@ -174,7 +174,7 @@ export default function BookingDetailPage() {
     <div className="min-h-screen bg-studio-bg flex items-center justify-center">
       <div className="text-center">
         <p className="text-zinc-500 text-sm">Booking not found.</p>
-        <button onClick={() => navigate(backTo)} className="mt-4 text-gold text-sm hover:text-gold-light">← Back</button>
+        <button onClick={() => navigate(backTo)} className="mt-4 text-dome text-sm hover:text-dome-light">← Back</button>
       </div>
     </div>
   );
@@ -187,7 +187,7 @@ export default function BookingDetailPage() {
       <header className="border-b border-studio-border px-6 py-4 flex items-center justify-between sticky top-0 bg-studio-bg z-10">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate(backTo)} className="text-zinc-500 hover:text-white text-sm transition-colors">← Back</button>
-          <h1 className="font-display text-xl text-gold font-semibold animate-heading">Booking Detail</h1>
+          <h1 className="font-display text-xl text-dome font-semibold animate-heading">Booking Detail</h1>
         </div>
         <div className="flex items-center gap-2">
           {/* Link DAW — downloads a pre-filled watcher.config.json for apps/watcher */}
@@ -229,7 +229,7 @@ export default function BookingDetailPage() {
             </button>
           )}
           <button onClick={shareCard} disabled={sharing}
-            className="flex items-center gap-2 text-xs border border-studio-border text-zinc-400 px-3 py-1.5 rounded-lg hover:border-gold/40 hover:text-gold transition-colors disabled:opacity-40">
+            className="flex items-center gap-2 text-xs border border-studio-border text-zinc-400 px-3 py-1.5 rounded-lg hover:border-dome/40 hover:text-dome transition-colors disabled:opacity-40">
             {sharing ? <span className="animate-pulse">Preparing…</span>
               : copied ? <span className="text-green-400">Link copied</span>
               : <>
@@ -305,10 +305,10 @@ export default function BookingDetailPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-white text-sm font-medium">{booking.artist.name}</p>
-                {booking.artist.alias && <p className="text-gold text-xs mt-0.5">{booking.artist.alias}</p>}
+                {booking.artist.alias && <p className="text-dome text-xs mt-0.5">{booking.artist.alias}</p>}
               </div>
               <button onClick={() => navigate(`/artists/${booking.artist.id}`)}
-                className="text-xs bg-gold/10 border border-gold/20 text-gold px-3 py-1.5 rounded-lg hover:bg-gold/20 transition-colors">
+                className="text-xs bg-dome/10 border border-dome/20 text-dome px-3 py-1.5 rounded-lg hover:bg-dome/20 transition-colors">
                 View profile
               </button>
             </div>
@@ -365,7 +365,7 @@ export default function BookingDetailPage() {
             <div className="flex items-center justify-between mb-3">
               <p className="label-mono">Deliver Files</p>
               <button onClick={() => setDeliverOpen(o => !o)}
-                className="text-xs text-gold border border-gold/30 px-3 py-1 rounded-lg hover:bg-gold/5 transition-colors">
+                className="text-xs text-dome border border-dome/30 px-3 py-1 rounded-lg hover:bg-dome/5 transition-colors">
                 {deliverOpen ? 'Cancel' : booking?.session_log?.tracks_worked?.length ? 'Re-deliver' : 'Deliver to artist'}
               </button>
             </div>
@@ -374,7 +374,7 @@ export default function BookingDetailPage() {
               <div className="space-y-1.5">
                 {booking.session_log.tracks_worked.map((url: string, i: number) => (
                   <a key={i} href={url} target="_blank" rel="noreferrer"
-                    className="flex items-center gap-2 text-xs text-zinc-400 hover:text-gold transition-colors font-mono truncate">
+                    className="flex items-center gap-2 text-xs text-zinc-400 hover:text-dome transition-colors font-mono truncate">
                     <span className="text-zinc-600">↗</span>{url.split('/').pop() ?? `File ${i + 1}`}
                   </a>
                 ))}
@@ -389,10 +389,10 @@ export default function BookingDetailPage() {
                   onChange={e => setDeliverUrls(e.target.value)}
                   placeholder="https://pub-xxx.r2.dev/files/track-master.wav&#10;https://pub-xxx.r2.dev/files/stems.zip"
                   rows={4}
-                  className="w-full bg-studio-bg border border-studio-border text-white text-xs font-mono placeholder-zinc-700 rounded-lg px-3 py-2.5 focus:outline-none focus:border-gold resize-none"
+                  className="w-full bg-studio-bg border border-studio-border text-white text-xs font-mono placeholder-zinc-700 rounded-lg px-3 py-2.5 focus:outline-none focus:border-dome resize-none"
                 />
                 <button onClick={() => deliver.mutate()} disabled={!deliverUrls.trim() || deliver.isPending}
-                  className="w-full bg-gold hover:bg-gold-light text-black font-semibold text-sm py-2.5 rounded-lg transition-colors disabled:opacity-40">
+                  className="w-full bg-dome hover:bg-dome-light text-black font-semibold text-sm py-2.5 rounded-lg transition-colors disabled:opacity-40">
                   {deliver.isPending ? 'Delivering…' : 'Deliver & notify artist →'}
                 </button>
               </div>
@@ -402,12 +402,12 @@ export default function BookingDetailPage() {
 
         {/* Artist: view delivered files */}
         {user?.role === 'ARTIST' && booking?.session_log?.tracks_worked?.length > 0 && (
-          <div className="rounded-xl border border-gold/20 bg-gold/5 px-6 py-5 animate-surface">
-            <p className="label-mono text-gold mb-3">Your Files Are Ready</p>
+          <div className="rounded-xl border border-dome/20 bg-dome/5 px-6 py-5 animate-surface">
+            <p className="label-mono text-dome mb-3">Your Files Are Ready</p>
             <div className="space-y-2">
               {booking.session_log.tracks_worked.map((url: string, i: number) => (
                 <a key={i} href={url} target="_blank" rel="noreferrer" download
-                  className="flex items-center gap-2 text-sm text-gold hover:text-gold-light transition-colors font-mono truncate">
+                  className="flex items-center gap-2 text-sm text-dome hover:text-dome-light transition-colors font-mono truncate">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
                   </svg>
@@ -430,7 +430,7 @@ export default function BookingDetailPage() {
                 setRescheduleEnd(e.toTimeString().slice(0,5));
                 setRescheduleOpen(true);
               }}
-              className="w-full py-3 rounded-xl border border-studio-border text-zinc-400 text-sm hover:border-gold/30 hover:text-gold transition-colors"
+              className="w-full py-3 rounded-xl border border-studio-border text-zinc-400 text-sm hover:border-dome/30 hover:text-dome transition-colors"
             >
               Reschedule this booking
             </button>
@@ -456,19 +456,19 @@ export default function BookingDetailPage() {
               <p>We know life as an artist is unpredictable. Here's how we handle changes:</p>
               <div className="space-y-2">
                 <div className="flex gap-3">
-                  <span className="text-gold font-mono text-xs mt-0.5">72h+</span>
+                  <span className="text-dome font-mono text-xs mt-0.5">72h+</span>
                   <span>Cancel or reschedule with no fee. Your credits are returned in full.</span>
                 </div>
                 <div className="flex gap-3">
-                  <span className="text-gold font-mono text-xs mt-0.5">48h</span>
+                  <span className="text-dome font-mono text-xs mt-0.5">48h</span>
                   <span>50% of session credits are retained. The rest return to your wallet.</span>
                 </div>
                 <div className="flex gap-3">
-                  <span className="text-gold font-mono text-xs mt-0.5">24h</span>
+                  <span className="text-dome font-mono text-xs mt-0.5">24h</span>
                   <span>Last-minute cancellations retain the full session cost. Reach out to the studio if there's an emergency — we're human.</span>
                 </div>
                 <div className="flex gap-3">
-                  <span className="text-gold font-mono text-xs mt-0.5">Now</span>
+                  <span className="text-dome font-mono text-xs mt-0.5">Now</span>
                   <span>Use the Reschedule button above to move to a new slot at no extra charge (72h+ notice). The studio is always on your side.</span>
                 </div>
               </div>
@@ -482,7 +482,7 @@ export default function BookingDetailPage() {
           {booking.status === 'COMPLETED' && (
             <Link
               to={`/book?rebook=${booking.id}`}
-              className="flex-1 text-center py-3 rounded-xl border border-gold/30 text-gold text-sm font-semibold hover:bg-gold/5 transition-colors font-display"
+              className="flex-1 text-center py-3 rounded-xl border border-dome/30 text-dome text-sm font-semibold hover:bg-dome/5 transition-colors font-display"
             >
               Rebook this session
             </Link>
@@ -520,7 +520,7 @@ export default function BookingDetailPage() {
                   value={rescheduleDate}
                   min={new Date().toISOString().slice(0,10)}
                   onChange={e => setRescheduleDate(e.target.value)}
-                  className="w-full bg-studio-bg border border-studio-border text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-gold"
+                  className="w-full bg-studio-bg border border-studio-border text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-dome"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -530,7 +530,7 @@ export default function BookingDetailPage() {
                     type="time"
                     value={rescheduleStart}
                     onChange={e => setRescheduleStart(e.target.value)}
-                    className="w-full bg-studio-bg border border-studio-border text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-gold"
+                    className="w-full bg-studio-bg border border-studio-border text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-dome"
                   />
                 </div>
                 <div>
@@ -539,7 +539,7 @@ export default function BookingDetailPage() {
                     type="time"
                     value={rescheduleEnd}
                     onChange={e => setRescheduleEnd(e.target.value)}
-                    className="w-full bg-studio-bg border border-studio-border text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-gold"
+                    className="w-full bg-studio-bg border border-studio-border text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-dome"
                   />
                 </div>
               </div>
@@ -547,7 +547,7 @@ export default function BookingDetailPage() {
             <button
               onClick={() => reschedule.mutate()}
               disabled={!rescheduleDate || !rescheduleStart || !rescheduleEnd || reschedule.isPending}
-              className="w-full mt-5 py-3 bg-gold hover:bg-gold-light text-black font-semibold text-sm rounded-xl transition-colors disabled:opacity-40"
+              className="w-full mt-5 py-3 bg-dome hover:bg-dome-light text-black font-semibold text-sm rounded-xl transition-colors disabled:opacity-40"
             >
               {reschedule.isPending ? 'Rescheduling…' : 'Confirm new time →'}
             </button>

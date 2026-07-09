@@ -143,10 +143,10 @@ export default function ConnectPage() {
                 maxWidth: '72%',
                 padding: '10px 14px',
                 borderRadius: isMe ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                background: isMe ? 'rgba(201,168,76,0.12)' : 'var(--surface)',
-                border: `1px solid ${isMe ? 'rgba(201,168,76,0.2)' : 'var(--border)'}`,
+                background: isMe ? 'rgba(90,155,203,0.12)' : 'var(--surface)',
+                border: `1px solid ${isMe ? 'rgba(90,155,203,0.2)' : 'var(--border)'}`,
               }}>
-                <p style={{ margin: 0, fontSize: 13, color: isMe ? '#E2C97E' : '#ccc', lineHeight: 1.5 }}>{msg.body}</p>
+                <p style={{ margin: 0, fontSize: 13, color: isMe ? '#8BBEDD' : '#ccc', lineHeight: 1.5 }}>{msg.body}</p>
                 <p style={{ margin: '4px 0 0', fontSize: 10, color: '#444', textAlign: isMe ? 'right' : 'left', fontFamily: 'JetBrains Mono, monospace' }}>
                   {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </p>
@@ -183,7 +183,7 @@ export default function ConnectPage() {
           onClick={() => { if (draft.trim() && connectionId) send.mutate(); }}
           disabled={!draft.trim() || !connectionId || send.isPending}
           style={{
-            background: draft.trim() ? '#C9A84C' : 'var(--muted)',
+            background: draft.trim() ? '#5A9BCB' : 'var(--muted)',
             border: 'none',
             borderRadius: 10,
             width: 40,

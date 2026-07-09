@@ -123,8 +123,8 @@ export default function ReceiptPage() {
           </div>
         </div>
 
-        {/* Gold accent line */}
-        <div style={{ height: 3, background: 'linear-gradient(90deg, #C9A84C, #E2C97E, #C9A84C)' }} />
+        {/* Accent line */}
+        <div style={{ height: 3, background: 'linear-gradient(90deg, #5A9BCB, #8BBEDD, #5A9BCB)' }} />
 
         {/* Body */}
         <div style={{ padding: '36px 40px' }}>
@@ -138,7 +138,7 @@ export default function ReceiptPage() {
               {booking.artist?.name ?? 'Artist'}
             </p>
             {booking.artist?.alias && (
-              <p style={{ fontSize: 13, color: '#C9A84C', margin: '2px 0 0' }}>
+              <p style={{ fontSize: 13, color: '#5A9BCB', margin: '2px 0 0' }}>
                 {booking.artist.alias}
               </p>
             )}
@@ -253,7 +253,7 @@ export default function ReceiptPage() {
             }}
           >
             <div>
-              <p style={{ fontSize: 12, color: '#C9A84C', fontFamily: "'Playfair Display', serif", margin: 0 }}>
+              <p style={{ fontSize: 12, color: '#5A9BCB', fontFamily: "'Playfair Display', serif", margin: 0 }}>
                 Dreamz Music Lab
               </p>
               <p style={{ fontSize: 11, color: '#bbb', margin: '4px 0 0' }}>

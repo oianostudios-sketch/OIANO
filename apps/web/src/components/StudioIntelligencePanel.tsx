@@ -124,7 +124,7 @@ export default function StudioIntelligencePanel({ pulseData, loading }: Props) {
       {/* ── Daily Signal / Mantra ── */}
       <div style={{
         background: '#0c0a06',
-        border: '1px solid #C9A84C22',
+        border: '1px solid #5A9BCB22',
         borderRadius: 8,
         padding: '14px 16px',
         position: 'relative',
@@ -134,11 +134,11 @@ export default function StudioIntelligencePanel({ pulseData, loading }: Props) {
         <div style={{
           position: 'absolute', top: -40, right: -40,
           width: 120, height: 120, borderRadius: '50%',
-          background: 'radial-gradient(circle, #C9A84C18 0%, transparent 70%)',
+          background: 'radial-gradient(circle, #5A9BCB18 0%, transparent 70%)',
           pointerEvents: 'none',
         }} />
         <div style={{ position: 'relative', zIndex: 1 }}>
-          <p style={{ margin: '0 0 8px', fontSize: 9, color: '#C9A84C88', letterSpacing: '0.14em', textTransform: 'uppercase', fontFamily: 'monospace' }}>
+          <p style={{ margin: '0 0 8px', fontSize: 9, color: '#5A9BCB88', letterSpacing: '0.14em', textTransform: 'uppercase', fontFamily: 'monospace' }}>
             ✦ Today's signal
           </p>
           <p style={{
@@ -153,7 +153,7 @@ export default function StudioIntelligencePanel({ pulseData, loading }: Props) {
           }}>
             "{mantra.text}"
           </p>
-          <p style={{ margin: 0, fontSize: 10, color: '#C9A84C', fontFamily: 'monospace', letterSpacing: '0.08em' }}>
+          <p style={{ margin: 0, fontSize: 10, color: '#5A9BCB', fontFamily: 'monospace', letterSpacing: '0.08em' }}>
             — {mantra.author}
           </p>
         </div>
@@ -176,7 +176,7 @@ export default function StudioIntelligencePanel({ pulseData, loading }: Props) {
               <p style={{ margin: '0 0 2px', fontSize: 11, color: '#555' }}>
                 of {util.today_available_hours}h available · today
               </p>
-              <p style={{ margin: 0, fontSize: 11, color: '#C9A84C88' }}>
+              <p style={{ margin: 0, fontSize: 11, color: '#5A9BCB88' }}>
                 {util.week_sessions} sessions this week
               </p>
             </div>
@@ -199,12 +199,12 @@ export default function StudioIntelligencePanel({ pulseData, loading }: Props) {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                 <span style={{ fontSize: 12, color: '#e4e4e7', fontWeight: 600 }}>{genre.genre}</span>
-                <span style={{ fontSize: 11, color: '#C9A84C', fontFamily: 'monospace' }}>{genre.pct}%</span>
+                <span style={{ fontSize: 11, color: '#5A9BCB', fontFamily: 'monospace' }}>{genre.pct}%</span>
               </div>
               <div style={{ height: 4, background: '#1e1e1e', borderRadius: 2, overflow: 'hidden' }}>
                 <div style={{
                   height: '100%', width: `${genre.pct}%`,
-                  background: 'linear-gradient(90deg, #C9A84C, #E2C97E)',
+                  background: 'linear-gradient(90deg, #5A9BCB, #8BBEDD)',
                   borderRadius: 2, transition: 'width 1s ease',
                 }} />
               </div>

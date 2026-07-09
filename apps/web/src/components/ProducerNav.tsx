@@ -20,7 +20,7 @@ export function ProducerNav({ passportCode }: { passportCode?: string | null }) 
         background: 'none', border: 'none',
         padding: '0.4rem 0.9rem',
         borderRadius: 6,
-        color: active ? '#C9A84C' : '#666',
+        color: active ? '#5A9BCB' : '#666',
         fontFamily: 'var(--font-mono, JetBrains Mono), monospace',
         fontSize: '0.75rem', letterSpacing: '0.08em',
         textTransform: 'uppercase' as const,

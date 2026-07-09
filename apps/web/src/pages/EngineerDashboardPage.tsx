@@ -104,7 +104,7 @@ export default function EngineerDashboardPage() {
       {/* Header */}
       <header className="border-b border-studio-border px-6 py-4 flex items-center justify-between sticky top-0 bg-studio-bg z-10">
         <div className="flex items-center gap-3">
-          <h1 className="font-display text-xl text-gold font-semibold">OIANO</h1>
+          <h1 className="font-display text-xl text-dome font-semibold">OIANO</h1>
           <span className="text-zinc-600 text-xs">Engineer · Studio</span>
         </div>
         {/* Room status strip — live from pulse */}
@@ -149,7 +149,7 @@ export default function EngineerDashboardPage() {
               {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
             </span>
             {todaysSessions.length > 0 && (
-              <span className="ml-auto text-xs bg-gold/10 border border-gold/20 text-gold px-2 py-0.5 rounded-full">
+              <span className="ml-auto text-xs bg-dome/10 border border-dome/20 text-dome px-2 py-0.5 rounded-full">
                 {todaysSessions.length} session{todaysSessions.length !== 1 ? 's' : ''}
               </span>
             )}
@@ -173,17 +173,17 @@ export default function EngineerDashboardPage() {
 
                 return (
                   <div key={b.id} className={`bg-studio-surface border rounded-xl px-5 py-4 transition-colors ${
-                    isActive ? 'border-gold/30 bg-gold/5' : 'border-studio-border'
+                    isActive ? 'border-dome/30 bg-dome/5' : 'border-studio-border'
                   }`}>
                     <div className="flex items-center gap-5">
                       {/* Time block */}
                       <div className="w-20 flex-shrink-0 text-center">
-                        <p className={`font-mono text-sm font-semibold ${isActive ? 'text-gold' : 'text-zinc-300'}`}>
+                        <p className={`font-mono text-sm font-semibold ${isActive ? 'text-dome' : 'text-zinc-300'}`}>
                           {fmtTime(b.starts_at)}
                         </p>
                         <p className="text-zinc-600 text-xs">{fmtTime(b.ends_at)}</p>
                         {isActive && (
-                          <span className="text-[9px] text-gold uppercase tracking-wider font-mono mt-1 block">● live</span>
+                          <span className="text-[9px] text-dome uppercase tracking-wider font-mono mt-1 block">● live</span>
                         )}
                       </div>
 
@@ -206,7 +206,7 @@ export default function EngineerDashboardPage() {
                         {isPast && (
                           <button
                             onClick={() => openNotes(b)}
-                            className="text-xs bg-gold/10 border border-gold/20 text-gold px-3 py-1.5 rounded-lg hover:bg-gold/20 transition-colors"
+                            className="text-xs bg-dome/10 border border-dome/20 text-dome px-3 py-1.5 rounded-lg hover:bg-dome/20 transition-colors"
                           >
                             {b.session_log?.notes ? '✎ Edit notes' : '+ Add notes'}
                           </button>
@@ -223,10 +223,10 @@ export default function EngineerDashboardPage() {
                     {/* Existing notes preview */}
                     {b.session_log?.notes && (
                       <div className="mt-3 pt-3 border-t border-studio-border flex items-start gap-3">
-                        <span className="text-gold text-xs font-mono">Notes</span>
+                        <span className="text-dome text-xs font-mono">Notes</span>
                         <p className="text-zinc-400 text-xs leading-relaxed flex-1">{b.session_log.notes}</p>
                         {b.session_log.quality_rating && (
-                          <span className="text-gold text-xs flex-shrink-0">
+                          <span className="text-dome text-xs flex-shrink-0">
                             {'★'.repeat(b.session_log.quality_rating)}
                             <span className="text-zinc-600 ml-1">({RATING_LABELS[b.session_log.quality_rating]})</span>
                           </span>
@@ -283,7 +283,7 @@ export default function EngineerDashboardPage() {
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {b.session_log?.quality_rating && (
-                      <span className="text-gold text-xs">{'★'.repeat(b.session_log.quality_rating)}</span>
+                      <span className="text-dome text-xs">{'★'.repeat(b.session_log.quality_rating)}</span>
                     )}
                     <button
                       onClick={() => openNotes(b)}
@@ -325,7 +325,7 @@ export default function EngineerDashboardPage() {
                     onClick={() => setRating(r === rating ? 0 : r)}
                     className={`flex-1 py-2 rounded-lg border text-xs transition-colors ${
                       r <= rating
-                        ? 'border-gold bg-gold/10 text-gold'
+                        ? 'border-dome bg-dome/10 text-dome'
                         : 'border-studio-border text-zinc-600 hover:border-zinc-600'
                     }`}
                   >
@@ -344,7 +344,7 @@ export default function EngineerDashboardPage() {
                 value={tracksText}
                 onChange={(e) => setTracksText(e.target.value)}
                 placeholder="Track 1, Track 2, Hook refine..."
-                className="w-full bg-studio-muted border border-studio-border text-white placeholder-zinc-600 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-gold transition-colors"
+                className="w-full bg-studio-muted border border-studio-border text-white placeholder-zinc-600 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-dome transition-colors"
               />
             </div>
 
@@ -356,7 +356,7 @@ export default function EngineerDashboardPage() {
                 onChange={(e) => setNotesText(e.target.value)}
                 placeholder="What happened in the session? Breakthroughs, challenges, what to pick up next time..."
                 rows={4}
-                className="w-full bg-studio-muted border border-studio-border text-white placeholder-zinc-600 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-gold transition-colors resize-none"
+                className="w-full bg-studio-muted border border-studio-border text-white placeholder-zinc-600 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-dome transition-colors resize-none"
               />
             </div>
 
@@ -370,7 +370,7 @@ export default function EngineerDashboardPage() {
               <button
                 onClick={() => saveNotes.mutate({ id: notesTarget })}
                 disabled={saveNotes.isPending}
-                className="flex-1 bg-gold text-black font-semibold py-2.5 rounded-lg text-sm hover:bg-gold-light transition-colors disabled:opacity-50"
+                className="flex-1 bg-dome text-black font-semibold py-2.5 rounded-lg text-sm hover:bg-dome-light transition-colors disabled:opacity-50"
               >
                 {saveNotes.isPending ? 'Saving…' : 'Save notes'}
               </button>
