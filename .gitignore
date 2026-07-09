@@ -3,3 +3,8 @@ node_modules
 .env
 
 /generated/prisma
+
+# One-off root-level DB scripts — read DATABASE_URL from env, but keep them
+# out of git entirely as defense in depth (see the July 2026 credential audit)
+/run-migration-pg.js
+/update-passwords.js
