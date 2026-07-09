@@ -1,0 +1,16 @@
+{
+  "name": "@oiano/daw-watcher",
+  "version": "1.0.0",
+  "description": "DAW file-sync agent for OIANO StudioOS — watches your project folder and syncs saves to the studio system in real time",
+  "main": "watcher.js",
+  "scripts": {
+    "start": "node watcher.js",
+    "dev": "node --watch watcher.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "chokidar": "^3.6.0",
+    "form-data": "^4.0.0"
+  },
+  "engines": { "node": ">=18" }
+}

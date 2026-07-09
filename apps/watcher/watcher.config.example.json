@@ -1,0 +1,25 @@
+{
+  "_comment": "Copy this to watcher.config.json and fill in your values. The studio dashboard can generate this for you automatically when a session starts.",
+
+  "api_url":    "http://localhost:4000",
+  "token":      "paste-your-jwt-token-here",
+  "artist_id":  "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "session_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+
+  "watch_path": "C:\\Users\\YourName\\Documents\\Image-Line\\FL Studio\\Projects",
+
+  "_watch_path_examples": {
+    "FL Studio (Windows)":    "C:\\Users\\YourName\\Documents\\Image-Line\\FL Studio\\Projects",
+    "FL Studio (Mac)":        "/Users/YourName/Documents/Image-Line/FL Studio/Projects",
+    "Ableton Live (Windows)": "C:\\Users\\YourName\\Documents\\Ableton\\Projects",
+    "Ableton Live (Mac)":     "/Users/YourName/Music/Ableton/Projects",
+    "Logic Pro (Mac)":        "/Users/YourName/Music",
+    "Pro Tools":              "C:\\Users\\YourName\\Documents\\Pro Tools"
+  },
+
+  "extensions": [".flp", ".wav", ".mp3", ".aiff", ".aif", ".ogg", ".mid", ".als", ".logic", ".ptx", ".zip"],
+
+  "debounce_ms":      2000,
+  "use_polling":      false,
+  "poll_interval_ms": 1000
+}
