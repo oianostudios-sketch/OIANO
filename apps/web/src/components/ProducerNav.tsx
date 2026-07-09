@@ -33,7 +33,7 @@ export function ProducerNav({ passportCode }: { passportCode?: string | null }) 
   );
 
   return (
-    <nav style={{
+    <nav className="producer-nav" style={{
       position: 'sticky', top: 0, zIndex: 50,
       background: 'rgba(10,10,10,0.92)',
       backdropFilter: 'blur(12px)',
@@ -41,9 +41,27 @@ export function ProducerNav({ passportCode }: { passportCode?: string | null }) 
       padding: '0 2rem',
       height: 52,
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      gap: '0.75rem',
     }}>
+      <style>{`
+        @media (max-width: 640px) {
+          .producer-nav { padding: 0 1rem !important; }
+          .producer-nav .producer-nav-subtitle { display: none; }
+          .producer-nav .producer-nav-code { display: none; }
+          .producer-nav .producer-nav-links {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            min-width: 0;
+            flex: 1 1 auto;
+            justify-content: flex-start !important;
+          }
+          .producer-nav .producer-nav-links::-webkit-scrollbar { display: none; }
+          .producer-nav .producer-nav-links button { flex-shrink: 0; }
+        }
+      `}</style>
       {/* Left — wordmark */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexShrink: 0 }}>
         <span style={{
           fontFamily: 'var(--font-display, Playfair Display), serif',
           fontSize: '1.1rem', fontWeight: 400, color: '#C9A84C',
@@ -51,8 +69,8 @@ export function ProducerNav({ passportCode }: { passportCode?: string | null }) 
         }} onClick={() => navigate('/producer')}>
           OIANO
         </span>
-        <div style={{ width: 1, height: 16, background: 'rgba(255,255,255,0.08)' }} />
-        <span style={{
+        <div className="producer-nav-subtitle" style={{ width: 1, height: 16, background: 'rgba(255,255,255,0.08)' }} />
+        <span className="producer-nav-subtitle" style={{
           fontFamily: 'var(--font-mono, JetBrains Mono), monospace',
           fontSize: '0.65rem', letterSpacing: '0.2em',
           color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase',
@@ -62,7 +80,7 @@ export function ProducerNav({ passportCode }: { passportCode?: string | null }) 
       </div>
 
       {/* Centre — nav links */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+      <div className="producer-nav-links" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', justifyContent: 'center' }}>
         {navLink('Projects', '/producer', onProjects)}
         {navLink('Discover', '/discover', onDiscover)}
         {navLink('Producers', '/producers', onProducers)}
@@ -70,9 +88,9 @@ export function ProducerNav({ passportCode }: { passportCode?: string | null }) 
       </div>
 
       {/* Right — passport code + logout */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexShrink: 0 }}>
         {passportCode && (
-          <span style={{
+          <span className="producer-nav-code" style={{
             fontFamily: 'var(--font-mono, JetBrains Mono), monospace',
             fontSize: '0.65rem', color: 'rgba(201,168,76,0.45)',
             letterSpacing: '0.12em',
@@ -89,6 +107,7 @@ export function ProducerNav({ passportCode }: { passportCode?: string | null }) 
             fontFamily: 'var(--font-mono, JetBrains Mono), monospace',
             letterSpacing: '0.06em', textTransform: 'uppercase',
             transition: 'color 0.15s, border-color 0.15s',
+            whiteSpace: 'nowrap',
           }}
           onMouseEnter={e => { (e.target as HTMLButtonElement).style.color = '#ef4444'; (e.target as HTMLButtonElement).style.borderColor = 'rgba(239,68,68,0.3)'; }}
           onMouseLeave={e => { (e.target as HTMLButtonElement).style.color = '#555'; (e.target as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.08)'; }}
