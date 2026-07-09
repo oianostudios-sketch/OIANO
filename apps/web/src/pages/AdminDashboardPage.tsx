@@ -369,7 +369,7 @@ export default function AdminDashboardPage() {
                 )}
                 <button
                   onClick={() => setShowWalkIn(true)}
-                  className="flex items-center gap-2 bg-gold/10 border border-gold/30 text-gold text-xs px-4 py-2 rounded-lg hover:bg-gold/20 transition-colors font-medium"
+                  className="flex items-center gap-2 bg-dome/10 border border-dome/30 text-dome text-xs px-4 py-2 rounded-lg hover:bg-dome/20 transition-colors font-medium"
                 >
                   + Walk-in
                 </button>
@@ -396,7 +396,7 @@ export default function AdminDashboardPage() {
                       {/* Time + artist */}
                       <div className="flex items-center gap-5">
                         <div className="text-center w-16 border-r border-studio-border pr-5">
-                          <p className="metric-number text-gold text-sm">{fmt2(b.starts_at)}</p>
+                          <p className="metric-number text-dome text-sm">{fmt2(b.starts_at)}</p>
                           <p className="metric-number text-zinc-600 text-xs">{fmt2(b.ends_at)}</p>
                         </div>
                         <div>
@@ -440,7 +440,7 @@ export default function AdminDashboardPage() {
                             )}
                           </>
                         )}
-                        <Link to={`/bookings/${b.id}`} className="text-zinc-600 hover:text-gold text-xs transition-colors px-1.5 ml-1">→</Link>
+                        <Link to={`/bookings/${b.id}`} className="text-zinc-600 hover:text-dome text-xs transition-colors px-1.5 ml-1">→</Link>
                       </div>
                     </div>
                   );
@@ -475,7 +475,7 @@ export default function AdminDashboardPage() {
                       </div>
                       <button
                         onClick={() => { setCreditTarget({ id: r.artist_id, name: r.artist_name }); setCreditAmount(100); }}
-                        className="text-xs bg-gold/10 border border-gold/20 text-gold px-3 py-1.5 rounded-lg hover:bg-gold/20 transition-colors"
+                        className="text-xs bg-dome/10 border border-dome/20 text-dome px-3 py-1.5 rounded-lg hover:bg-dome/20 transition-colors"
                       >+ Credit</button>
                     </div>
                   ))}
@@ -500,19 +500,19 @@ export default function AdminDashboardPage() {
                     value={announceTitle}
                     onChange={e => setAnnounceTitle(e.target.value)}
                     placeholder="Announcement title…"
-                    className="w-full bg-zinc-900 border border-studio-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-gold/40"
+                    className="w-full bg-zinc-900 border border-studio-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-dome/40"
                   />
                   <textarea
                     value={announceBody}
                     onChange={e => setAnnounceBody(e.target.value)}
                     placeholder="Message body (visible to all artists)…"
                     rows={3}
-                    className="w-full bg-zinc-900 border border-studio-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-gold/40 resize-none"
+                    className="w-full bg-zinc-900 border border-studio-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-dome/40 resize-none"
                   />
                   <button
                     onClick={() => broadcast.mutate()}
                     disabled={!announceTitle.trim() || !announceBody.trim() || broadcast.isPending}
-                    className="w-full bg-gold/10 border border-gold/20 text-gold py-2 rounded-lg text-sm font-semibold hover:bg-gold/20 transition-colors disabled:opacity-40"
+                    className="w-full bg-dome/10 border border-dome/20 text-dome py-2 rounded-lg text-sm font-semibold hover:bg-dome/20 transition-colors disabled:opacity-40"
                   >
                     {broadcast.isPending ? 'Broadcasting…' : 'Broadcast to all artists'}
                   </button>
@@ -539,7 +539,7 @@ export default function AdminDashboardPage() {
                             <div className="flex items-center gap-2">
                               <Link
                                 to={`/artists/${a.id}`}
-                                className="text-white text-sm font-medium hover:text-gold transition-colors truncate"
+                                className="text-white text-sm font-medium hover:text-dome transition-colors truncate"
                               >
                                 {a.name}
                               </Link>
@@ -553,7 +553,7 @@ export default function AdminDashboardPage() {
                             <p className="text-zinc-600 text-[10px] font-mono mt-0.5">
                               {a.passport?.passport_code ?? '—'}
                               <span className="text-zinc-700 mx-1">·</span>
-                              <span className="text-gold/70">{a.passport?.profile_strength ?? 0}%</span>
+                              <span className="text-dome/70">{a.passport?.profile_strength ?? 0}%</span>
                             </p>
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0 ml-2">
@@ -562,7 +562,7 @@ export default function AdminDashboardPage() {
                             </span>
                             <button
                               onClick={() => { setCreditTarget({ id: a.id, name: a.name }); setCreditAmount(100); }}
-                              className="text-[10px] bg-gold/10 border border-gold/20 text-gold px-2 py-0.5 rounded hover:bg-gold/20 transition-colors"
+                              className="text-[10px] bg-dome/10 border border-dome/20 text-dome px-2 py-0.5 rounded hover:bg-dome/20 transition-colors"
                             >+$</button>
                           </div>
                         </div>
@@ -594,14 +594,14 @@ export default function AdminDashboardPage() {
                   onClick={() => setBookingTab(tab)}
                   className={`px-4 py-2 text-xs transition-colors flex items-center gap-1.5 ${
                     bookingTab === tab
-                      ? 'text-gold border-b-2 border-gold -mb-px'
+                      ? 'text-dome border-b-2 border-dome -mb-px'
                       : 'text-zinc-500 hover:text-white'
                   }`}
                 >
                   {tab}
                   {count > 0 && (
                     <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
-                      bookingTab === tab ? 'bg-gold/20 text-gold' : 'bg-studio-muted text-zinc-600'
+                      bookingTab === tab ? 'bg-dome/20 text-dome' : 'bg-studio-muted text-zinc-600'
                     }`}>{count}</span>
                   )}
                 </button>
@@ -665,7 +665,7 @@ export default function AdminDashboardPage() {
                       </>
                     )}
                     <Link to={`/bookings/${b.id}`}
-                      className="text-zinc-600 hover:text-gold text-xs transition-colors px-1.5 ml-1">→</Link>
+                      className="text-zinc-600 hover:text-dome text-xs transition-colors px-1.5 ml-1">→</Link>
                   </div>
                 </div>
               ))}
@@ -699,7 +699,7 @@ export default function AdminDashboardPage() {
                 placeholder="Artist or client name"
                 value={wiName}
                 onChange={(e) => setWiName(e.target.value)}
-                className="w-full bg-studio-muted border border-studio-border text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-gold transition-colors"
+                className="w-full bg-studio-muted border border-studio-border text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-dome transition-colors"
               />
             </div>
 
@@ -710,7 +710,7 @@ export default function AdminDashboardPage() {
                 placeholder="+1 555 000 0000"
                 value={wiPhone}
                 onChange={(e) => setWiPhone(e.target.value)}
-                className="w-full bg-studio-muted border border-studio-border text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-gold transition-colors"
+                className="w-full bg-studio-muted border border-studio-border text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-dome transition-colors"
               />
             </div>
 
@@ -719,7 +719,7 @@ export default function AdminDashboardPage() {
               <select
                 value={wiRoomId}
                 onChange={(e) => setWiRoomId(e.target.value)}
-                className="w-full bg-studio-muted border border-studio-border text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-gold transition-colors"
+                className="w-full bg-studio-muted border border-studio-border text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-dome transition-colors"
               >
                 <option value="">Select a room</option>
                 {rooms.map((r: any) => (
@@ -735,7 +735,7 @@ export default function AdminDashboardPage() {
                   type="date"
                   value={wiDate}
                   onChange={(e) => setWiDate(e.target.value)}
-                  className="w-full bg-studio-muted border border-studio-border text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-gold transition-colors"
+                  className="w-full bg-studio-muted border border-studio-border text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-dome transition-colors"
                 />
               </div>
               <div>
@@ -744,7 +744,7 @@ export default function AdminDashboardPage() {
                   type="time"
                   value={wiTime}
                   onChange={(e) => setWiTime(e.target.value)}
-                  className="w-full bg-studio-muted border border-studio-border text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-gold transition-colors"
+                  className="w-full bg-studio-muted border border-studio-border text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-dome transition-colors"
                 />
               </div>
             </div>
@@ -758,7 +758,7 @@ export default function AdminDashboardPage() {
                     onClick={() => setWiDuration(d)}
                     className={`py-2 text-sm rounded-lg border transition-colors ${
                       wiDuration === d
-                        ? 'border-gold bg-gold/10 text-gold'
+                        ? 'border-dome bg-dome/10 text-dome'
                         : 'border-studio-border bg-studio-muted text-zinc-400 hover:border-zinc-600'
                     }`}
                   >{d / 60}h</button>
@@ -773,7 +773,7 @@ export default function AdminDashboardPage() {
                 placeholder="e.g. bring own headphones"
                 value={wiNotes}
                 onChange={(e) => setWiNotes(e.target.value)}
-                className="w-full bg-studio-muted border border-studio-border text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-gold transition-colors"
+                className="w-full bg-studio-muted border border-studio-border text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-dome transition-colors"
               />
             </div>
 
@@ -785,7 +785,7 @@ export default function AdminDashboardPage() {
               <button
                 onClick={() => walkIn.mutate()}
                 disabled={!wiValid || walkIn.isPending}
-                className="flex-1 bg-gold text-black font-semibold py-2.5 rounded-lg text-sm hover:bg-gold-light transition-colors disabled:opacity-40"
+                className="flex-1 bg-dome text-black font-semibold py-2.5 rounded-lg text-sm hover:bg-dome-light transition-colors disabled:opacity-40"
               >{walkIn.isPending ? 'Booking…' : 'Book walk-in'}</button>
             </div>
           </div>
@@ -812,7 +812,7 @@ export default function AdminDashboardPage() {
                   onClick={() => setCreditAmount(amt)}
                   className={`py-2 text-sm rounded-lg border transition-colors ${
                     creditAmount === amt
-                      ? 'border-gold bg-gold/10 text-gold'
+                      ? 'border-dome bg-dome/10 text-dome'
                       : 'border-studio-border bg-studio-muted text-zinc-400 hover:border-zinc-600'
                   }`}
                 >${amt}</button>
@@ -827,7 +827,7 @@ export default function AdminDashboardPage() {
                 max={10000}
                 value={creditAmount}
                 onChange={(e) => setCreditAmount(Number(e.target.value))}
-                className="w-full bg-studio-muted border border-studio-border text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-gold transition-colors"
+                className="w-full bg-studio-muted border border-studio-border text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-dome transition-colors"
               />
             </div>
 
@@ -839,7 +839,7 @@ export default function AdminDashboardPage() {
               <button
                 onClick={() => creditWallet.mutate({ artist_id: creditTarget.id, amount_usd: creditAmount })}
                 disabled={creditWallet.isPending || !creditAmount}
-                className="flex-1 bg-gold text-black font-semibold py-2.5 rounded-lg text-sm disabled:opacity-50 hover:bg-gold-light transition-colors"
+                className="flex-1 bg-dome text-black font-semibold py-2.5 rounded-lg text-sm disabled:opacity-50 hover:bg-dome-light transition-colors"
               >
                 {creditWallet.isPending ? 'Crediting…' : `Credit $${creditAmount}`}
               </button>
