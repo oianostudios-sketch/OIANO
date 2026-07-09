@@ -7,6 +7,7 @@ import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
+import ArtistFacetMark from '../components/ArtistFacetMark';
 
 interface DiscoverArtist {
   id: string;
@@ -16,6 +17,7 @@ interface DiscoverArtist {
   avatar: string | null;
   profile_strength: number;
   overlap_score: number;
+  tier?: string | null;
   shared_genres: string[];
   shared_themes: string[];
   creative_dna: {
@@ -228,6 +230,7 @@ export default function DiscoverPage() {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
                           <span style={{ color: '#fff', fontWeight: 600, fontSize: 14 }}>{a.name}</span>
+                          <ArtistFacetMark tier={a.tier} />
                           {a.alias && <span style={{ color: '#C9A84C', fontSize: 12 }}>{a.alias}</span>}
                           {a.overlap_score > 0 && (
                             <span style={{

@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import { authenticate } from '../middleware/auth.middleware';
+import { computeArtistTiers } from '../lib/artistTier';
 
 export const discoverRouter = Router();
 discoverRouter.use(authenticate);
@@ -83,6 +84,10 @@ discoverRouter.get('/', async (req: any, res: Response, next: NextFunction) => {
       b.overlap_score - a.overlap_score || b.profile_strength - a.profile_strength
     );
 
-    res.json(scored.slice(0, 20));
+    const top = scored.slice(0, 20);
+    const tiers = await computeArtistTiers(top.map((a) => a.id));
+    const withTier = top.map((a) => ({ ...a, tier: tiers[a.id] ?? null }));
+
+    res.json(withTier);
   } catch (err) { next(err); }
 });

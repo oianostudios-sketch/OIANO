@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
+import ArtistFacetMark from '../components/ArtistFacetMark';
 
 // ── ConnectPage ───────────────────────────────────────────────────────────────
 // Slide-over style artist-to-artist message thread.
@@ -101,7 +102,10 @@ export default function ConnectPage() {
         )}
 
         <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#fff' }}>{displayName}</p>
+          <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}>
+            {displayName}
+            <ArtistFacetMark tier={otherArtist?.tier} />
+          </p>
           <p style={{ margin: 0, fontSize: 11, color: '#555', fontFamily: 'JetBrains Mono, monospace' }}>
             {status === 'ACCEPTED' ? '● connected' : status === 'PENDING' ? '○ pending' : '✕ declined'}
           </p>

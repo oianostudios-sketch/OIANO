@@ -4,6 +4,7 @@ import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
 import { emitActivityEvent } from '../lib/activityEvents';
+import { computeArtistTier } from '../lib/artistTier';
 
 export const artistsRouter = Router();
 artistsRouter.use(authenticate);
@@ -74,6 +75,8 @@ artistsRouter.get('/:id', async (req: any, res, next) => {
       }).catch(() => {}); // non-fatal
     }
 
+    const tier = await computeArtistTier(artist.id);
+
     // Non-admin artists viewing someone else's profile get a redacted response
     if (!isOwner && !isAdmin) {
       const { wallet, bookings, files, ...publicFields } = artist as any;
@@ -81,10 +84,10 @@ artistsRouter.get('/:id', async (req: any, res, next) => {
       if (publicFields.passport && !publicFields.passport.ai_summary_public) {
         publicFields.passport = { ...publicFields.passport, ai_summary: null };
       }
-      return res.json(publicFields);
+      return res.json({ ...publicFields, tier });
     }
 
-    res.json(artist);
+    res.json({ ...artist, tier });
   } catch (err) { next(err); }
 });
 
