@@ -11,9 +11,8 @@ import { StudioStateProvider } from './context/StudioState';
 import CommandPalette from './components/CommandPalette';
 import SessionLiveBar from './components/SessionLiveBar';
 import ErrorBoundary from './components/ErrorBoundary';
-import LoginPage from './pages/LoginPage';
-import SignupPage from './pages/SignupPage';
-import OnboardingPage from './pages/OnboardingPage';
+import EnterPage from './pages/EnterPage';
+import OnboardingSequencePage from './pages/OnboardingSequencePage';
 import DashboardPage from './pages/DashboardPage';
 import ArtistProfilePage from './pages/ArtistProfilePage';
 import BookingPage from './pages/BookingPage';
@@ -33,7 +32,7 @@ import ProducerPassportPage from './pages/ProducerPassportPage';
 
 function RequireAuth({ children, role, roles }: { children: JSX.Element; role?: string; roles?: string[] }) {
   const { token, user } = useAuthStore();
-  if (!token) return <Navigate to="/login" replace />;
+  if (!token) return <Navigate to="/enter" replace />;
   if (role && user?.role !== role) return <Navigate to="/dashboard" replace />;
   if (roles && !roles.includes(user?.role ?? '')) return <Navigate to="/dashboard" replace />;
   return children;
@@ -59,9 +58,10 @@ function AnimatedRoutes() {
   return (
     <div key={pathname} className="page-enter" style={{ minHeight: '100%' }}>
       <Routes>
-        <Route path="/onboarding"   element={<RequireAuth role="ARTIST"><OnboardingPage /></RequireAuth>} />
-        <Route path="/login"        element={<LoginPage />} />
-        <Route path="/signup"       element={<SignupPage />} />
+        <Route path="/onboarding"   element={<RequireAuth role="ARTIST"><OnboardingSequencePage /></RequireAuth>} />
+        <Route path="/enter"        element={<EnterPage />} />
+        <Route path="/login"        element={<Navigate to="/enter" replace />} />
+        <Route path="/signup"       element={<Navigate to="/enter" replace />} />
         <Route path="/dashboard"    element={<RequireAuth><ErrorBoundary><SmartDashboard /></ErrorBoundary></RequireAuth>} />
         <Route path="/discover"     element={<RequireAuth role="ARTIST"><DiscoverPage /></RequireAuth>} />
         <Route path="/artists/:id"  element={<RequireAuth><ErrorBoundary><ArtistProfilePage /></ErrorBoundary></RequireAuth>} />

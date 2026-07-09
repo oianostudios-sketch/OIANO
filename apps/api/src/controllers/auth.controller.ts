@@ -187,7 +187,10 @@ export async function enter(req: Request, res: Response, next: NextFunction) {
                   },
                 },
               },
-              wallet: { create: { balance_usd: 0 } },
+              // Small welcome credit — lets a brand-new artist actually complete
+              // a real booking during the onboarding sequence's demo flow
+              // instead of hitting the wallet-balance guard at $0.
+              wallet: { create: { balance_usd: 100 } },
             },
           },
         },

@@ -309,7 +309,7 @@ export default function DashboardPage() {
   const energyProfile = creativeDNA.energy_profile ?? null;
   const themes       = creativeDNA.key_themes ?? [];
 
-  function handleLogout() { logout(); navigate('/login'); }
+  function handleLogout() { logout(); navigate('/enter'); }
 
   return (
     <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#f5f5f5' }}>
