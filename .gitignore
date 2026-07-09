@@ -4,6 +4,16 @@ node_modules
 
 /generated/prisma
 
+# Local-disk fallback for avatar/track uploads when R2 isn't configured —
+# real user content, not something to commit
+apps/api/uploads/
+
+# Build artifacts and runtime logs
+apps/api/tsconfig.tsbuildinfo
+apps/web/dist/
+*.log
+*.pid
+
 # One-off root-level DB scripts — read DATABASE_URL from env, but keep them
 # out of git entirely as defense in depth (see the July 2026 credential audit)
 /run-migration-pg.js
