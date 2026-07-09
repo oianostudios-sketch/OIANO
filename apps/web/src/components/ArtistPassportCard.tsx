@@ -108,9 +108,9 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
           100% { transform: translateX(120%) rotate(8deg); }
         }
         @keyframes apc-upload-pulse {
-          0%   { box-shadow: 0 0 0 0 rgba(201,168,76,0.55); }
-          70%  { box-shadow: 0 0 0 14px rgba(201,168,76,0); }
-          100% { box-shadow: 0 0 0 0 rgba(201,168,76,0); }
+          0%   { box-shadow: 0 0 0 0 rgba(90,155,203,0.55); }
+          70%  { box-shadow: 0 0 0 14px rgba(90,155,203,0); }
+          100% { box-shadow: 0 0 0 0 rgba(90,155,203,0); }
         }
         .apc-shimmer { animation: apc-shimmer-sweep 6s ease-in-out infinite; }
         .apc-avatar-pulse { animation: apc-upload-pulse 1.2s ease-out; }
@@ -141,8 +141,8 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
             overflow: 'hidden',
             background: 'linear-gradient(145deg, #141414 0%, #0a0a0a 60%, #1a1500 100%)',
             boxShadow: hover
-              ? '0 32px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(201,168,76,0.3), inset 0 1px 0 rgba(201,168,76,0.15)'
-              : '0 16px 48px rgba(0,0,0,0.6), 0 0 0 1px rgba(201,168,76,0.15)',
+              ? '0 32px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(90,155,203,0.3), inset 0 1px 0 rgba(90,155,203,0.15)'
+              : '0 16px 48px rgba(0,0,0,0.6), 0 0 0 1px rgba(90,155,203,0.15)',
             transition: 'box-shadow 0.3s ease',
           }}
         >
@@ -158,17 +158,17 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
                 width: '40%',
                 height: '200%',
                 background: hover
-                  ? 'linear-gradient(125deg, transparent 20%, rgba(201,168,76,0.14) 50%, transparent 80%)'
-                  : 'linear-gradient(125deg, transparent 20%, rgba(201,168,76,0.05) 50%, transparent 80%)',
+                  ? 'linear-gradient(125deg, transparent 20%, rgba(90,155,203,0.14) 50%, transparent 80%)'
+                  : 'linear-gradient(125deg, transparent 20%, rgba(90,155,203,0.05) 50%, transparent 80%)',
                 transition: 'background 0.4s ease',
               }}
             />
           </div>
 
-          {/* Gold top strip */}
+          {/* Top strip */}
           <div style={{
             height: 4,
-            background: 'linear-gradient(90deg, #8a6c1e, #C9A84C, #E2C97E, #C9A84C, #8a6c1e)',
+            background: 'linear-gradient(90deg, #3D6A8A, #5A9BCB, #8BBEDD, #5A9BCB, #3D6A8A)',
           }} />
 
           {/* Header row */}
@@ -201,7 +201,7 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
                 height: size === 'sm' ? 90 : 120,
                 borderRadius: '50%',
                 overflow: 'hidden',
-                border: '2px solid rgba(201,168,76,0.4)',
+                border: '2px solid rgba(90,155,203,0.4)',
                 background: '#1e1e1e',
                 position: 'relative',
               }}
@@ -224,7 +224,7 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
                   justifyContent: 'center',
                   fontFamily: "'Playfair Display', serif",
                   fontSize: size === 'sm' ? 28 : 38,
-                  color: '#C9A84C',
+                  color: '#5A9BCB',
                   fontWeight: 600,
                 }}>
                   {artist.name?.[0]?.toUpperCase()}
@@ -241,7 +241,7 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
                   alignItems: 'center',
                   justifyContent: 'center',
                   fontSize: 10,
-                  color: '#C9A84C',
+                  color: '#5A9BCB',
                   fontFamily: "'DM Sans', sans-serif",
                   fontWeight: 600,
                   letterSpacing: 0.5,
@@ -273,7 +273,7 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
               <p style={{
                 fontFamily: "'JetBrains Mono', monospace",
                 fontSize: 11,
-                color: '#C9A84C',
+                color: '#5A9BCB',
                 margin: '4px 0 0',
                 letterSpacing: 2,
               }}>
@@ -290,11 +290,11 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
                   fontSize: 9,
                   padding: '3px 9px',
                   borderRadius: 20,
-                  border: '1px solid rgba(201,168,76,0.3)',
-                  color: '#C9A84C',
+                  border: '1px solid rgba(90,155,203,0.3)',
+                  color: '#5A9BCB',
                   fontFamily: "'JetBrains Mono', monospace",
                   letterSpacing: 0.5,
-                  background: 'rgba(201,168,76,0.06)',
+                  background: 'rgba(90,155,203,0.06)',
                 }}>
                   {g}
                 </span>
@@ -303,7 +303,7 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
           )}
 
           {/* Divider */}
-          <div style={{ margin: '14px 20px', height: 1, background: 'linear-gradient(90deg, transparent, rgba(201,168,76,0.2), transparent)' }} />
+          <div style={{ margin: '14px 20px', height: 1, background: 'linear-gradient(90deg, transparent, rgba(90,155,203,0.2), transparent)' }} />
 
           {/* Passport code + strength */}
           <div style={{ padding: '0 20px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
@@ -314,7 +314,7 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
               <p style={{
                 fontFamily: "'JetBrains Mono', monospace",
                 fontSize: 12,
-                color: '#E2C97E',
+                color: '#8BBEDD',
                 margin: 0,
                 letterSpacing: 1,
               }}>
@@ -331,12 +331,12 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
                   <div style={{
                     height: '100%',
                     width: `${strength}%`,
-                    background: `linear-gradient(90deg, #8a6c1e, #C9A84C)`,
+                    background: `linear-gradient(90deg, #3D6A8A, #5A9BCB)`,
                     borderRadius: 2,
                     transition: 'width 0.8s ease',
                   }} />
                 </div>
-                <span style={{ fontSize: 10, color: '#C9A84C', fontFamily: "'JetBrains Mono', monospace" }}>
+                <span style={{ fontSize: 10, color: '#5A9BCB', fontFamily: "'JetBrains Mono', monospace" }}>
                   {strength}%
                 </span>
               </div>
@@ -370,13 +370,13 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
             borderRadius: 20,
             overflow: 'hidden',
             background: 'linear-gradient(155deg, #0d0d0d 0%, #0a0a0a 50%, #110e00 100%)',
-            boxShadow: '0 16px 48px rgba(0,0,0,0.6), 0 0 0 1px rgba(201,168,76,0.15)',
+            boxShadow: '0 16px 48px rgba(0,0,0,0.6), 0 0 0 1px rgba(90,155,203,0.15)',
           }}
         >
-          {/* Gold top strip */}
+          {/* Top strip */}
           <div style={{
             height: 4,
-            background: 'linear-gradient(90deg, #8a6c1e, #C9A84C, #E2C97E, #C9A84C, #8a6c1e)',
+            background: 'linear-gradient(90deg, #3D6A8A, #5A9BCB, #8BBEDD, #5A9BCB, #3D6A8A)',
           }} />
 
           <div style={{ padding: '18px 22px', height: 'calc(100% - 4px)', display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -386,7 +386,7 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
               <p style={{
                 fontFamily: "'Playfair Display', serif",
                 fontSize: 13,
-                color: '#C9A84C',
+                color: '#5A9BCB',
                 margin: 0,
                 letterSpacing: 2,
               }}>
@@ -410,7 +410,7 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
                 fontFamily: "'DM Sans', sans-serif",
                 lineHeight: 1.6,
                 margin: 0,
-                borderLeft: '2px solid rgba(201,168,76,0.3)',
+                borderLeft: '2px solid rgba(90,155,203,0.3)',
                 paddingLeft: 10,
                 fontStyle: 'italic',
               }}>
@@ -454,7 +454,7 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
                 <span style={{ fontSize: 8, color: '#555', fontFamily: "'JetBrains Mono', monospace", letterSpacing: 1.5 }}>
                   PROFILE STRENGTH
                 </span>
-                <span style={{ fontSize: 10, color: strength >= 80 ? '#C9A84C' : '#666', fontFamily: "'JetBrains Mono', monospace" }}>
+                <span style={{ fontSize: 10, color: strength >= 80 ? '#5A9BCB' : '#666', fontFamily: "'JetBrains Mono', monospace" }}>
                   {strength < 40 ? 'INCOMPLETE' : strength < 70 ? 'DEVELOPING' : strength < 90 ? 'STRONG' : 'COMPLETE'}
                 </span>
               </div>
@@ -464,7 +464,7 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
                   width: `${strength}%`,
                   background: strength >= 80
                     ? 'linear-gradient(90deg, #6a9c6a, #88cc88)'
-                    : 'linear-gradient(90deg, #8a6c1e, #C9A84C)',
+                    : 'linear-gradient(90deg, #3D6A8A, #5A9BCB)',
                   borderRadius: 3,
                   transition: 'width 1s ease',
                 }} />

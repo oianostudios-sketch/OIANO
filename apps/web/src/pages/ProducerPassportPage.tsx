@@ -178,7 +178,7 @@ export default function ProducerPassportPage() {
               )}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
                 <span style={{ fontSize: 10, color: '#555', fontFamily: "'JetBrains Mono',monospace'" }}>PRODUCER PASSPORT</span>
-                <span style={{ fontSize: 10, color: '#C9A84C', fontFamily: "'JetBrains Mono',monospace'" }}>· {passportCode}</span>
+                <span style={{ fontSize: 10, color: '#5A9BCB', fontFamily: "'JetBrains Mono',monospace'" }}>· {passportCode}</span>
               </div>
             </div>
           </div>
@@ -253,7 +253,7 @@ export default function ProducerPassportPage() {
               <button
                 onClick={() => updatePassport.mutate({ genres_produced: genreDraft.split(',').map(s => s.trim()).filter(Boolean) })}
                 disabled={updatePassport.isPending}
-                style={{ alignSelf: 'flex-end', fontSize: 12, color: '#000', background: '#C9A84C', border: 'none', borderRadius: 8, padding: '8px 18px', cursor: 'pointer', fontWeight: 600 }}
+                style={{ alignSelf: 'flex-end', fontSize: 12, color: '#000', background: '#5A9BCB', border: 'none', borderRadius: 8, padding: '8px 18px', cursor: 'pointer', fontWeight: 600 }}
               >
                 {updatePassport.isPending ? 'Saving…' : 'Save'}
               </button>
@@ -296,7 +296,7 @@ export default function ProducerPassportPage() {
               <button
                 onClick={() => updatePassport.mutate({ signature_tags: tagDraft.split(',').map(s => s.trim()).filter(Boolean) })}
                 disabled={updatePassport.isPending}
-                style={{ alignSelf: 'flex-end', fontSize: 12, color: '#000', background: '#C9A84C', border: 'none', borderRadius: 8, padding: '8px 18px', cursor: 'pointer', fontWeight: 600 }}
+                style={{ alignSelf: 'flex-end', fontSize: 12, color: '#000', background: '#5A9BCB', border: 'none', borderRadius: 8, padding: '8px 18px', cursor: 'pointer', fontWeight: 600 }}
               >
                 {updatePassport.isPending ? 'Saving…' : 'Save'}
               </button>
@@ -313,8 +313,8 @@ export default function ProducerPassportPage() {
                 const count = phaseCounts[phase] ?? 0;
                 const isActive = count > 0;
                 return (
-                  <div key={phase} style={{ flex: 1, textAlign: 'center', padding: '10px 4px', background: isActive ? 'rgba(201,168,76,0.06)' : 'transparent', borderRight: '1px solid var(--border)' }}>
-                    <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: isActive ? '#C9A84C' : '#333', fontFamily: "'JetBrains Mono',monospace'" }}>{count}</p>
+                  <div key={phase} style={{ flex: 1, textAlign: 'center', padding: '10px 4px', background: isActive ? 'rgba(90,155,203,0.06)' : 'transparent', borderRight: '1px solid var(--border)' }}>
+                    <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: isActive ? '#5A9BCB' : '#333', fontFamily: "'JetBrains Mono',monospace'" }}>{count}</p>
                     <p style={{ margin: '2px 0 0', fontSize: 9, color: isActive ? '#555' : '#2a2a2a', fontFamily: "'JetBrains Mono',monospace'", letterSpacing: '0.04em' }}>{label}</p>
                   </div>
                 );
