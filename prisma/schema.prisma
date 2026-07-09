@@ -1,0 +1,487 @@
+// OIANO StudioOS — Full Phase 1 Schema
+// Run: npx prisma migrate dev --name init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  ARTIST
+  PRODUCER
+  STUDIO_ADMIN
+  ENGINEER
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum ProjectPhase {
+  PRE_PRODUCTION
+  TRACKING
+  EDITING
+  MIXING
+  MASTERING
+  DELIVERED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PROCESSING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum ServiceCategory {
+  RECORDING
+  FULL_DAY
+  MIX_MASTER
+  COACHING
+  EVENT
+  MEMBERSHIP
+}
+
+// ─── Core Auth ────────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password_hash String?
+  role          UserRole  @default(ARTIST)
+  artist        Artist?
+  studio_staff  StudioStaff?
+  notifications    Notification[]
+  booking_messages BookingMessage[]
+  producer         Producer?
+  locale           String?   @default("en-US")
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  @@map("users")
+}
+
+// ─── Studio ───────────────────────────────────────────────────────────────────
+
+model Studio {
+  id                String    @id @default(uuid())
+  slug              String    @unique
+  name              String
+  timezone          String    @default("America/New_York")
+  currency          String    @default("USD")
+  stripe_account_id String?
+  address           String?
+  phone             String?
+  email             String?
+  logo_url          String?
+  rooms             Room[]
+  engineers         Engineer[]
+  services          ServiceOffering[]
+  bookings          Booking[]
+  availability      AvailabilitySlot[]
+  staff             StudioStaff[]
+  announcements     StudioAnnouncement[]
+  created_at        DateTime  @default(now())
+
+  @@map("studios")
+}
+
+model StudioStaff {
+  id         String   @id @default(uuid())
+  user_id    String   @unique
+  user       User     @relation(fields: [user_id], references: [id])
+  studio_id  String
+  studio     Studio   @relation(fields: [studio_id], references: [id])
+  role       UserRole @default(STUDIO_ADMIN)
+
+  @@map("studio_staff")
+}
+
+model Room {
+  id           String   @id @default(uuid())
+  studio_id    String
+  studio       Studio   @relation(fields: [studio_id], references: [id])
+  name         String
+  capacity     Int?
+  description  String?
+  hourly_rate  Decimal? @db.Decimal(10, 2)
+  bookings     Booking[]
+  availability AvailabilitySlot[]
+
+  @@map("rooms")
+}
+
+model Engineer {
+  id              String    @id @default(uuid())
+  studio_id       String
+  studio          Studio    @relation(fields: [studio_id], references: [id])
+  name            String
+  specialties     String[]
+  hourly_rate_usd Decimal?  @db.Decimal(10, 2)
+  bio             String?
+  avatar_url      String?
+  credits              String[]  @default([])
+  bookings             Booking[] @relation("AssignedEngineer")
+  preferred_bookings   Booking[] @relation("PreferredEngineer")
+  availability         AvailabilitySlot[]
+
+  @@map("engineers")
+}
+
+model ServiceOffering {
+  id            String          @id @default(uuid())
+  studio_id     String
+  studio        Studio          @relation(fields: [studio_id], references: [id])
+  category      ServiceCategory
+  name          String
+  description   String?
+  min_price_usd Decimal         @db.Decimal(10, 2)
+  max_price_usd Decimal         @db.Decimal(10, 2)
+  unit          String          // "hour" | "session" | "track" | "month"
+  bookings      Booking[]
+
+  @@map("service_offerings")
+}
+
+model AvailabilitySlot {
+  id          String    @id @default(uuid())
+  studio_id   String
+  studio      Studio    @relation(fields: [studio_id], references: [id])
+  room_id     String?
+  room        Room?     @relation(fields: [room_id], references: [id])
+  engineer_id String?
+  engineer    Engineer? @relation(fields: [engineer_id], references: [id])
+  starts_at   DateTime
+  ends_at     DateTime
+  is_blocked  Boolean   @default(false)
+  note        String?
+
+  @@map("availability_slots")
+}
+
+// ─── Artist ───────────────────────────────────────────────────────────────────
+
+model Artist {
+  id           String         @id @default(uuid())
+  user_id      String         @unique
+  user         User           @relation(fields: [user_id], references: [id])
+  name         String
+  alias        String?
+  bio          String?
+  avatar_url   String?
+  status       ArtistAvailability @default(AVAILABLE_FOR_BOOKING)
+  passport     ArtistPassport?
+  wallet       Wallet?
+  bookings     Booking[]
+  session_logs SessionLog[]
+  files        ArtistFile[]
+  projects             Project[]
+  connections_sent     PassportConnection[]  @relation("ConnectInitiator")
+  connections_received PassportConnection[]  @relation("ConnectRecipient")
+  connect_messages     ConnectMessage[]      @relation("ConnectMessages")
+  activity_events      ActivityEvent[]
+  created_at   DateTime       @default(now())
+
+  @@map("artists")
+}
+
+model ArtistPassport {
+  id                      String    @id @default(uuid())
+  artist_id               String    @unique
+  artist                  Artist    @relation(fields: [artist_id], references: [id])
+  passport_code           String    @unique     // e.g. OIANO-A1B2
+  creative_dna            Json      @default("{}")  // genres, influences, vocal, energy
+  profile_strength        Int       @default(0)     // 0–100
+  profile_image_url       String?                   // avatar / press photo
+  bio                     String?                   // short artist bio
+  ai_summary              String?                   // cached AI brief
+  ai_summary_updated_at   DateTime?                 // for cache invalidation
+  ai_summary_edited       Boolean   @default(false) // true if artist manually edited
+  ai_summary_public       Boolean   @default(true)  // false = hidden from engineers
+  profile_views           Int       @default(0)     // incremented on non-owner views
+  issued_at               DateTime  @default(now())
+  updated_at              DateTime  @updatedAt
+
+  @@map("artist_passports")
+}
+
+model Wallet {
+  id              String               @id @default(uuid())
+  artist_id       String               @unique
+  artist          Artist               @relation(fields: [artist_id], references: [id])
+  balance_usd     Decimal              @default(0) @db.Decimal(10, 2)
+  transactions    WalletTransaction[]
+  top_ups         WalletTopUp[]
+
+  @@map("wallets")
+}
+
+model WalletTransaction {
+  id          String   @id @default(uuid())
+  wallet_id   String
+  wallet      Wallet   @relation(fields: [wallet_id], references: [id])
+  amount_usd  Decimal  @db.Decimal(10, 2)
+  type        String   // "credit" | "debit"
+  description String?
+  created_at  DateTime @default(now())
+
+  @@map("wallet_transactions")
+}
+
+model ArtistFile {
+  id          String   @id @default(uuid())
+  artist_id   String
+  artist      Artist   @relation(fields: [artist_id], references: [id])
+  name        String
+  url         String
+  mime_type   String?
+  size_bytes  Int?
+  folder      String?  // relative folder path, e.g. "Projects/MyAlbum" or "Bounces"
+  source      String?  // "daw_watcher" | "manual"
+  uploaded_at DateTime @default(now())
+
+  @@map("artist_files")
+}
+
+// ─── Booking & Sessions ───────────────────────────────────────────────────────
+
+model Booking {
+  id          String        @id @default(uuid())
+  studio_id   String
+  studio      Studio        @relation(fields: [studio_id], references: [id])
+  artist_id   String
+  artist      Artist        @relation(fields: [artist_id], references: [id])
+  room_id     String
+  room        Room          @relation(fields: [room_id], references: [id])
+  engineer_id           String?
+  engineer              Engineer?     @relation("AssignedEngineer", fields: [engineer_id], references: [id])
+  preferred_engineer_id String?
+  preferred_engineer    Engineer?     @relation("PreferredEngineer", fields: [preferred_engineer_id], references: [id])
+  service_id  String
+  service     ServiceOffering @relation(fields: [service_id], references: [id])
+  starts_at   DateTime
+  ends_at     DateTime
+  status      BookingStatus @default(PENDING)
+  total_usd   Decimal       @db.Decimal(10, 2)
+  notes       String?
+  payment     Payment?
+  session_log SessionLog?
+  messages    BookingMessage[]
+  project_id  String?
+  project     Project?      @relation(fields: [project_id], references: [id])
+  created_at  DateTime      @default(now())
+  updated_at  DateTime      @updatedAt
+
+  @@map("bookings")
+}
+
+model Payment {
+  id                String        @id @default(uuid())
+  booking_id        String        @unique
+  booking           Booking       @relation(fields: [booking_id], references: [id])
+  provider          String        // "stripe" | "wallet" | "cash"
+  provider_ref      String?       // Stripe checkout session ID
+  payment_intent_id String?       // Stripe payment_intent ID — used for refund/failure matching
+  amount_usd        Decimal       @db.Decimal(10, 2)
+  status            PaymentStatus @default(UNPAID)
+  paid_at           DateTime?
+  created_at        DateTime      @default(now())
+
+  @@map("payments")
+}
+
+// Wallet top-ups via Stripe — separate from booking payments
+model WalletTopUp {
+  id                String   @id @default(uuid())
+  wallet_id         String
+  wallet            Wallet   @relation(fields: [wallet_id], references: [id])
+  provider_ref      String?  // Stripe checkout session ID
+  payment_intent_id String?
+  amount_usd        Decimal  @db.Decimal(10, 2)
+  status            String   @default("PENDING") // PENDING | PAID | FAILED
+  created_at        DateTime @default(now())
+
+  @@map("wallet_topups")
+}
+
+model SessionLog {
+  id             String    @id @default(uuid())
+  booking_id     String    @unique
+  booking        Booking   @relation(fields: [booking_id], references: [id])
+  artist_id      String
+  artist         Artist    @relation(fields: [artist_id], references: [id])
+  notes              String?
+  quality_rating     Int?      // 1–5 engineer rates session
+  artist_rating      Int?      // 1–5 artist rates engineer
+  artist_testimonial String?   // public text shown on engineer profile
+  ai_summary         String?
+  tracks_worked      String[]
+  started_at         DateTime?
+  ended_at           DateTime?
+
+  @@map("session_logs")
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+
+model Notification {
+  id         String    @id @default(uuid())
+  user_id    String
+  user       User      @relation(fields: [user_id], references: [id])
+  type       String    // "booking_confirmed" | "session_reminder" | "payment_received" etc.
+  title      String
+  body       String
+  payload    Json      @default("{}")
+  read_at    DateTime?
+  created_at DateTime  @default(now())
+
+  @@map("notifications")
+}
+
+// ─── Booking Messages ─────────────────────────────────────────────────────────
+
+model BookingMessage {
+  id         String   @id @default(uuid())
+  booking_id String
+  booking    Booking  @relation(fields: [booking_id], references: [id])
+  sender_id  String
+  sender     User     @relation(fields: [sender_id], references: [id])
+  body       String
+  created_at DateTime @default(now())
+
+  @@map("booking_messages")
+}
+
+// ─── Producer ─────────────────────────────────────────────────────────────────
+
+model Producer {
+  id           String            @id @default(uuid())
+  user_id      String            @unique
+  user         User              @relation(fields: [user_id], references: [id])
+  name         String
+  alias        String?
+  bio          String?
+  avatar_url   String?
+  passport     ProducerPassport?
+  projects     Project[]
+  open_to_collabs Boolean        @default(true)
+  created_at   DateTime          @default(now())
+
+  @@map("producers")
+}
+
+model ProducerPassport {
+  id                String    @id @default(uuid())
+  producer_id       String    @unique
+  producer          Producer  @relation(fields: [producer_id], references: [id])
+  passport_code     String    @unique       // e.g. PROD-X1Y2
+  genres_produced   Json      @default("[]")  // string[]
+  signature_tags    Json      @default("[]")  // string[] e.g. "trap hi-hats"
+  profile_strength  Int       @default(0)
+  profile_views     Int       @default(0)
+  issued_at         DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+
+  @@map("producer_passports")
+}
+
+// ─── Projects ─────────────────────────────────────────────────────────────────
+
+model Project {
+  id           String        @id @default(uuid())
+  producer_id  String
+  producer     Producer      @relation(fields: [producer_id], references: [id])
+  artist_id    String?
+  artist       Artist?       @relation(fields: [artist_id], references: [id])
+  title        String
+  phase        ProjectPhase  @default(PRE_PRODUCTION)
+  notes        String?
+  is_active    Boolean       @default(true)
+  last_session_at DateTime?
+  bookings        Booking[]
+  created_at   DateTime      @default(now())
+  updated_at   DateTime      @updatedAt
+
+  @@map("projects")
+}
+
+// ─── Studio Announcements ─────────────────────────────────────────────────────
+model StudioAnnouncement {
+  id         String   @id @default(uuid())
+  studio_id  String
+  studio     Studio   @relation(fields: [studio_id], references: [id])
+  title      String
+  body       String
+  created_by String   // user_id of the admin who posted
+  created_at DateTime @default(now())
+
+  @@map("studio_announcements")
+}
+
+// ─── Passport Connect (artist-to-artist DMs) ─────────────────────────────────
+model PassportConnection {
+  id           String         @id @default(uuid())
+  initiator_id String         // artist.id
+  recipient_id String         // artist.id
+  status       ConnectStatus  @default(PENDING)
+  created_at   DateTime       @default(now())
+  messages     ConnectMessage[]
+
+  initiator    Artist @relation("ConnectInitiator", fields: [initiator_id], references: [id])
+  recipient    Artist @relation("ConnectRecipient", fields: [recipient_id], references: [id])
+
+  @@unique([initiator_id, recipient_id])
+  @@map("passport_connections")
+}
+
+model ConnectMessage {
+  id            String             @id @default(uuid())
+  connection_id String
+  sender_id     String             // artist.id
+  body          String
+  created_at    DateTime           @default(now())
+
+  connection    PassportConnection @relation(fields: [connection_id], references: [id], onDelete: Cascade)
+  sender        Artist             @relation("ConnectMessages", fields: [sender_id], references: [id])
+
+  @@map("connect_messages")
+}
+
+enum ConnectStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+// ─── Activity Events ──────────────────────────────────────────────────────────
+
+enum ArtistAvailability {
+  AVAILABLE_FOR_BOOKING
+  IN_SESSION
+  UNAVAILABLE
+}
+
+model ActivityEvent {
+  id         String   @id @default(uuid())
+  type       String   // "profile.created" | "status.changed" | "session.booked" | "session.completed"
+  artist_id  String?
+  artist     Artist?  @relation(fields: [artist_id], references: [id])
+  payload    Json     @default("{}")
+  created_at DateTime @default(now())
+
+  @@index([type])
+  @@index([artist_id])
+  @@map("activity_events")
+}
