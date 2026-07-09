@@ -1,0 +1,613 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Design tokens ────────────────────────────────────────── */
+:root {
+  /* Core palette */
+  --gold:        #C9A84C;
+  --gold-light:  #E2C97E;
+  --gold-dim:    #C9A84C40;
+  --amber:       #E8823A;   /* Analog Warmth accent — live sessions */
+  --amber-dim:   #E8823A30;
+  --bg:          #0a0a0a;
+  --surface:     #111111;
+  --border:      #1e1e1e;
+  --muted:       #2a2a2a;
+
+  /* State-driven color temperature — idle default */
+  --live-accent:     var(--gold);
+  --live-accent-dim: var(--gold-dim);
+  --live-glow:       rgba(201,168,76,0.08);
+
+  /* Grain intensity */
+  --grain-opacity: 0.028;
+}
+
+/* Live session — whole UI warms to amber */
+body.session-live {
+  --live-accent:     var(--amber);
+  --live-accent-dim: var(--amber-dim);
+  --live-glow:       rgba(232,130,58,0.10);
+}
+
+/* ─── Base ──────────────────────────────────────────────────── */
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--bg);
+  color: #f5f5f5;
+  font-family: 'DM Sans', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  position: relative;
+  padding-top: 28px;
+}
+
+/* ─── Global film grain overlay ─────────────────────────────── */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: var(--grain-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 300px 300px;
+  animation: grain-drift 8s steps(1) infinite;
+}
+
+
+/* ─── OIANO Typography System ───────────────────────────────────
+   Three-voice system:
+   · Display  — Playfair Display, editorial, gold moments
+   · Body     — DM Sans, 300/400 weight, generous line-height
+   · Data     — JetBrains Mono, tight tracking, muted
+──────────────────────────────────────────────────────────────── */
+
+/* Body defaults — lighter weight, better legibility */
+body {
+  font-weight: 300;
+  line-height: 1.65;
+  font-size: 15px;
+  color: #d4d4d4;
+  letter-spacing: 0.01em;
+}
+
+/* Display headlines — Playfair with refined tracking */
+h1, h2, h3, h4,
+.font-display,
+[class*="font-display"] {
+  font-family: 'Playfair Display', serif;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.015em;    /* tighter — more editorial */
+  color: #f0ede8;              /* warm off-white, not harsh pure white */
+}
+
+/* Large display headings — italic pull quote feel */
+h1, .text-4xl, .text-5xl, .text-3xl {
+  letter-spacing: -0.025em;
+}
+
+/* Brand wordmark "OIANO" wherever it appears */
+.brand-wordmark {
+  font-family: 'Playfair Display', serif;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+/* Section labels — mono, spaced caps */
+.label-mono,
+.text-xs.font-mono.uppercase,
+.text-xs.tracking-widest {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #4a4a4a;
+  font-size: 9px;
+}
+
+/* Numeric / metric values */
+.metric-number,
+.font-mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 400;
+  letter-spacing: -0.01em;    /* numbers look better tight */
+  font-variant-numeric: tabular-nums;
+}
+
+/* Gold text moments — key data points, amounts */
+.text-gold,
+[class*="text-gold"] {
+  color: var(--gold);
+  font-weight: 500;
+}
+
+/* Prose body paragraphs — slightly warmer, more readable */
+p {
+  color: #b0aca7;
+  line-height: 1.7;
+}
+
+/* Strong within prose */
+strong { font-weight: 600; color: #e8e4df; }
+
+/* Links — no underline, gold on hover */
+a {
+  color: inherit;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+a:hover { color: var(--gold); }
+
+/* ─── Studio status strip (quiet cycling ticker) ─────────────── */
+.studio-ticker-strip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 999;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 18px;
+  background: #080808;
+  border-bottom: 1px solid #141414;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+.sts-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.sts-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sts-label {
+  color: #333;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 9px;
+}
+.sts-sep {
+  color: #1e1e1e;
+}
+.sts-value {
+  color: #555;
+}
+.sts-accent {
+  color: #C9A84C;
+}
+
+/* ─── StudioPulseWidget ──────────────────────────────────────── */
+.studio-pulse-widget {
+  position: fixed;
+  top: 14px;
+  right: 16px;
+  z-index: 1000;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #0f0f0f;
+  border: 1px solid #1e1e1e;
+  border-radius: 20px;
+  padding: 5px 10px;
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.08em;
+  transition: border-color 0.3s, background 0.3s;
+  backdrop-filter: blur(8px);
+}
+.studio-pulse-widget:hover { border-color: #2a2a2a; background: #141414; }
+
+.spw-live  { display: flex; align-items: center; gap: 6px; }
+.spw-next  { display: flex; align-items: center; gap: 6px; }
+.spw-idle  { display: flex; align-items: center; gap: 6px; }
+
+.spw-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+}
+.spw-dot-live  { background: var(--live-accent, #E8823A); box-shadow: 0 0 5px var(--live-accent, #E8823A); animation: spw-pulse 1.2s ease-in-out infinite; }
+.spw-dot-ready { background: #22c55e; box-shadow: 0 0 4px #22c55e; }
+.spw-dot-idle  { background: #C9A84C; opacity: 0.5; }
+
+@keyframes spw-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.8); }
+}
+
+.spw-label  { color: #e4e4e7; font-weight: 700; }
+.spw-time   { color: #C9A84C; }
+.spw-detail { color: #555; white-space: nowrap; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+
+body.session-live .studio-pulse-widget {
+  border-color: var(--live-accent, #E8823A);
+  background: #120d08;
+}
+
+/* ─── ArtistStatusToggle ─────────────────────────────────────── */
+.artist-status-toggle {
+  position: fixed;
+  top: 14px;
+  left: 16px;
+  z-index: 1000;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #0f0f0f;
+  border: 1px solid #1e1e1e;
+  border-radius: 20px;
+  padding: 5px 10px;
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.08em;
+  transition: border-color 0.3s, background 0.3s;
+  backdrop-filter: blur(8px);
+}
+.artist-status-toggle:hover { border-color: #2a2a2a; background: #141414; }
+
+.ast-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.ast-dot-available   { background: #22c55e; box-shadow: 0 0 4px #22c55e; }
+.ast-dot-in-session  { background: var(--live-accent, #E8823A); box-shadow: 0 0 5px var(--live-accent, #E8823A); }
+.ast-dot-unavailable { background: #6b7280; }
+
+.ast-label { color: #e4e4e7; font-weight: 700; }
+
+/* ─── Runsheet ───────────────────────────────────────────────────────────────── */
+.rs-page {
+  min-height: 100vh;
+  background: #0a0a0a;
+  padding: 24px;
+}
+.rs-screen-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  gap: 16px;
+}
+.rs-back {
+  color: #555;
+  font-size: 13px;
+  text-decoration: none;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.05em;
+}
+.rs-back:hover { color: #C9A84C; }
+.rs-nav { display: flex; align-items: center; gap: 10px; }
+.rs-nav-btn {
+  background: #141414;
+  border: 1px solid #1e1e1e;
+  color: #888;
+  padding: 6px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.rs-nav-btn:hover { border-color: #C9A84C; color: #C9A84C; }
+.rs-date-input {
+  background: #141414;
+  border: 1px solid #1e1e1e;
+  color: #f5f5f5;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+}
+.rs-print-btn {
+  background: #C9A84C;
+  border: none;
+  color: #000;
+  padding: 8px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+}
+.rs-print-btn:hover { background: #E2C97E; }
+
+/* Sheet */
+.rs-sheet {
+  background: #fff;
+  color: #111;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 40px 48px;
+  border-radius: 4px;
+  font-family: 'DM Sans', sans-serif;
+}
+.rs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+.rs-studio-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #111;
+}
+.rs-sheet-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: #888;
+  margin-top: 4px;
+}
+.rs-header-right { text-align: right; }
+.rs-date-display {
+  font-family: 'Playfair Display', serif;
+  font-size: 16px;
+  border: 1px solid #e5e5e5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  color: #bbb;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.08em;
+}
+.rs-footer-sep { color: #ddd; }
+
+/* ─── Page transitions ───────────────────────────────────────── */
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page-enter {
+  animation: page-enter 180ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* ─── Global button press feel ───────────────────────────────── */
+button:active:not(:disabled),
+a[role="button"]:active {
+  transform: scale(0.97);
+  transition: transform 80ms ease;
+}
+/* Smooth return from press */
+button:not(:active),
+a[role="button"]:not(:active) {
+  transition: transform 150ms ease, background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+/* ─── Notification badge pulse ───────────────────────────────── */
+@keyframes notif-ring {
+  0%   { box-shadow: 0 0 0 0   rgba(201,168,76,0.9); }
+  70%  { box-shadow: 0 0 0 6px rgba(201,168,76,0);   }
+  100% { box-shadow: 0 0 0 0   rgba(201,168,76,0);   }
+}
+.notif-badge-pulse {
+  animation: notif-ring 2s ease-out infinite;
+}
+
+/* ─── Live bar body offset (applied by JS when bar is visible) ─ */
+body.has-live-bar {
+  padding-top: 60px; /* 28px ticker + 32px live bar */
+}
+
+/* ─── Cmd+K hint in header (keyboard-savvy users discover it) ── */
+.cmdK-hint {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px; color: #2a2a2a; letter-spacing: 0.08em;
+}
+
+/* ─── DAW badge — faint breathing pulse on synced files ─────── */
+@keyframes daw-badge-pulse {
+  0%, 100% { opacity: 0.55; box-shadow: 0 0 0 0 rgba(201,168,76,0); }
+  50%       { opacity: 0.85; box-shadow: 0 0 0 3px rgba(201,168,76,0.12); }
+}
+.daw-badge {
+  animation: daw-badge-pulse 4s ease-in-out infinite;
+}
+
+/* ─── Metric cards — fade + rise on first render ────────────── */
+@keyframes metric-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.metric-enter { animation: metric-enter 0.35s cubic-bezier(0.4,0,0.2,1) both; }
+
+/* ─── Status badge — smooth color temperature shift ─────────── */
+.status-badge {
+  transition: color 0.35s ease, background-color 0.35s ease, border-color 0.35s ease;
+}
+
+/* ─── File upload progress bar — waveform shimmer ───────────── */
+@keyframes upload-shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+.upload-bar-shimmer {
+  background: linear-gradient(
+    90deg,
+    #C9A84C 0%, #E2C97E 40%, #C9A84C 60%, #a07830 100%
+  );
+  background-size: 200% auto;
+  animation: upload-shimmer 1.6s linear infinite;
+  border-radius: 2px;
+  height: 3px;
+}
+
+/* ─── Arc animate-in — session arcs draw on mount ───────────── */
+@keyframes arc-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.ck-arc-group {
+  animation: arc-fade-in 0.6s cubic-bezier(0.4,0,0.2,1) both;
+}
+
+/* ─── Profile strength bar fill ─────────────────────────────── */
+@keyframes bar-fill {
+  from { width: 0%; }
+}
+.strength-bar-fill {
+  animation: bar-fill 0.8s cubic-bezier(0.4,0,0.2,1) both;
+}
+
+/* ─── Card hover lift (booking cards, file cards) ───────────── */
+.card-lift {
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.card-lift:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+}
+
+/* ─── Session-live: deeper ambient temperature across all surfaces ──────────── */
+body.session-live {
+  background-color: #0d0b08;  /* warm charcoal when live */
+}
+body.session-live .pulse-sidebar {
+  background: linear-gradient(180deg, #100e0a 0%, #0c0a08 100%);
+  border-right-color: #251d0e !important;
+}
+body.session-live .pulse-panel {
+  border-color: #251d0e;
+}
+body.session-live .pulse-brand .pulse-mark {
+  color: var(--amber);
+  box-shadow: 0 0 12px var(--amber-dim);
+}
+body.session-live .bg-studio-surface {
+  background-color: #120f0a !important;
+}
+body.session-live .border-studio-border {
+  border-color: #251d0e !important;
+}
+/* Warm the topbar when live */
+body.session-live .pulse-topbar {
+  border-bottom-color: #251d0e;
+  background: linear-gradient(90deg, #0d0b0800 0%, #0d0b0840 100%);
+}
+
+/* ─── Pending KPI card pulse ─────────────────────────────────────────────────── */
+@keyframes pending-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(201,168,76,0); border-color: #1e1e1e; }
+  50%       { box-shadow: 0 0 14px rgba(201,168,76,0.12); border-color: #C9A84C44; }
+}
+.kpi-pending-pulse {
+  animation: pending-pulse 2.4s ease-in-out infinite;
+}
+
+/* ─── Hub card open = teal (studio ready, not dead) ─────────────────────────── */
+/* Applied via .hub-card[data-open] when state is open */
+.hub-state-open  { --hub-dot: #1D9E75; --hub-pill: #1D9E75; --hub-border: #1D9E7522; }
+.hub-state-soon  { --hub-dot: #C9A84C; --hub-pill: #C9A84C; --hub-border: #C9A84C30; }
+.hub-state-active { --hub-dot: var(--live-accent); --hub-pill: var(--live-accent); --hub-border: var(--live-accent); }
+
+/* ─── Waveform glow — active accent on hub card ─────────────────────────────── */
+.hub-card-live {
+  border-color: var(--live-accent-dim) !important;
+  box-shadow: 0 0 32px var(--live-glow), inset 0 0 24px var(--live-glow) !important;
+}
+
+/* ─── Entry animation — stronger page feel ───────────────────────────────────── */
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page-enter {
+  animation: page-enter 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ─── OIANO login split layout ─────────────────────────────────────────────── */
+.login-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr 420px;
+}
+@media (max-width: 760px) {
+  .login-shell { grid-template-columns: 1fr; }
+  .login-brand-panel { display: none; }
+}
+.login-brand-panel {
+  background: #070707;
+  border-right: 1px solid #141414;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  padding: 48px;
+}
+.login-brand-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 60% 50% at 50% 60%, rgba(201,168,76,0.05) 0%, transparent 70%);
+  pointer-events: none;
+}
+.login-wave-svg {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 180px;
+  opacity: 0.06;
+}
+.login-brand-logotype {
+  font-family: 'Playfair Display', serif;
+  font-weight: 700;
+  font-size: clamp(52px, 8vw, 96px);
+  letter-spacing: 0.22em;
+  color: #C9A84C;
+  text-transform: uppercase;
+  line-height: 1;
+  position: relative;
+  z-index: 1;
+}
+.login-brand-sub {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.28em;
+  color: #3f3f46;
+  text-transform: uppercase;
+  margin-top: 16px;
+  position: relative;
+  z-index: 1;
+}
+.login-brand-studio {
+  position: absolute;
+  bottom: 32px;
+  left: 0; right: 0;
+  text-align: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: #2a2a2a;
+  text-transform: uppercase;
+  z-index: 1;
+}
+.login-form-panel {
+  background: #0a0a0a;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 40px;
+  border-left: 1px solid #141414;
+}
+.login-form-inner {
+  width: 100%;
+  max-width: 340px;
+}
