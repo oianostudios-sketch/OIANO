@@ -1,9 +1,13 @@
 // apps/api/src/routes/producer.routes.ts
 import { Router } from 'express';
+import path from 'path';
+import fs from 'fs';
 import { z } from 'zod';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
+import { isR2Configured, uploadToR2, deleteFromR2 } from '../lib/r2';
+import { getImageUpload } from '../lib/imageUpload';
 
 export const producerRouter = Router();
 producerRouter.use(authenticate);
@@ -29,6 +33,50 @@ producerRouter.get('/me', requireRole('PRODUCER'), async (req: any, res, next) =
     if (!producer) throw new AppError('Producer profile not found', 404);
     res.json(producer);
   } catch (err) { next(err); }
+});
+
+// ── PATCH /api/producer/avatar — upload profile photo ────────────────────────
+producerRouter.patch('/avatar', requireRole('PRODUCER'), async (req: any, res, next) => {
+  const upload = getImageUpload();
+  if (!upload) return next(new AppError('Image upload not configured', 501));
+
+  upload.single('avatar')(req, res, async (err: any) => {
+    if (err) return next(new AppError(err.message ?? 'Upload failed', 400));
+    try {
+      const producer = await db.producer.findUnique({ where: { user_id: req.userId } });
+      if (!producer) throw new AppError('Producer not found', 404);
+
+      const file = req.file;
+      if (!file) throw new AppError('No image provided', 400);
+
+      let publicUrl: string;
+
+      if (isR2Configured && (file as any).buffer) {
+        publicUrl = await uploadToR2(
+          (file as any).buffer,
+          `avatars/${producer.id}`,
+          file.originalname || 'avatar.jpg',
+          file.mimetype,
+        );
+        if (producer.avatar_url?.startsWith('http')) {
+          await deleteFromR2(producer.avatar_url);
+        }
+      } else {
+        publicUrl = `/uploads/avatars/${(file as any).filename}`;
+        if (producer.avatar_url?.startsWith('/uploads/')) {
+          const oldPath = path.join(process.cwd(), producer.avatar_url);
+          if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+        }
+      }
+
+      await db.producer.update({
+        where: { id: producer.id },
+        data: { avatar_url: publicUrl },
+      });
+
+      res.json({ avatar_url: publicUrl });
+    } catch (e) { next(e); }
+  });
 });
 
 // ── POST /api/producer/setup — create producer profile on first login ─────────

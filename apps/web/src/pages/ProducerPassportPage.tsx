@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { ProducerNav } from '../components/ProducerNav';
 import { useToast } from '../components/Toast';
+
+const API_ORIGIN = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
 
 // ── ProducerPassportPage ──────────────────────────────────────────────────────
 // Route: /producer/passport
@@ -30,6 +32,9 @@ export default function ProducerPassportPage() {
   const [editingTags, setEditingTags]     = useState(false);
   const [genreDraft, setGenreDraft]       = useState('');
   const [tagDraft, setTagDraft]           = useState('');
+  const [avatarHover, setAvatarHover]      = useState(false);
+  const [justUploaded, setJustUploaded]    = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   // ── Fetch producer + passport ─────────────────────────────────────────────
   const { data: me, isLoading } = useQuery({
@@ -54,6 +59,29 @@ export default function ProducerPassportPage() {
     },
     onError: () => toast.error('Update failed'),
   });
+
+  // ── Avatar upload ──────────────────────────────────────────────────────────
+  const uploadAvatar = useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData();
+      form.append('avatar', file);
+      return api.patch('/producer/avatar', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['producer-me'] });
+      toast.success('Avatar updated');
+      setJustUploaded(true);
+      setTimeout(() => setJustUploaded(false), 1200);
+    },
+    onError: () => toast.error('Upload failed'),
+  });
+
+  const onAvatarFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadAvatar.mutate(file);
+  }, [uploadAvatar]);
 
   if (isLoading) {
     return (
@@ -84,6 +112,17 @@ export default function ProducerPassportPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg,#0a0a0a)', fontFamily: 'DM Sans,sans-serif' }}>
+      <style>{`
+        @keyframes ppp-upload-pulse {
+          0%   { box-shadow: 0 0 0 0 rgba(90,155,203,0.55); }
+          70%  { box-shadow: 0 0 0 14px rgba(90,155,203,0); }
+          100% { box-shadow: 0 0 0 0 rgba(90,155,203,0); }
+        }
+        .ppp-avatar-pulse { animation: ppp-upload-pulse 1.2s ease-out; }
+        @media (prefers-reduced-motion: reduce) {
+          .ppp-avatar-pulse { animation: none; }
+        }
+      `}</style>
       <ProducerNav passportCode={passport?.passport_code} />
       <div style={{ minHeight: 'calc(100vh - 52px)', background: 'var(--bg)', color: '#fff' }}>
 
@@ -101,13 +140,35 @@ export default function ProducerPassportPage() {
         {/* Identity block */}
         <div style={{ marginBottom: 36 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            {producer?.avatar_url ? (
-              <img src={producer.avatar_url} alt="" style={{ width: 72, height: 72, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--border)' }} />
-            ) : (
-              <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, color: '#555', border: '2px solid var(--border)' }}>
-                🎛
-              </div>
-            )}
+            <div
+              className={justUploaded ? 'ppp-avatar-pulse' : undefined}
+              style={{ width: 72, height: 72, borderRadius: '50%', position: 'relative', cursor: 'pointer', flexShrink: 0 }}
+              onMouseEnter={() => setAvatarHover(true)}
+              onMouseLeave={() => setAvatarHover(false)}
+              onClick={() => fileRef.current?.click()}
+            >
+              {producer?.avatar_url ? (
+                <img
+                  src={producer.avatar_url.startsWith('/') ? `${API_ORIGIN}${producer.avatar_url}` : producer.avatar_url}
+                  alt=""
+                  style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--border)' }}
+                />
+              ) : (
+                <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, color: '#555', border: '2px solid var(--border)' }}>
+                  🎛
+                </div>
+              )}
+              {avatarHover && (
+                <div style={{
+                  position: 'absolute', inset: 0, borderRadius: '50%',
+                  background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 10, color: 'var(--dome, #5A9BCB)', fontWeight: 600, letterSpacing: '0.03em',
+                }}>
+                  {uploadAvatar.isPending ? '…' : '+ Photo'}
+                </div>
+              )}
+              <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onAvatarFileChange} />
+            </div>
             <div>
               <p style={{ margin: 0, fontFamily: "'Playfair Display',serif", fontSize: 24, fontWeight: 700, color: '#fff' }}>
                 {producer?.alias ?? producer?.name ?? 'Producer'}

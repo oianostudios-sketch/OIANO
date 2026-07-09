@@ -284,7 +284,7 @@ export default function PassportPage() {
                 creative_dna: dna,
               },
             }}
-            editable={false}
+            editable
             size="lg"
           />
           <p className="pp-flip-hint">click card to flip</p>

@@ -8,6 +8,9 @@ import { useState, useRef, useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { useToast } from './Toast';
+import { useAuthStore } from '../store/auth.store';
+
+const API_ORIGIN = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
 
 interface PassportCardProps {
   artist: {
@@ -42,6 +45,7 @@ const ENERGY_COLORS: Record<string, string> = {
 export default function ArtistPassportCard({ artist, editable = false, size = 'md' }: PassportCardProps) {
   const [flipped, setFlipped] = useState(false);
   const [hover, setHover] = useState(false);
+  const [justUploaded, setJustUploaded] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const qc = useQueryClient();
   const toast = useToast();
@@ -63,10 +67,25 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
         headers: { 'Content-Type': 'multipart/form-data' },
       });
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['me'] });
       qc.invalidateQueries({ queryKey: ['artist', artist.id] });
+      qc.invalidateQueries({ queryKey: ['passport'] });
+
+      // The Zustand auth store isn't React-Query-driven — invalidating
+      // queries above does nothing for it. Without this, the new photo
+      // never appears anywhere that reads user.artist until next login.
+      const { user, token } = useAuthStore.getState();
+      if (user?.artist && token) {
+        useAuthStore.getState().setAuth(token, {
+          ...user,
+          artist: { ...user.artist, avatar_url: res.data.avatar_url },
+        });
+      }
+
       toast.success('Avatar updated');
+      setJustUploaded(true);
+      setTimeout(() => setJustUploaded(false), 1200);
     },
     onError: () => toast.error('Upload failed'),
   });
@@ -83,6 +102,23 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
       onMouseLeave={() => setHover(false)}
       onClick={() => setFlipped((f) => !f)}
     >
+      <style>{`
+        @keyframes apc-shimmer-sweep {
+          0%   { transform: translateX(-120%) rotate(8deg); }
+          100% { transform: translateX(120%) rotate(8deg); }
+        }
+        @keyframes apc-upload-pulse {
+          0%   { box-shadow: 0 0 0 0 rgba(201,168,76,0.55); }
+          70%  { box-shadow: 0 0 0 14px rgba(201,168,76,0); }
+          100% { box-shadow: 0 0 0 0 rgba(201,168,76,0); }
+        }
+        .apc-shimmer { animation: apc-shimmer-sweep 6s ease-in-out infinite; }
+        .apc-avatar-pulse { animation: apc-upload-pulse 1.2s ease-out; }
+        @media (prefers-reduced-motion: reduce) {
+          .apc-shimmer { animation: none; }
+          .apc-avatar-pulse { animation: none; }
+        }
+      `}</style>
       {/* Perspective container */}
       <div
         style={{
@@ -110,19 +146,24 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
             transition: 'box-shadow 0.3s ease',
           }}
         >
-          {/* Holographic shimmer overlay */}
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              background: hover
-                ? 'linear-gradient(125deg, transparent 30%, rgba(201,168,76,0.06) 50%, transparent 70%)'
-                : 'transparent',
-              transition: 'background 0.4s ease',
-              pointerEvents: 'none',
-              zIndex: 10,
-            }}
-          />
+          {/* Holographic shimmer — a slow, always-on sweep so the card reads as
+              alive at rest, not just on hover. Hover brightens it further. */}
+          <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 10 }}>
+            <div
+              className="apc-shimmer"
+              style={{
+                position: 'absolute',
+                top: '-50%',
+                left: 0,
+                width: '40%',
+                height: '200%',
+                background: hover
+                  ? 'linear-gradient(125deg, transparent 20%, rgba(201,168,76,0.14) 50%, transparent 80%)'
+                  : 'linear-gradient(125deg, transparent 20%, rgba(201,168,76,0.05) 50%, transparent 80%)',
+                transition: 'background 0.4s ease',
+              }}
+            />
+          </div>
 
           {/* Gold top strip */}
           <div style={{
@@ -154,6 +195,7 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
           {/* Avatar */}
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 8, position: 'relative' }}>
             <div
+              className={justUploaded ? 'apc-avatar-pulse' : undefined}
               style={{
                 width: size === 'sm' ? 90 : 120,
                 height: size === 'sm' ? 90 : 120,
@@ -169,7 +211,7 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
             >
               {artist.avatar_url ? (
                 <img
-                  src={artist.avatar_url.startsWith('/') ? `http://localhost:4000${artist.avatar_url}` : artist.avatar_url}
+                  src={artist.avatar_url.startsWith('/') ? `${API_ORIGIN}${artist.avatar_url}` : artist.avatar_url}
                   alt={artist.name}
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 />
