@@ -36,6 +36,13 @@ export default function ProducerPassportPage() {
   const [justUploaded, setJustUploaded]    = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const [addingTrack, setAddingTrack]     = useState(false);
+  const [trackTitle, setTrackTitle]       = useState('');
+  const [trackBpm, setTrackBpm]           = useState('');
+  const [trackGenre, setTrackGenre]       = useState('');
+  const [trackTags, setTrackTags]         = useState('');
+  const trackFileRef = useRef<HTMLInputElement>(null);
+
   // ── Fetch producer + passport ─────────────────────────────────────────────
   const { data: me, isLoading } = useQuery({
     queryKey: ['producer-me'],
@@ -45,6 +52,11 @@ export default function ProducerPassportPage() {
   const { data: projects = [] } = useQuery({
     queryKey: ['producer-projects'],
     queryFn: async () => (await api.get('/producer/projects')).data,
+  });
+
+  const { data: tracks = [] } = useQuery({
+    queryKey: ['producer-tracks'],
+    queryFn: async () => (await api.get('/producer/tracks')).data,
   });
 
   // ── Update passport mutation ───────────────────────────────────────────────
@@ -82,6 +94,41 @@ export default function ProducerPassportPage() {
     const file = e.target.files?.[0];
     if (file) uploadAvatar.mutate(file);
   }, [uploadAvatar]);
+
+  // ── Track (beat/sample) catalogue ─────────────────────────────────────────
+  const uploadTrack = useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData();
+      form.append('audio', file);
+      form.append('title', trackTitle.trim());
+      if (trackBpm.trim())   form.append('bpm', trackBpm.trim());
+      if (trackGenre.trim()) form.append('genre', trackGenre.trim());
+      form.append('tags', JSON.stringify(trackTags.split(',').map(s => s.trim()).filter(Boolean)));
+      return api.post('/producer/tracks', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['producer-tracks'] });
+      toast.success('Track added to catalogue');
+      setAddingTrack(false);
+      setTrackTitle(''); setTrackBpm(''); setTrackGenre(''); setTrackTags('');
+    },
+    onError: () => toast.error('Upload failed'),
+  });
+
+  const archiveTrack = useMutation({
+    mutationFn: (id: string) => api.delete(`/producer/tracks/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['producer-tracks'] }),
+    onError: () => toast.error('Could not remove track'),
+  });
+
+  const onTrackFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!trackTitle.trim()) { toast.error('Give the track a title first'); return; }
+    uploadTrack.mutate(file);
+  }, [trackTitle, uploadTrack, toast]);
 
   if (isLoading) {
     return (
@@ -300,6 +347,100 @@ export default function ProducerPassportPage() {
               >
                 {updatePassport.isPending ? 'Saving…' : 'Save'}
               </button>
+            </div>
+          )}
+        </div>
+
+        {/* Catalogue — beats/samples, preview-only for now */}
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '20px 24px', marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <p style={{ margin: 0, fontSize: 11, color: '#555', fontFamily: "'JetBrains Mono',monospace'" }}>CATALOGUE</p>
+            <button
+              onClick={() => setAddingTrack(v => !v)}
+              style={{ fontSize: 10, color: '#444', background: 'none', border: 'none', cursor: 'pointer', fontFamily: "'JetBrains Mono',monospace'" }}
+            >
+              {addingTrack ? 'cancel' : '+ upload'}
+            </button>
+          </div>
+
+          {addingTrack && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: (tracks as any[]).length > 0 ? 20 : 0 }}>
+              <input
+                value={trackTitle}
+                onChange={e => setTrackTitle(e.target.value)}
+                placeholder="Track title"
+                style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: '#fff', outline: 'none', fontFamily: "'DM Sans',sans-serif'" }}
+              />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <input
+                  value={trackBpm}
+                  onChange={e => setTrackBpm(e.target.value.replace(/\D/g, ''))}
+                  placeholder="BPM (optional)"
+                  style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: '#fff', outline: 'none', fontFamily: "'DM Sans',sans-serif'" }}
+                />
+                <input
+                  value={trackGenre}
+                  onChange={e => setTrackGenre(e.target.value)}
+                  placeholder="Genre (optional)"
+                  style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: '#fff', outline: 'none', fontFamily: "'DM Sans',sans-serif'" }}
+                />
+              </div>
+              <input
+                value={trackTags}
+                onChange={e => setTrackTags(e.target.value)}
+                placeholder="Tags — dark, 808s, melodic, … (optional)"
+                style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: '#fff', outline: 'none', fontFamily: "'DM Sans',sans-serif'" }}
+              />
+              <button
+                onClick={() => trackFileRef.current?.click()}
+                disabled={uploadTrack.isPending}
+                style={{ alignSelf: 'flex-end', fontSize: 12, color: '#000', background: '#5A9BCB', border: 'none', borderRadius: 8, padding: '8px 18px', cursor: uploadTrack.isPending ? 'wait' : 'pointer', fontWeight: 600 }}
+              >
+                {uploadTrack.isPending ? 'Uploading…' : 'Choose audio file'}
+              </button>
+              <input ref={trackFileRef} type="file" accept="audio/*" style={{ display: 'none' }} onChange={onTrackFileChange} />
+            </div>
+          )}
+
+          {(tracks as any[]).length === 0 ? (
+            !addingTrack && (
+              <p style={{ margin: 0, fontSize: 12, color: '#333', fontStyle: 'italic' }}>No tracks yet — upload a beat to start your catalogue</p>
+            )
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {(tracks as any[]).map(t => (
+                <div key={t.id} style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div>
+                      <p style={{ margin: 0, fontSize: 13, color: '#fff', fontWeight: 600 }}>{t.title}</p>
+                      <p style={{ margin: '2px 0 0', fontSize: 11, color: '#555' }}>
+                        {[t.genre, t.bpm ? `${t.bpm} BPM` : null].filter(Boolean).join(' · ')}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => archiveTrack.mutate(t.id)}
+                      disabled={archiveTrack.isPending}
+                      style={{ fontSize: 10, color: '#444', background: 'none', border: 'none', cursor: 'pointer', fontFamily: "'JetBrains Mono',monospace'" }}
+                    >
+                      remove
+                    </button>
+                  </div>
+                  <audio
+                    controls
+                    src={t.file_url.startsWith('/') ? `${API_ORIGIN}${t.file_url}` : t.file_url}
+                    style={{ width: '100%', height: 32 }}
+                  />
+                  {(t.tags as string[])?.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                      {(t.tags as string[]).map(tag => (
+                        <span key={tag} style={{ fontSize: 10, background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.2)', color: '#a78bfa', padding: '2px 9px', borderRadius: 20 }}>
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>
