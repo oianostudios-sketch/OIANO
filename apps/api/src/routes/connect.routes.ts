@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate as requireAuth, requireRole } from '../middleware/auth.middleware';
-import prisma from '../lib/prisma';
+import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
 import { broadcastToUser } from './notifications.routes';
 
@@ -20,7 +20,7 @@ async function getArtistId(userId: string): Promise<string> {
 // GET /api/connect — list my connections (sent + received) with latest message
 connectRouter.get('/', requireAuth, async (req, res, next) => {
   try {
-    const myArtistId = await getArtistId(req.userId!);
+    const myArtistId = await getArtistId((req as any).userId!);
 
     const connections = await (prisma as any).passportConnection.findMany({
       where: {
@@ -55,7 +55,7 @@ const InitiateSchema = z.object({
 connectRouter.post('/', requireAuth, async (req, res, next) => {
   try {
     const { artist_id: recipientId, message } = InitiateSchema.parse(req.body);
-    const myArtistId = await getArtistId(req.userId!);
+    const myArtistId = await getArtistId((req as any).userId!);
 
     if (myArtistId === recipientId) {
       throw new AppError('Cannot connect with yourself', 400);
@@ -121,7 +121,7 @@ connectRouter.post('/', requireAuth, async (req, res, next) => {
 // GET /api/connect/:id — full thread
 connectRouter.get('/:id', requireAuth, async (req, res, next) => {
   try {
-    const myArtistId = await getArtistId(req.userId!);
+    const myArtistId = await getArtistId((req as any).userId!);
 
     const connection = await (prisma as any).passportConnection.findFirst({
       where: {
@@ -156,7 +156,7 @@ const MessageSchema = z.object({ body: z.string().min(1).max(2000) });
 connectRouter.post('/:id/messages', requireAuth, async (req, res, next) => {
   try {
     const { body } = MessageSchema.parse(req.body);
-    const myArtistId = await getArtistId(req.userId!);
+    const myArtistId = await getArtistId((req as any).userId!);
 
     const connection = await (prisma as any).passportConnection.findFirst({
       where: {
@@ -220,7 +220,7 @@ const StatusSchema = z.object({ status: z.enum(['ACCEPTED', 'DECLINED']) });
 connectRouter.patch('/:id/status', requireAuth, async (req, res, next) => {
   try {
     const { status } = StatusSchema.parse(req.body);
-    const myArtistId = await getArtistId(req.userId!);
+    const myArtistId = await getArtistId((req as any).userId!);
 
     const connection = await (prisma as any).passportConnection.findFirst({
       where: { id: req.params.id, recipient_id: myArtistId },

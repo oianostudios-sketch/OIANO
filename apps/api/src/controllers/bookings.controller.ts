@@ -365,6 +365,7 @@ export async function updateBookingStatus(req: Request, res: Response, next: Nex
         sendBookingCancelled({
           to: artistEmail, artistName, service,
           startsAt: existing.starts_at.toISOString(),
+          bookingId: existing.id,
         }).catch((e) => console.error('[email] cancelled failed:', e?.message));
       }
     }

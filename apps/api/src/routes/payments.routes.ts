@@ -14,7 +14,7 @@ const TOP_UP_MAX = 5000;
 function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) throw new AppError('Stripe is not configured', 503);
-  return new Stripe(key, { apiVersion: '2024-06-20' });
+  return new Stripe(key, { apiVersion: '2026-06-24.dahlia' });
 }
 
 // ── POST /api/payments/stripe/checkout-session ────────────────────────────────

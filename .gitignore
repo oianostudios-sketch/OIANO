@@ -10,7 +10,13 @@ apps/api/uploads/
 
 # Build artifacts and runtime logs
 apps/api/tsconfig.tsbuildinfo
+apps/api/dist/
 apps/web/dist/
+packages/shared/src/*.js
+packages/shared/src/*.d.ts
+packages/shared/src/*.js.map
+packages/shared/src/*.d.ts.map
+packages/shared/tsconfig.tsbuildinfo
 *.log
 *.pid
 

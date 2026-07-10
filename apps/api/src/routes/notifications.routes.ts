@@ -2,6 +2,7 @@
 // Server-Sent Events for real-time booking status updates
 import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
+import type { Prisma } from '@prisma/client';
 
 export const notificationsRouter = Router();
 
@@ -124,7 +125,7 @@ export async function createNotification(params: {
       type:    params.type,
       title:   params.title,
       body:    params.body,
-      payload: params.payload ?? {},
+      payload: (params.payload ?? {}) as Prisma.InputJsonValue,
     },
   });
   // Also push over SSE so the bell badge updates live

@@ -1,0 +1,67 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# One-time setup:
+#   1. Render dashboard → New + → Blueprint → connect the oianostudios-sketch/OIANO repo.
+#   2. Render reads this file and proposes two services (oiano-api, oiano-web).
+#   3. Fill in the env vars marked "sync: false" below in the Render dashboard —
+#      their real values live in apps/api/.env locally and must never be committed.
+#   4. First deploy of oiano-api will fail fast if any required var is missing
+#      (see apps/api/src/lib/env.ts) — that's intentional, not a bug.
+#   5. After oiano-web's first deploy, copy its https://*.onrender.com URL into
+#      oiano-api's FRONTEND_URL var, and oiano-api's URL into oiano-web's
+#      VITE_API_URL var, then trigger a manual redeploy of both once.
+#
+# Prisma migrations are NOT run automatically on every deploy (a schema change
+# should be a deliberate step, not a silent side effect of pushing code) — run
+# `npx prisma migrate deploy` yourself against DATABASE_URL when a migration
+# needs to ship.
+
+services:
+  - type: web
+    name: oiano-api
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install && npx prisma generate --schema=./prisma/schema.prisma && npm run build --workspace=apps/api
+    startCommand: npm run start --workspace=apps/api
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: STRIPE_ENABLED
+        value: "false"
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        sync: false
+      - key: R2_PUBLIC_URL
+        sync: false
+
+  - type: web
+    name: oiano-web
+    runtime: static
+    buildCommand: npm install && npm run build --workspace=apps/web
+    staticPublishPath: apps/web/dist
+    envVars:
+      - key: VITE_API_URL
+        sync: false
+    routes:
+      # SPA fallback — client-side routing (React Router) needs every path to
+      # serve index.html, not a 404
+      - type: rewrite
+        source: /*
+        destination: /index.html

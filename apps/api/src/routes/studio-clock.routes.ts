@@ -150,7 +150,6 @@ studioClockRouter.post('/sessions/:id/activity', authenticate, async (req, res, 
     await prisma.sessionLog.upsert({
       where: { booking_id: bookingId },
       update: {
-        updated_at: new Date(),
         ...(note ? { notes: { set: `[${new Date().toLocaleTimeString()}] ${source ?? 'daw'}: ${note}` } } : {}),
       },
       create: {

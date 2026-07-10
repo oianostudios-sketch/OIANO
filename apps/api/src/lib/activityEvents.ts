@@ -1,5 +1,6 @@
 // apps/api/src/lib/activityEvents.ts
 import { EventEmitter } from 'events';
+import type { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
 
 export type ActivityEventType =
@@ -26,7 +27,7 @@ export async function emitActivityEvent(
 ): Promise<ActivityEvent> {
   const { artist_id, ...rest } = payload;
   const event = await prisma.activityEvent.create({
-    data: { type, artist_id: artist_id ?? null, payload: rest },
+    data: { type, artist_id: artist_id ?? null, payload: rest as Prisma.InputJsonValue },
   });
   activityEventBus.emit(type, event);
   return event;
