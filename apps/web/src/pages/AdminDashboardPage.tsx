@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
+import { Filter, Megaphone, Wallet, Zap } from 'lucide-react';
 import { useAuthStore } from '../store/auth.store';
 import { api } from '../lib/api';
 import { useToast } from '../components/Toast';
@@ -51,7 +52,7 @@ function BookingFunnel({ funnel }: { funnel: { pending: number; confirmed: numbe
   ];
   return (
     <div className="bg-studio-surface border border-studio-border rounded-xl px-5 py-4 animate-surface-4">
-      <p className="label-mono mb-3">Booking funnel</p>
+      <p className="label-mono mb-3 flex items-center gap-2"><Filter size={12} strokeWidth={2} /> Booking funnel</p>
       <div className="space-y-2">
         {rows.map((r) => {
           const pct = total > 0 ? Math.round((r.count / total) * 100) : 0;
@@ -486,7 +487,7 @@ export default function AdminDashboardPage() {
             {/* Announce to all artists */}
             <div className="animate-surface-1">
               <div className="flex items-center justify-between mb-3">
-                <p className="label-mono">Studio broadcast</p>
+                <p className="label-mono flex items-center gap-2"><Megaphone size={12} strokeWidth={2} /> Studio broadcast</p>
                 <button
                   onClick={() => setShowAnnounce(v => !v)}
                   className="text-[10px] border border-studio-border text-zinc-400 px-2 py-1 rounded-lg hover:text-white transition-colors"
@@ -688,7 +689,7 @@ export default function AdminDashboardPage() {
         >
           <div className="bg-studio-surface border border-studio-border rounded-xl p-6 w-full max-w-md space-y-5 animate-surface">
             <div>
-              <p className="label-mono mb-1">Instant booking</p>
+              <p className="label-mono mb-1 flex items-center gap-2"><Zap size={12} strokeWidth={2} /> Instant booking</p>
               <h3 className="font-display text-lg text-white animate-heading">Walk-in</h3>
             </div>
 
@@ -801,7 +802,7 @@ export default function AdminDashboardPage() {
         >
           <div className="bg-studio-surface border border-studio-border rounded-xl p-6 w-full max-w-sm space-y-5 animate-surface">
             <div>
-              <p className="label-mono mb-1">Credit wallet</p>
+              <p className="label-mono mb-1 flex items-center gap-2"><Wallet size={12} strokeWidth={2} /> Credit wallet</p>
               <h3 className="font-display text-lg text-white animate-heading">{creditTarget.name}</h3>
             </div>
 

@@ -1,6 +1,7 @@
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
+import { Calendar, CreditCard, UploadCloud, Download } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
 import { fmtTime, fmtDateLong, fmtDuration } from '../lib/fmt';
@@ -15,6 +16,15 @@ const STATUS_COLORS: Record<string, string> = {
   COMPLETED:   'bg-zinc-800 text-zinc-400 border-zinc-700',
   CANCELLED:   'bg-red-900/30 text-red-400 border-red-900/30',
   NO_SHOW:     'bg-red-900/20 text-red-600 border-red-900/20',
+};
+
+const STATUS_DOT: Record<string, string> = {
+  PENDING:     'bg-yellow-400',
+  CONFIRMED:   'bg-green-400',
+  IN_PROGRESS: 'bg-blue-400',
+  COMPLETED:   'bg-zinc-500',
+  CANCELLED:   'bg-red-400',
+  NO_SHOW:     'bg-red-700',
 };
 
 const STATUS_MESSAGES: Record<string, string> = {
@@ -61,7 +71,9 @@ function StripePayButton({ bookingId }: { bookingId: string }) {
           border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
           letterSpacing: '0.04em',
         }}>
-        {loading ? 'Redirecting to checkout…' : '💳 Pay with Stripe'}
+        {loading
+          ? 'Redirecting to checkout…'
+          : <span className="inline-flex items-center gap-2"><CreditCard size={15} strokeWidth={2} /> Pay with Stripe</span>}
       </button>
       <p className="text-zinc-600 text-xs text-center mt-2">Secured by Stripe · You'll be redirected to complete payment</p>
     </div>
@@ -248,7 +260,10 @@ export default function BookingDetailPage() {
         {/* Status */}
         <div className={`rounded-xl border px-6 py-5 animate-surface ${STATUS_COLORS[booking.status] ?? 'border-studio-border'}`}>
           <div className="flex items-center justify-between mb-2">
-            <p className="label-mono">Status</p>
+            <p className="label-mono flex items-center gap-2">
+              <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[booking.status] ?? 'bg-zinc-500'}`} />
+              Status
+            </p>
             <span className="text-sm font-semibold font-mono">{booking.status}</span>
           </div>
           <p className="text-sm opacity-80">{STATUS_MESSAGES[booking.status] ?? booking.status}</p>
@@ -256,7 +271,7 @@ export default function BookingDetailPage() {
 
         {/* Session details */}
         <div className="bg-studio-surface border border-studio-border rounded-xl p-6 animate-surface-1">
-          <p className="label-mono mb-5">Session details</p>
+          <p className="label-mono mb-5 flex items-center gap-2"><Calendar size={12} strokeWidth={2} /> Session details</p>
           <div className="space-y-4">
             {[
               { label: 'Date',     value: fmtDateLong(booking.starts_at) },
@@ -275,7 +290,7 @@ export default function BookingDetailPage() {
 
         {/* Payment */}
         <div className="bg-studio-surface border border-studio-border rounded-xl p-6 animate-surface-2">
-          <p className="label-mono mb-5">Payment</p>
+          <p className="label-mono mb-5 flex items-center gap-2"><CreditCard size={12} strokeWidth={2} /> Payment</p>
           <div className="flex justify-between items-end">
             <div>
               <p className="text-zinc-500 text-xs">Total</p>
@@ -363,7 +378,7 @@ export default function BookingDetailPage() {
         {canDeliver && (
           <div className="rounded-xl border border-studio-border bg-studio-surface px-6 py-5 animate-surface">
             <div className="flex items-center justify-between mb-3">
-              <p className="label-mono">Deliver Files</p>
+              <p className="label-mono flex items-center gap-2"><UploadCloud size={12} strokeWidth={2} /> Deliver Files</p>
               <button onClick={() => setDeliverOpen(o => !o)}
                 className="text-xs text-dome border border-dome/30 px-3 py-1 rounded-lg hover:bg-dome/5 transition-colors">
                 {deliverOpen ? 'Cancel' : booking?.session_log?.tracks_worked?.length ? 'Re-deliver' : 'Deliver to artist'}
@@ -403,7 +418,7 @@ export default function BookingDetailPage() {
         {/* Artist: view delivered files */}
         {user?.role === 'ARTIST' && booking?.session_log?.tracks_worked?.length > 0 && (
           <div className="rounded-xl border border-dome/20 bg-dome/5 px-6 py-5 animate-surface">
-            <p className="label-mono text-dome mb-3">Your Files Are Ready</p>
+            <p className="label-mono text-dome mb-3 flex items-center gap-2"><Download size={12} strokeWidth={2} /> Your Files Are Ready</p>
             <div className="space-y-2">
               {booking.session_log.tracks_worked.map((url: string, i: number) => (
                 <a key={i} href={url} target="_blank" rel="noreferrer" download

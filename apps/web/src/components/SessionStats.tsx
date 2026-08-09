@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { TrendingUp } from 'lucide-react';
 import { api } from '../lib/api';
 
 interface Stats {
@@ -31,7 +32,7 @@ export default function SessionStats() {
   return (
     <div className="bg-studio-surface border border-studio-border rounded-xl p-6 animate-surface-3">
       <div className="flex items-center justify-between mb-5">
-        <p className="label-mono">Your momentum</p>
+        <p className="label-mono flex items-center gap-2"><TrendingUp size={12} strokeWidth={2} /> Your momentum</p>
         <p className="text-zinc-600 text-xs font-mono">{thisYear}</p>
       </div>
 
