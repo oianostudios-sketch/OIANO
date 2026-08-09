@@ -1,10 +1,12 @@
 import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { Filter, Megaphone, Wallet, Zap } from 'lucide-react';
+import { Filter, Megaphone, Wallet, Zap, Activity, Calendar, ClipboardList, CalendarPlus, Eye, LogOut } from 'lucide-react';
 import { useAuthStore } from '../store/auth.store';
 import { api } from '../lib/api';
 import { useToast } from '../components/Toast';
+import SunMark from '../components/SunMark';
+import { useStudioState } from '../context/StudioState';
 import { SkeletonKPI, SkeletonRow, SkeletonArtistCard } from '../components/Skeleton';
 import { fmtTime, fmtDate } from '../lib/fmt';
 
@@ -111,6 +113,7 @@ export default function AdminDashboardPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const toast = useToast();
+  const { roomStatus } = useStudioState();
 
   const [bookingTab, setBookingTab] = useState<BookingTab>('All');
   const [creditTarget, setCreditTarget] = useState<{ id: string; name: string } | null>(null);
@@ -277,28 +280,62 @@ export default function AdminDashboardPage() {
       {/* ── Header ─────────────────────────────────────────────────────────────── */}
       <header className="border-b border-studio-border px-6 py-3 flex items-center justify-between sticky top-0 bg-studio-bg/95 backdrop-blur-sm z-10">
         <div className="flex items-center gap-4">
-          <span className="brand-wordmark text-base">OIANO</span>
+          <SunMark size={26} />
           <span className="text-[10px] font-mono text-zinc-600 tracking-widest uppercase">
             Dreamz Music Lab · Admin
           </span>
         </div>
+
+        {/* Room presence — live from StudioState, no extra fetch */}
+        <div className="hidden md:flex items-center gap-2">
+          {roomStatus.map((room) => (
+            <div key={room.name} style={{
+              display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px',
+              borderRadius: 99, fontSize: 11, fontFamily: 'JetBrains Mono, monospace',
+              background: room.busy ? 'rgba(232,130,58,0.1)' : 'rgba(255,255,255,0.04)',
+              border: `1px solid ${room.busy ? 'rgba(232,130,58,0.3)' : '#222'}`,
+              color: room.busy ? '#E8823A' : '#444',
+            }}>
+              <span style={{
+                width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
+                background: room.busy ? '#E8823A' : '#333',
+                boxShadow: room.busy ? '0 0 6px #E8823A' : 'none',
+                animation: room.busy ? 'spw-pulse 1.2s ease-in-out infinite' : 'none',
+              }} />
+              {room.name}
+            </div>
+          ))}
+        </div>
+
         <nav className="flex gap-5 items-center">
           {[
-            { to: '/pulse',     label: 'Studio Pulse' },
-            { to: '/calendar',  label: 'Calendar' },
-            { to: '/runsheet',  label: 'Runsheet' },
-            { to: '/book',      label: 'Book' },
-            { to: '/dashboard', label: 'Artist view' },
-          ].map(({ to, label }) => (
-            <Link key={to} to={to} className="link-underline text-zinc-500 hover:text-white text-sm transition-colors">
-              {label}
+            { to: '/pulse',     label: 'Studio Pulse', icon: Activity },
+            { to: '/calendar',  label: 'Calendar',     icon: Calendar },
+            { to: '/runsheet',  label: 'Runsheet',      icon: ClipboardList },
+            { to: '/book',      label: 'Book',          icon: CalendarPlus },
+            { to: '/dashboard', label: 'Artist view',   icon: Eye },
+          ].map(({ to, label, icon: Icon }) => (
+            <Link
+              key={to}
+              to={to}
+              aria-label={label}
+              className="group relative flex items-center justify-center w-8 h-8 rounded-lg text-zinc-500 hover:text-white hover:bg-studio-surface transition-colors"
+            >
+              <Icon size={16} strokeWidth={1.75} />
+              <span className="pointer-events-none absolute top-full mt-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md border border-studio-border bg-studio-surface px-2 py-1 text-[10px] font-mono uppercase tracking-widest text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                {label}
+              </span>
             </Link>
           ))}
           <button
             onClick={() => { logout(); navigate('/enter'); }}
-            className="text-zinc-600 hover:text-zinc-400 text-sm transition-colors ml-2"
+            aria-label="Sign out"
+            className="group relative flex items-center justify-center w-8 h-8 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-studio-surface transition-colors ml-1"
           >
-            Sign out
+            <LogOut size={16} strokeWidth={1.75} />
+            <span className="pointer-events-none absolute top-full mt-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md border border-studio-border bg-studio-surface px-2 py-1 text-[10px] font-mono uppercase tracking-widest text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+              Sign out
+            </span>
           </button>
         </nav>
       </header>

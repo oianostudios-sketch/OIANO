@@ -9,6 +9,7 @@ import ArtistPassportCard from '../components/ArtistPassportCard';
 import { useToast } from '../components/Toast';
 import { useStudioState } from '../context/StudioState';
 import SessionStats from '../components/SessionStats';
+import SunMark from '../components/SunMark';
 import { fmtTime as _fmtTime, fmtDateShort as _fmtDateShort } from '../lib/fmt';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -340,7 +341,7 @@ export default function DashboardPage() {
       {/* Nav */}
       <header className="db-header" style={{ borderBottom: '1px solid #141414', padding: '14px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, color: '#C9A84C', fontWeight: 600 }}>OIANO</span>
+          <SunMark size={24} />
           <span style={{ color: '#2a2a2a', fontSize: 11, fontFamily: 'monospace' }}>StudioOS</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>

@@ -8,6 +8,8 @@ import { api } from '../lib/api';
 import VUMeter from '../components/VUMeter';
 import SmartClock from '../components/SmartClock/SmartClock';
 import StudioIntelligencePanel, { PulseData } from '../components/StudioIntelligencePanel';
+import SunMark from '../components/SunMark';
+import { Activity, LayoutDashboard, Calendar, CalendarPlus, Eye } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -514,6 +516,68 @@ export default function PulseDashboard() {
     return () => clearInterval(id);
   }, [loadPulse]);
 
+  // ── Auto-scroll the intelligence panel — a slow, self-driving ticker so the
+  // revenue/signal/productivity/moving cards are all visible without the
+  // operator having to touch anything. Pauses on hover/touch so a manual
+  // scroll isn't fought, and dwells briefly at each end before reversing.
+  const intelPanelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = intelPanelRef.current;
+    if (!el) return;
+
+    let raf = 0;
+    let dir: 1 | -1 = 1;
+    let paused = false;
+    // Phase-based (not position-threshold-based) so a boundary touch dwells
+    // exactly once — a threshold check like "scrollTop <= 1" would keep
+    // re-triggering every frame while the slow increment lingers near 0.
+    let phase: 'moving' | 'dwelling' = 'moving';
+    let dwellEnd = 0;
+    // scrollTop only holds whole pixels — a sub-pixel-per-frame increment
+    // read back from el.scrollTop rounds to 0 every frame and never
+    // accumulates. Track the true (fractional) position ourselves instead.
+    let pos = el.scrollTop;
+
+    function tick(now: number) {
+      const max = el!.scrollHeight - el!.clientHeight;
+      if (!paused && max > 4) {
+        if (phase === 'dwelling') {
+          if (now >= dwellEnd) phase = 'moving';
+        } else {
+          pos += dir * 0.35;
+          if (pos >= max) {
+            pos = max;
+            dir = -1;
+            phase = 'dwelling';
+            dwellEnd = now + 1600;
+          } else if (pos <= 0) {
+            pos = 0;
+            dir = 1;
+            phase = 'dwelling';
+            dwellEnd = now + 1600;
+          }
+          el!.scrollTop = pos;
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    }
+    raf = requestAnimationFrame(tick);
+
+    const pause  = () => { paused = true; };
+    const resume = () => { paused = false; };
+    el.addEventListener('mouseenter', pause);
+    el.addEventListener('mouseleave', resume);
+    el.addEventListener('touchstart', pause, { passive: true });
+    el.addEventListener('touchend', () => setTimeout(resume, 1500));
+
+    return () => {
+      cancelAnimationFrame(raf);
+      el.removeEventListener('mouseenter', pause);
+      el.removeEventListener('mouseleave', resume);
+      el.removeEventListener('touchstart', pause);
+    };
+  }, []);
+
   const sorted = useMemo(
     () => [...sessions].sort((a, b) => new Date(sessionStart(a)).getTime() - new Date(sessionStart(b)).getTime()),
     [sessions]
@@ -577,10 +641,9 @@ export default function PulseDashboard() {
         {/* ── Sidebar ─────────────────────────────────────────────────── */}
         <aside className="cmd-sidebar">
           <div className="cmd-brand">
-            <div className={`cmd-mark${activeSession ? ' cmd-mark-live' : ''}`}>O</div>
+            <SunMark size={26} />
             <div>
-              <strong>OIANO</strong>
-              <span>Command Centre</span>
+              <strong>Command Centre</strong>
             </div>
           </div>
 
@@ -600,16 +663,18 @@ export default function PulseDashboard() {
 
           <nav className="cmd-nav">
             {[
-              { label: 'Pulse',       to: null },
-              { label: 'Admin',       to: '/admin' },
-              { label: 'Calendar',    to: '/calendar' },
-              { label: 'Book studio', to: '/book' },
-              { label: 'Artist view', to: '/dashboard' },
+              { label: 'Pulse',       to: null,          icon: Activity },
+              { label: 'Admin',       to: '/admin',       icon: LayoutDashboard },
+              { label: 'Calendar',    to: '/calendar',    icon: Calendar },
+              { label: 'Book studio', to: '/book',        icon: CalendarPlus },
+              { label: 'Artist view', to: '/dashboard',   icon: Eye },
             ].map(n => (
               <button key={n.label}
                 className={n.to === null ? 'cmd-nav-btn active' : 'cmd-nav-btn'}
+                aria-label={n.label}
                 onClick={() => n.to && navigate(n.to)}>
-                {n.label}
+                <n.icon size={14} strokeWidth={1.75} />
+                <span className="cmd-nav-tip">{n.label}</span>
               </button>
             ))}
           </nav>
@@ -819,7 +884,7 @@ export default function PulseDashboard() {
               </div>
 
               {/* Intelligence panel */}
-              <div className="cmd-intel-panel">
+              <div className="cmd-intel-panel" ref={intelPanelRef}>
                 <StudioIntelligencePanel pulseData={pulseData} loading={pulseLoading} />
               </div>
 
@@ -872,30 +937,31 @@ const CSS = `
     display:flex; align-items:center; gap:8px;
     padding:14px 12px; border-bottom:1px solid #111; flex-shrink:0;
   }
-  .cmd-mark {
-    width:26px; height:26px; flex-shrink:0;
-    display:grid; place-items:center;
-    border:1px solid #5A9BCB33; color:#5A9BCB;
-    font-weight:700; font-size:12px; font-family:'Playfair Display',serif;
-    transition: border-color .5s, box-shadow .5s;
-  }
-  .cmd-mark.cmd-mark-live { border-color:#5A9BCB; box-shadow:0 0 14px #5A9BCB33; }
   .cmd-brand strong { display:block; font-size:11px; color:#d4d4d8; letter-spacing:.02em; }
-  .cmd-brand span   { display:block; font-size:9px;  color:#333; margin-top:1px; letter-spacing:.04em; }
   .cmd-vu-block { padding:12px; border-bottom:1px solid #111; flex-shrink:0; }
   .cmd-section-label {
     font-size:9px; color:#333; letter-spacing:.16em;
     text-transform:uppercase; font-family:'JetBrains Mono',monospace;
     display:block;
   }
-  .cmd-nav { display:flex; flex-direction:column; gap:2px; padding:10px 8px; flex-shrink:0; }
+  .cmd-nav { display:flex; align-items:center; justify-content:space-between; gap:2px; padding:10px 8px; flex-shrink:0; }
   .cmd-nav-btn {
-    width:100%; text-align:left; background:none; border:none; cursor:pointer;
-    font-size:12px; color:#52525b; padding:7px 10px; border-radius:5px;
+    position:relative;
+    flex:1; display:flex; align-items:center; justify-content:center;
+    height:28px; background:none; border:none; cursor:pointer;
+    color:#52525b; border-radius:5px;
     font-family:inherit; transition:background .12s, color .12s;
   }
   .cmd-nav-btn:hover { background:#111; color:#a1a1aa; }
   .cmd-nav-btn.active { background:#1a1a1a; color:#5A9BCB; }
+  .cmd-nav-tip {
+    position:absolute; top:calc(100% + 6px); left:50%; transform:translateX(-50%);
+    white-space:nowrap; background:#111; border:1px solid #1e1e1e; border-radius:5px;
+    padding:4px 8px; font-size:9px; letter-spacing:.12em; text-transform:uppercase;
+    color:#d4d4d8; font-family:'JetBrains Mono',monospace;
+    opacity:0; pointer-events:none; transition:opacity .15s; z-index:30;
+  }
+  .cmd-nav-btn:hover .cmd-nav-tip { opacity:1; }
   .cmd-sidebar-pulse { padding:12px; margin-top:auto; border-top:1px solid #111; flex-shrink:0; }
 
   /* ── Main ── */

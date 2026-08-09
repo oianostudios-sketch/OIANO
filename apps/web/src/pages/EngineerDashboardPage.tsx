@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/auth.store';
 import { api } from '../lib/api';
 import { useToast } from '../components/Toast';
 import { SkeletonRow } from '../components/Skeleton';
+import SunMark from '../components/SunMark';
 import { fmtTime, fmtDate } from '../lib/fmt';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -104,7 +105,7 @@ export default function EngineerDashboardPage() {
       {/* Header */}
       <header className="border-b border-studio-border px-6 py-4 flex items-center justify-between sticky top-0 bg-studio-bg z-10">
         <div className="flex items-center gap-3">
-          <h1 className="font-display text-xl text-dome font-semibold">OIANO</h1>
+          <SunMark size={24} />
           <span className="text-zinc-600 text-xs">Engineer · Studio</span>
         </div>
         {/* Room status strip — live from pulse */}
@@ -119,7 +120,11 @@ export default function EngineerDashboardPage() {
                 border: `1px solid ${live ? 'rgba(29,158,117,0.3)' : '#222'}`,
                 color: live ? '#1D9E75' : '#444',
               }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: live ? '#1D9E75' : '#333', flexShrink: 0, boxShadow: live ? '0 0 6px #1D9E75' : 'none' }} />
+                <span style={{
+                  width: 6, height: 6, borderRadius: '50%', background: live ? '#1D9E75' : '#333', flexShrink: 0,
+                  boxShadow: live ? '0 0 6px #1D9E75' : 'none',
+                  animation: live ? 'spw-pulse 1.2s ease-in-out infinite' : 'none',
+                }} />
                 {room.name ?? room.room_type}
               </div>
             );

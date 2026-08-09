@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
@@ -25,16 +25,27 @@ export default function NotificationBell() {
     refetchInterval: 60_000,
   });
 
+  // One-shot "it just landed" burst — distinct from the continuous unread-count
+  // pulse below, which just means "something is unread" regardless of timing.
+  const [burst, setBurst] = useState(false);
+  const burstTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Re-fetch when SSE fires a notification or booking event
   useEffect(() => {
     const handler = (e: CustomEvent) => {
       const t = e.detail?.type;
       if (t === 'notification' || t === 'booking_updated' || t === 'session_delivered') {
         qc.invalidateQueries({ queryKey: ['notifications'] });
+        setBurst(true);
+        if (burstTimer.current) clearTimeout(burstTimer.current);
+        burstTimer.current = setTimeout(() => setBurst(false), 700);
       }
     };
     window.addEventListener('sse', handler as EventListener);
-    return () => window.removeEventListener('sse', handler as EventListener);
+    return () => {
+      window.removeEventListener('sse', handler as EventListener);
+      if (burstTimer.current) clearTimeout(burstTimer.current);
+    };
   }, [qc]);
 
   const unread = notifs.filter((n) => !n.read_at).length;
@@ -43,7 +54,7 @@ export default function NotificationBell() {
   return (
     <button
       onClick={() => navigate('/notifications')}
-      className="relative text-zinc-500 hover:text-white transition-colors p-1"
+      className={`relative text-zinc-500 hover:text-white transition-colors p-1${burst ? ' bell-burst' : ''}`}
       aria-label={label}
     >
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

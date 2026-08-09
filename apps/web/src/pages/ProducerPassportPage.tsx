@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { ProducerNav } from '../components/ProducerNav';
 import { useToast } from '../components/Toast';
+import SunMark from '../components/SunMark';
 
 const API_ORIGIN = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
 
@@ -176,7 +177,7 @@ export default function ProducerPassportPage() {
       {/* Header */}
       <header style={{ borderBottom: '1px solid var(--border)', padding: '14px 24px', display: 'flex', alignItems: 'center', gap: 12, background: 'var(--surface)', position: 'sticky', top: 0, zIndex: 10 }}>
         <button onClick={() => navigate('/producer')} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: 18, padding: '0 4px' }}>←</button>
-        <span style={{ fontFamily: "'Playfair Display',serif", fontSize: 17, color: '#C9A84C', fontWeight: 600 }}>OIANO</span>
+        <SunMark size={22} />
         <span style={{ fontSize: 10, color: '#333', fontFamily: "'JetBrains Mono',monospace", letterSpacing: '0.2em', textTransform: 'uppercase', marginLeft: 'auto' }}>
           {passportCode}
         </span>

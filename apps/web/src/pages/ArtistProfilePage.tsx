@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
 import { useToast } from '../components/Toast';
 import { getPersonality } from '../lib/personality';
+import SunMark from '../components/SunMark';
 
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 
@@ -284,7 +285,7 @@ export default function ArtistProfilePage() {
       {/* Header */}
       <header style={{ borderBottom:'1px solid #141414', padding:'14px 24px', display:'flex', alignItems:'center', gap:12 }}>
         <button onClick={() => navigate(backTo)} style={{ fontSize:11, color:'#3a3a3a', background:'none', border:'none', cursor:'pointer', fontFamily:'inherit' }}>← Back</button>
-        <span style={{ fontFamily:"'Playfair Display',serif", fontSize:17, color:'#C9A84C', fontWeight:600 }}>OIANO</span>
+        <SunMark size={22} />
         {passportCode && (
           <span style={{ fontSize:9, color:'#222', fontFamily:"'JetBrains Mono',monospace", letterSpacing:'0.22em', textTransform:'uppercase', marginLeft:'auto' }}>
             {passportCode}
