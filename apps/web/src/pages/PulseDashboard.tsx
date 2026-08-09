@@ -607,6 +607,7 @@ export default function PulseDashboard() {
 
   const revenuePaid        = sessions.filter(s => s.payment_status === 'PAID').reduce((sum, b) => sum + paymentAmount(b), 0);
   const revenueOutstanding = sessions.filter(s => s.payment_status !== 'PAID').reduce((sum, s) => sum + paymentAmount(s), 0);
+  const todayRevenue       = todaySessions.reduce((sum, s) => sum + paymentAmount(s), 0);
 
   const thisWeekSessions = useMemo(() => {
     const weekStart = new Date();
@@ -867,6 +868,30 @@ export default function PulseDashboard() {
                 <button className="cmd-btn primary" onClick={() => navigate('/book')}>Book a session →</button>
               </div>
             )}
+          </div>
+
+          {/* TODAY strip — one glanceable line instead of hunting the same
+              four numbers across the sidebar, hub footer, and revenue block. */}
+          <div className="cmd-today-strip">
+            <div className="cts-item">
+              <span className="cts-val">{todaySessions.length}</span>
+              <span className="cts-lbl">Bookings</span>
+            </div>
+            <div className="cts-div" />
+            <div className="cts-item">
+              <span className="cts-val">{fmtCurrency(todayRevenue)}</span>
+              <span className="cts-lbl">Revenue</span>
+            </div>
+            <div className="cts-div" />
+            <div className="cts-item">
+              <span className="cts-val" style={{ color: utilizationPct >= 70 ? '#1D9E75' : undefined }}>{Math.round(utilizationPct)}%</span>
+              <span className="cts-lbl">Utilization</span>
+            </div>
+            <div className="cts-div" />
+            <div className="cts-item">
+              <span className="cts-val" style={{ color: revenueOutstanding > 0 ? '#C9A84C' : undefined }}>{fmtCurrency(revenueOutstanding)}</span>
+              <span className="cts-lbl">Outstanding</span>
+            </div>
           </div>
 
           {/* Body: 3 columns */}
@@ -1151,6 +1176,17 @@ const CSS = `
   .hero-countdown-sub { font-size:10px; color:#3a3a3a; font-family:'JetBrains Mono',monospace; letter-spacing:.1em; margin-top:3px; }
   .hero-empty { display:flex; align-items:center; gap:20px; }
   .hero-empty-msg { font-size:12px; color:#2a2a2a; }
+
+  /* TODAY strip */
+  .cmd-today-strip {
+    display:flex; align-items:center;
+    padding:10px 20px; gap:20px;
+    border-bottom:1px solid #111; flex-shrink:0;
+  }
+  .cts-item { display:flex; align-items:baseline; gap:7px; }
+  .cts-val { font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:700; color:#e4e4e7; }
+  .cts-lbl { font-size:10px; color:#3a3a3a; letter-spacing:.1em; text-transform:uppercase; }
+  .cts-div { width:1px; height:14px; background:#141414; }
 
   /* Body 3-col */
   .cmd-body {
