@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import VUMeter from '../components/VUMeter';
 import SmartClock from '../components/SmartClock/SmartClock';
-import StudioIntelligencePanel, { PulseData } from '../components/StudioIntelligencePanel';
+import StudioIntelligencePanel, { PulseData, Insight } from '../components/StudioIntelligencePanel';
 import SunMark from '../components/SunMark';
 import { Activity, LayoutDashboard, Calendar, CalendarPlus, Eye } from 'lucide-react';
 
@@ -636,6 +636,96 @@ export default function PulseDashboard() {
     return h > 0 ? `${h}h ${m.toString().padStart(2,'0')}m` : `${m.toString().padStart(2,'0')}m ${s.toString().padStart(2,'0')}s`;
   }, [nextSession, nowMs]);
 
+  // ── Intelligence — the "what should the manager do" layer. Each card is
+  // computed from data already loaded on this page (no extra fetch), so it
+  // can point at a specific artist/room/amount instead of a bare count.
+  // Ranked risk > payment > opportunity > trend, capped so it stays a short,
+  // actually-actionable list rather than a wall of facts.
+  const insights = useMemo((): Insight[] => {
+    const out: Insight[] = [];
+    const ROOM_NAMES = ['Studio A', 'Studio B', 'Vocal Booth'];
+    const DAY_HOURS = 14; // 8am–10pm per room
+
+    // Booking risk — soonest still-unconfirmed session
+    const risk = sorted.find(s =>
+      s.status === 'PENDING' && s.starts_at && new Date(s.starts_at).getTime() > nowMs
+    );
+    if (risk) {
+      const minsUntil = Math.round((new Date(risk.starts_at!).getTime() - nowMs) / 60_000);
+      out.push({
+        id: 'risk', icon: '⚠', label: 'Booking risk', severity: 'risk',
+        headline: `${sessionArtist(risk)} — confirmation pending`,
+        detail: `Session starts in ${fmtMins(minsUntil)}`,
+        cta: 'Review booking →',
+        onClick: () => navigate(`/bookings/${risk.id}`),
+      });
+    }
+
+    // Payment follow-up — largest outstanding balance on a confirmed/completed session
+    const outstanding = sessions
+      .filter(s => s.payment_status !== 'PAID' && ['CONFIRMED', 'COMPLETED'].includes(s.status ?? ''))
+      .sort((a, b) => paymentAmount(b) - paymentAmount(a))[0];
+    if (outstanding && paymentAmount(outstanding) > 0) {
+      out.push({
+        id: 'payment', icon: '🧾', label: 'Payment follow-up', severity: 'payment',
+        headline: `${sessionArtist(outstanding)} — ${fmtCurrency(paymentAmount(outstanding))} outstanding`,
+        detail: outstanding.starts_at ? `Session ${fmtTime(outstanding.starts_at)} · ${outstanding.status?.toLowerCase()}` : 'Payment pending',
+        cta: 'View booking →',
+        onClick: () => navigate(`/bookings/${outstanding.id}`),
+      });
+    }
+
+    // Revenue opportunity — the room with the most unused hours today
+    const avgRate = (() => {
+      const priced = sessions.filter(s => paymentAmount(s) > 0 && s.starts_at && s.ends_at);
+      if (!priced.length) return 30;
+      const total = priced.reduce((sum, s) => {
+        const hrs = (new Date(s.ends_at!).getTime() - new Date(s.starts_at!).getTime()) / 3_600_000;
+        return sum + (hrs > 0 ? paymentAmount(s) / hrs : 0);
+      }, 0);
+      return total / priced.length;
+    })();
+    const roomGaps = ROOM_NAMES.map(name => {
+      const bookedHrs = todaySessions
+        .filter(s => s.room?.name === name)
+        .reduce((sum, s) => sum + (new Date(s.ends_at!).getTime() - new Date(s.starts_at!).getTime()) / 3_600_000, 0);
+      return { name, unused: Math.max(0, DAY_HOURS - bookedHrs) };
+    }).sort((a, b) => b.unused - a.unused);
+    const topGap = roomGaps[0];
+    if (topGap && topGap.unused >= 2) {
+      out.push({
+        id: 'opportunity', icon: '💰', label: 'Revenue opportunity', severity: 'opportunity',
+        headline: `${topGap.name} has ${topGap.unused.toFixed(1)}h unused today`,
+        detail: `Potential revenue: ${fmtCurrency(topGap.unused * avgRate)}`,
+        cta: 'Open availability →',
+        onClick: () => navigate('/book'),
+      });
+    }
+
+    // Trend — trending genre + the 4h window with the most session starts
+    if (pulseData?.trending_genre) {
+      const buckets = new Array(24).fill(0);
+      sessions.forEach(s => { if (s.starts_at) buckets[new Date(s.starts_at).getHours()]++; });
+      let bestStart = 8, bestSum = -1;
+      for (let h = 8; h <= 18; h++) {
+        const sum = buckets.slice(h, h + 4).reduce((a, b) => a + b, 0);
+        if (sum > bestSum) { bestSum = sum; bestStart = h; }
+      }
+      if (bestSum > 0) {
+        const g = pulseData.trending_genre;
+        out.push({
+          id: 'trend', icon: '📈', label: 'Pulse insight', severity: 'trend',
+          headline: `${g.genre} sessions lead this month at ${g.pct}%`,
+          detail: `Highest-demand window: ${bestStart % 12 || 12}${bestStart < 12 ? 'am' : 'pm'}–${(bestStart + 4) % 12 || 12}${bestStart + 4 < 12 || bestStart + 4 === 24 ? 'am' : 'pm'}`,
+          cta: 'View calendar →',
+          onClick: () => navigate('/calendar'),
+        });
+      }
+    }
+
+    return out.slice(0, 4);
+  }, [sorted, sessions, todaySessions, pulseData, nowMs, navigate]);
+
   return (
     <>
       <style>{CSS}</style>
@@ -888,7 +978,7 @@ export default function PulseDashboard() {
 
               {/* Intelligence panel */}
               <div className="cmd-intel-panel" ref={intelPanelRef}>
-                <StudioIntelligencePanel pulseData={pulseData} loading={pulseLoading} />
+                <StudioIntelligencePanel pulseData={pulseData} loading={pulseLoading} insights={insights} />
               </div>
 
             </div>

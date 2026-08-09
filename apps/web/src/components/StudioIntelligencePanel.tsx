@@ -1,5 +1,4 @@
 import { useMemo, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -19,6 +18,27 @@ export interface PulseData {
   wins: Array<{ type: string; message: string; artist_name: string; icon: string }>;
   next_moves: Array<{ type: string; message: string; count: number; severity: string }>;
 }
+
+// ── Intelligence — the "what should the manager do" layer. Computed client
+// side in PulseDashboard from data it already has loaded (bookings/pulse),
+// so a card can name a specific artist/room/amount instead of a bare count.
+export interface Insight {
+  id: string;
+  icon: string;
+  label: string;
+  headline: string;
+  detail: string;
+  cta: string;
+  severity: 'risk' | 'payment' | 'opportunity' | 'trend';
+  onClick: () => void;
+}
+
+const INSIGHT_STYLE: Record<Insight['severity'], { border: string; bg: string; label: string; icon: string }> = {
+  risk:        { border: '#D94A4A30', bg: '#D94A4A0a', label: '#D94A4A', icon: '#D94A4A' },
+  payment:     { border: '#C9A84C30', bg: '#C9A84C0a', label: '#C9A84C', icon: '#C9A84C' },
+  opportunity: { border: '#1D9E7530', bg: '#1D9E750a', label: '#1D9E75', icon: '#1D9E75' },
+  trend:       { border: '#3B8BFF30', bg: '#3B8BFF0a', label: '#3B8BFF', icon: '#3B8BFF' },
+};
 
 // ── Studio mantras — seeded by day of year so they rotate daily ───────────────
 
@@ -100,10 +120,10 @@ const SEVERITY: Record<string, { dot: string; label: string; bg: string }> = {
 interface Props {
   pulseData: PulseData | null;
   loading: boolean;
+  insights?: Insight[];
 }
 
-export default function StudioIntelligencePanel({ pulseData, loading }: Props) {
-  const navigate = useNavigate();
+export default function StudioIntelligencePanel({ pulseData, loading, insights = [] }: Props) {
   const mantra = useMemo(() => getDayMantra(), []);
   const [blessingVisible, setBlessingVisible] = useState(true);
 
@@ -116,7 +136,6 @@ export default function StudioIntelligencePanel({ pulseData, loading }: Props) {
   const util   = pulseData?.utilization;
   const genre  = pulseData?.trending_genre;
   const wins   = pulseData?.wins ?? [];
-  const moves  = pulseData?.next_moves ?? [];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
@@ -249,42 +268,60 @@ export default function StudioIntelligencePanel({ pulseData, loading }: Props) {
         </div>
       )}
 
-      {/* ── Next Moves ── */}
+      {/* ── Intelligence — the soul of Pulse: not "what happened" but
+           "what should the manager do", each card naming a specific
+           artist/room/amount and a direct action rather than a bare count. */}
       <div style={{ background: '#111', border: '1px solid #1a1a1a', borderRadius: 8, padding: '12px 14px', flex: 1 }}>
-        <p style={{ margin: '0 0 10px', fontSize: 10, color: '#444', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-          Next moves
-        </p>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
+          <p style={{ margin: 0, fontSize: 10, color: '#444', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+            Intelligence
+          </p>
+          {insights.length > 0 && (
+            <span style={{ fontSize: 10, color: '#333', fontFamily: 'monospace' }}>
+              {insights.length} action{insights.length !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
         {loading ? (
           <div style={{ height: 24, background: '#1a1a1a', borderRadius: 4, opacity: 0.5 }} />
+        ) : insights.length === 0 ? (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 9,
+            background: SEVERITY.good.bg, borderRadius: 6, padding: '8px 10px',
+          }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: SEVERITY.good.dot, flexShrink: 0 }} />
+            <span style={{ fontSize: 12, color: SEVERITY.good.label }}>All clear — studio is running clean</span>
+          </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {moves.map((move, i) => {
-              const sev = SEVERITY[move.severity] ?? SEVERITY.info;
-              const dest =
-                move.type === 'unconfirmed' ? '/admin' :
-                move.type === 'overdue'     ? '/admin' :
-                move.type === 'inactive'    ? '/admin' : null;
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {insights.map((ins) => {
+              const s = INSIGHT_STYLE[ins.severity];
               return (
                 <button
-                  key={i}
-                  onClick={() => dest && navigate(dest)}
+                  key={ins.id}
+                  onClick={ins.onClick}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 9,
-                    background: sev.bg, border: '1px solid transparent',
-                    borderRadius: 6, padding: '8px 10px', cursor: dest ? 'pointer' : 'default',
-                    textAlign: 'left', width: '100%', fontFamily: 'inherit',
-                    transition: 'border-color 0.15s',
+                    display: 'flex', flexDirection: 'column', gap: 5,
+                    background: s.bg, border: `1px solid ${s.border}`,
+                    borderRadius: 7, padding: '10px 12px',
+                    textAlign: 'left', width: '100%', fontFamily: 'inherit', cursor: 'pointer',
+                    transition: 'border-color 0.15s, background 0.15s',
                   }}
-                  onMouseEnter={e => { if (dest) (e.currentTarget as HTMLElement).style.borderColor = sev.dot + '44'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'transparent'; }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = s.border.replace('30', '55'); }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = s.border; }}
                 >
                   <span style={{
-                    width: 6, height: 6, borderRadius: '50%',
-                    background: sev.dot, flexShrink: 0,
-                    boxShadow: move.severity !== 'good' ? `0 0 5px ${sev.dot}` : 'none',
-                  }} />
-                  <span style={{ fontSize: 12, color: sev.label, flex: 1, lineHeight: 1.3 }}>{move.message}</span>
-                  {dest && <span style={{ fontSize: 11, color: '#2a2a2a' }}>→</span>}
+                    display: 'flex', alignItems: 'center', gap: 5,
+                    fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+                    color: s.label, fontFamily: 'monospace',
+                  }}>
+                    <span style={{ color: s.icon }}>{ins.icon}</span> {ins.label}
+                  </span>
+                  <span style={{ fontSize: 13, color: '#e4e4e7', fontWeight: 600, lineHeight: 1.3 }}>
+                    {ins.headline}
+                  </span>
+                  <span style={{ fontSize: 11, color: '#71717a' }}>{ins.detail}</span>
+                  <span style={{ fontSize: 11, color: s.label, marginTop: 2 }}>{ins.cta}</span>
                 </button>
               );
             })}
