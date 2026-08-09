@@ -9,7 +9,7 @@ import VUMeter from '../components/VUMeter';
 import SmartClock from '../components/SmartClock/SmartClock';
 import StudioIntelligencePanel, { PulseData, Insight } from '../components/StudioIntelligencePanel';
 import SunMark from '../components/SunMark';
-import { Activity, LayoutDashboard, Calendar, CalendarPlus, Eye } from 'lucide-react';
+import { Activity, LayoutDashboard, Calendar, CalendarPlus, Eye, DollarSign, Gauge, Wallet } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -98,6 +98,72 @@ function LiveClock() {
       {hh}<span style={{ opacity: now.getSeconds() % 2 === 0 ? 1 : 0.25, transition: 'opacity 0.2s' }}>:</span>{mm}
       <span className="cmd-clock-sec">:{ss}</span>
     </span>
+  );
+}
+
+// ── Pulse dial — the hero centrepiece. A ring showing real elapsed % while a
+// session is live, a slow breathing ring otherwise, with the state/countdown
+// text set inside it rather than beside it. ────────────────────────────────
+
+function PulseDial({ activeSession, nextSession, nextCountdown }: {
+  activeSession?: Session; nextSession?: Session | null; nextCountdown?: string | null;
+}) {
+  const size = 148, r = 62, cx = size / 2, cy = size / 2, sw = 5;
+  const isLive = !!activeSession;
+
+  const [pct, setPct] = useState(0);
+  useEffect(() => {
+    if (!activeSession?.starts_at || !activeSession?.ends_at) { setPct(0); return; }
+    function calc() {
+      const start = new Date(activeSession!.starts_at!).getTime();
+      const end   = new Date(activeSession!.ends_at!).getTime();
+      const now   = Date.now();
+      setPct(Math.min(100, Math.max(0, ((now - start) / (end - start)) * 100)));
+    }
+    calc();
+    const id = setInterval(calc, 10_000);
+    return () => clearInterval(id);
+  }, [activeSession]);
+
+  const accent = isLive ? '#E8823A' : nextSession ? '#5A9BCB' : '#1D9E75';
+  const angle = Math.min(359.99, (pct / 100) * 360);
+  const rad = (angle - 90) * (Math.PI / 180);
+  const startRad = -Math.PI / 2;
+  const sx = cx + r * Math.cos(startRad), sy = cy + r * Math.sin(startRad);
+  const ex = cx + r * Math.cos(rad), ey = cy + r * Math.sin(rad);
+  const large = angle > 180 ? 1 : 0;
+
+  const minsLeft = isLive && activeSession?.ends_at
+    ? Math.max(0, Math.round((new Date(activeSession.ends_at).getTime() - Date.now()) / 60_000))
+    : null;
+
+  const stateLabel = isLive ? 'In session' : nextSession ? 'Studio ready' : 'Studio open';
+  const bigText = isLive ? fmtMins(minsLeft ?? 0) : nextSession ? (nextCountdown ?? '—') : '—';
+  const bigSub  = isLive ? 'remaining' : nextSession ? 'until next session' : '';
+
+  return (
+    <div className={`pulse-dial${isLive ? ' pulse-dial-live' : ''}`}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#1a1a1a" strokeWidth={sw} />
+        {isLive && pct > 0 && (
+          <path
+            d={`M${sx.toFixed(2)},${sy.toFixed(2)} A${r},${r},0,${large},1,${ex.toFixed(2)},${ey.toFixed(2)}`}
+            fill="none" stroke={accent} strokeWidth={sw} strokeLinecap="round"
+          />
+        )}
+        {!isLive && (
+          <circle className="pulse-dial-breathe" cx={cx} cy={cy} r={r} fill="none" stroke={accent} strokeWidth={sw} />
+        )}
+      </svg>
+      <div className="pulse-dial-center">
+        <span className="pulse-dial-state" style={{ color: accent }}>{stateLabel}</span>
+        <span className="pulse-dial-big">{bigText}</span>
+        {bigSub && <span className="pulse-dial-sub">{bigSub}</span>}
+        {nextSession?.room?.name && !isLive && (
+          <span className="pulse-dial-room">{nextSession.room.name}</span>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -274,6 +340,10 @@ function MainStudioCard({ sessions }: { sessions: Session[] }) {
   const minsLeft = active
     ? Math.max(0, Math.floor((new Date(active.ends_at!).getTime() - Date.now()) / 60_000))
     : null;
+  const pct = active
+    ? Math.min(100, Math.max(0, ((Date.now() - new Date(active.starts_at!).getTime()) /
+        (new Date(active.ends_at!).getTime() - new Date(active.starts_at!).getTime())) * 100))
+    : 0;
 
   return (
     <div className={`rcm${isLive ? ' rcm-live' : ''}`}
@@ -302,6 +372,12 @@ function MainStudioCard({ sessions }: { sessions: Session[] }) {
       ) : (
         <p className="rcm-artist" style={{ color: '#1e1e1e' }}>Open</p>
       )}
+      {active?.engineer?.name && (
+        <p className="rcm-engineer">Engineer: {active.engineer.name}</p>
+      )}
+      {isLive && (
+        <div className="rcm-progress"><div style={{ width: `${pct}%`, background: accent }} /></div>
+      )}
     </div>
   );
 }
@@ -314,6 +390,10 @@ function StudioBCard({ sessions }: { sessions: Session[] }) {
   const { active, next } = getRoomSession(sessions, 'studio b');
   const isLive = !!active;
   const BLUE = '#3B8BFF';
+  const pct = active
+    ? Math.min(100, Math.max(0, ((Date.now() - new Date(active.starts_at!).getTime()) /
+        (new Date(active.ends_at!).getTime() - new Date(active.starts_at!).getTime())) * 100))
+    : 0;
 
   return (
     <div className={`rcb${isLive ? ' rcb-live' : ''}`}>
@@ -338,6 +418,12 @@ function StudioBCard({ sessions }: { sessions: Session[] }) {
           {(active ?? next)?.artist?.name?.split(' ')[0] ?? (isLive ? '—' : 'Ready')}
         </span>
       </div>
+      {active?.engineer?.name && (
+        <p className="rcb-engineer">Engineer: {active.engineer.name}</p>
+      )}
+      {isLive && (
+        <div className="rcb-progress"><div style={{ width: `${pct}%`, background: BLUE }} /></div>
+      )}
     </div>
   );
 }
@@ -827,70 +913,81 @@ export default function PulseDashboard() {
             <div className="cmd-error">{error}</div>
           )}
 
-          {/* Hero band — live session OR next session countdown */}
+          {/* Hero band — a big circular pulse dial as the centrepiece instead
+              of a text-first bar. Elapsed-session % when live, a breathing
+              ring otherwise; the countdown/state text lives inside it. */}
           <div className={`cmd-hero${activeSession ? ' hero-live' : ' hero-idle'}`}>
-            {activeSession ? (
-              <>
-                <div className="hero-glow" />
-                <div className="hero-left">
+            {activeSession ? <div className="hero-glow" /> : null}
+            <PulseDial activeSession={activeSession} nextSession={nextSession} nextCountdown={nextCountdown} />
+            <div className="hero-left">
+              {activeSession ? (
+                <>
                   <span className="hero-live-pill">● IN SESSION</span>
                   <h2 className="hero-artist-name">{sessionArtist(activeSession)}</h2>
                   <p className="hero-detail">
                     {sessionTitle(activeSession)}
                     {activeSession.room ? ` · ${activeSession.room.name}` : ''}
+                    {' · '}{fmtTime(activeSession.starts_at)}–{fmtTime(activeSession.ends_at)}
                   </p>
-                </div>
-                <div className="hero-right">
-                  <div className="hero-time-range">
-                    {fmtTime(activeSession.starts_at)} – {fmtTime(activeSession.ends_at)}
-                  </div>
-                  <div style={{ marginTop:8, width:220 }}>
-                    <SessionProgress session={activeSession} />
-                  </div>
-                </div>
-              </>
-            ) : nextSession ? (
-              <>
-                <div className="hero-left">
+                </>
+              ) : nextSession ? (
+                <>
                   <span className="hero-idle-pill">◎ NEXT SESSION</span>
                   <h2 className="hero-artist-name hero-artist-dim">{sessionArtist(nextSession)}</h2>
-                  <p className="hero-detail">{sessionTitle(nextSession)} · {fmtTime(nextSession.starts_at)}</p>
-                </div>
-                <div className="hero-right">
-                  <span className="hero-countdown">{nextCountdown}</span>
-                  <span className="hero-countdown-sub">until session</span>
-                </div>
-              </>
-            ) : (
-              <div className="hero-empty">
-                <span className="hero-idle-pill">◎ STUDIO OPEN</span>
-                <p className="hero-empty-msg">No sessions scheduled today — the studio is ready.</p>
-                <button className="cmd-btn primary" onClick={() => navigate('/book')}>Book a session →</button>
-              </div>
-            )}
+                  <p className="hero-detail">
+                    {sessionTitle(nextSession)} · {fmtTime(nextSession.starts_at)}
+                    {nextSession.room ? ` · ${nextSession.room.name}` : ''}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <span className="hero-idle-pill">◎ STUDIO OPEN</span>
+                  <p className="hero-empty-msg">No sessions scheduled today — the studio is ready.</p>
+                  <button className="cmd-btn primary" style={{ marginTop:8, alignSelf:'flex-start' }} onClick={() => navigate('/book')}>Book a session →</button>
+                </>
+              )}
+            </div>
           </div>
 
           {/* TODAY strip — one glanceable line instead of hunting the same
               four numbers across the sidebar, hub footer, and revenue block. */}
           <div className="cmd-today-strip">
             <div className="cts-item">
-              <span className="cts-val">{todaySessions.length}</span>
-              <span className="cts-lbl">Bookings</span>
+              <span className="cts-badge" style={{ color: '#5A9BCB', background: '#5A9BCB14' }}><Calendar size={14} strokeWidth={2} /></span>
+              <span className="cts-text">
+                <span className="cts-val">{todaySessions.length}</span>
+                <span className="cts-lbl">Bookings</span>
+              </span>
             </div>
             <div className="cts-div" />
             <div className="cts-item">
-              <span className="cts-val">{fmtCurrency(todayRevenue)}</span>
-              <span className="cts-lbl">Revenue</span>
+              <span className="cts-badge" style={{ color: '#C9A84C', background: '#C9A84C14' }}><DollarSign size={14} strokeWidth={2} /></span>
+              <span className="cts-text">
+                <span className="cts-val">{fmtCurrency(todayRevenue)}</span>
+                <span className="cts-lbl">Revenue</span>
+              </span>
             </div>
             <div className="cts-div" />
             <div className="cts-item">
-              <span className="cts-val" style={{ color: utilizationPct >= 70 ? '#1D9E75' : undefined }}>{Math.round(utilizationPct)}%</span>
-              <span className="cts-lbl">Utilization</span>
+              <span className="cts-badge" style={{
+                color: utilizationPct >= 70 ? '#1D9E75' : '#5A9BCB',
+                background: utilizationPct >= 70 ? '#1D9E7514' : '#5A9BCB14',
+              }}><Gauge size={14} strokeWidth={2} /></span>
+              <span className="cts-text">
+                <span className="cts-val" style={{ color: utilizationPct >= 70 ? '#1D9E75' : undefined }}>{Math.round(utilizationPct)}%</span>
+                <span className="cts-lbl">Utilization</span>
+              </span>
             </div>
             <div className="cts-div" />
             <div className="cts-item">
-              <span className="cts-val" style={{ color: revenueOutstanding > 0 ? '#C9A84C' : undefined }}>{fmtCurrency(revenueOutstanding)}</span>
-              <span className="cts-lbl">Outstanding</span>
+              <span className="cts-badge" style={{
+                color: revenueOutstanding > 0 ? '#E8823A' : '#3f3f46',
+                background: revenueOutstanding > 0 ? '#E8823A14' : '#3f3f4614',
+              }}><Wallet size={14} strokeWidth={2} /></span>
+              <span className="cts-text">
+                <span className="cts-val" style={{ color: revenueOutstanding > 0 ? '#E8823A' : undefined }}>{fmtCurrency(revenueOutstanding)}</span>
+                <span className="cts-lbl">Outstanding</span>
+              </span>
             </div>
           </div>
 
@@ -1138,10 +1235,10 @@ const CSS = `
 
   /* Hero band */
   .cmd-hero {
-    display:flex; align-items:center; justify-content:space-between;
-    padding:14px 20px; border-bottom:1px solid #111;
-    flex-shrink:0; min-height:72px; position:relative; overflow:hidden;
-    gap:24px;
+    display:flex; align-items:center; justify-content:flex-start;
+    padding:16px 20px; border-bottom:1px solid #111;
+    flex-shrink:0; min-height:150px; position:relative; overflow:hidden;
+    gap:26px;
   }
   .hero-live { background:linear-gradient(90deg,#0f0d07 0%,#0a0a0a 100%); border-bottom-color:#5A9BCB22; }
   .hero-idle { background:#090909; }
@@ -1151,8 +1248,27 @@ const CSS = `
     background:radial-gradient(circle,#5A9BCB0c 0%,transparent 70%);
     pointer-events:none;
   }
-  .hero-left  { display:flex; flex-direction:column; gap:3px; position:relative; flex:1; min-width:0; }
+  .hero-left  { display:flex; flex-direction:column; gap:5px; position:relative; flex:1; min-width:0; justify-content:center; }
   .hero-right { display:flex; flex-direction:column; align-items:flex-end; flex-shrink:0; }
+
+  /* Pulse dial — hero centrepiece */
+  .pulse-dial { position:relative; width:148px; height:148px; flex-shrink:0; z-index:1; }
+  .pulse-dial svg { display:block; overflow:visible; }
+  .pulse-dial svg path { transition: stroke 0.6s ease; }
+  .pulse-dial-breathe { animation: pulse-dial-breathe 3.2s ease-in-out infinite; transform-origin:center; }
+  @keyframes pulse-dial-breathe {
+    0%, 100% { opacity:.3; transform:scale(1); }
+    50%      { opacity:.65; transform:scale(1.015); }
+  }
+  .pulse-dial-center {
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; gap:3px;
+    padding:0 16px;
+  }
+  .pulse-dial-state { font-size:8px; letter-spacing:.14em; text-transform:uppercase; font-family:'JetBrains Mono',monospace; font-weight:700; }
+  .pulse-dial-big { font-family:'JetBrains Mono',monospace; font-size:19px; font-weight:700; color:#f0ede8; line-height:1.1; }
+  .pulse-dial-sub { font-size:9px; color:#3a3a3a; letter-spacing:.05em; }
+  .pulse-dial-room { font-size:9px; color:#5A9BCB88; letter-spacing:.08em; text-transform:uppercase; margin-top:2px; }
   .hero-live-pill {
     font-size:9px; font-weight:700; letter-spacing:.16em;
     color:#5A9BCB; font-family:'JetBrains Mono',monospace;
@@ -1180,13 +1296,19 @@ const CSS = `
   /* TODAY strip */
   .cmd-today-strip {
     display:flex; align-items:center;
-    padding:10px 20px; gap:20px;
+    padding:12px 20px; gap:22px;
     border-bottom:1px solid #111; flex-shrink:0;
   }
-  .cts-item { display:flex; align-items:baseline; gap:7px; }
-  .cts-val { font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:700; color:#e4e4e7; }
-  .cts-lbl { font-size:10px; color:#3a3a3a; letter-spacing:.1em; text-transform:uppercase; }
-  .cts-div { width:1px; height:14px; background:#141414; }
+  .cts-item { display:flex; align-items:center; gap:10px; }
+  .cts-badge {
+    width:30px; height:30px; border-radius:50%; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    transition: background .4s, color .4s;
+  }
+  .cts-text { display:flex; flex-direction:column; gap:1px; }
+  .cts-val { font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:700; color:#e4e4e7; line-height:1.1; }
+  .cts-lbl { font-size:9px; color:#3a3a3a; letter-spacing:.1em; text-transform:uppercase; }
+  .cts-div { width:1px; height:24px; background:#141414; }
 
   /* Body 3-col */
   .cmd-body {
@@ -1400,6 +1522,9 @@ const CSS = `
   .rcm-wave .room-wave-wrap { height:24px; gap:2px; }
   .rcm-wave .room-wave-bar  { width:3px; max-width:5px; border-radius:1px 1px 0 0; }
   .rcm-artist { font-size:10px; margin-top:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:'JetBrains Mono',monospace; }
+  .rcm-engineer { font-size:9px; color:#3a3a3a; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rcm-progress { height:2px; background:#141414; border-radius:2px; overflow:hidden; margin-top:6px; }
+  .rcm-progress div { height:100%; transition:width 10s linear; }
 
   /* Studio B */
   .rcb {
@@ -1433,5 +1558,8 @@ const CSS = `
   .rcb-dot    { width:5px; height:5px; border-radius:50%; flex-shrink:0; transition:background .4s, box-shadow .4s; }
   .rcb-artist { font-size:10px; color:#1e3050; font-family:'JetBrains Mono',monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .rcb-live .rcb-artist { color:#3B8BFF60; }
+  .rcb-engineer { font-size:9px; color:#1a2a3a; margin-top:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rcb-progress { height:2px; background:#0f1018; border-radius:2px; overflow:hidden; margin-top:6px; }
+  .rcb-progress div { height:100%; transition:width 10s linear; }
   body.session-live .cmd-topbar  { border-bottom-color:#5A9BCB14; }
 `;

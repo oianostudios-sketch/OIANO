@@ -33,11 +33,11 @@ export interface Insight {
   onClick: () => void;
 }
 
-const INSIGHT_STYLE: Record<Insight['severity'], { border: string; bg: string; label: string; icon: string }> = {
-  risk:        { border: '#D94A4A30', bg: '#D94A4A0a', label: '#D94A4A', icon: '#D94A4A' },
-  payment:     { border: '#C9A84C30', bg: '#C9A84C0a', label: '#C9A84C', icon: '#C9A84C' },
-  opportunity: { border: '#1D9E7530', bg: '#1D9E750a', label: '#1D9E75', icon: '#1D9E75' },
-  trend:       { border: '#3B8BFF30', bg: '#3B8BFF0a', label: '#3B8BFF', icon: '#3B8BFF' },
+const INSIGHT_STYLE: Record<Insight['severity'], { border: string; bg: string; iconBg: string; label: string; icon: string }> = {
+  risk:        { border: '#D94A4A30', bg: '#D94A4A0a', iconBg: '#D94A4A18', label: '#D94A4A', icon: '#D94A4A' },
+  payment:     { border: '#C9A84C30', bg: '#C9A84C0a', iconBg: '#C9A84C18', label: '#C9A84C', icon: '#C9A84C' },
+  opportunity: { border: '#1D9E7530', bg: '#1D9E750a', iconBg: '#1D9E7518', label: '#1D9E75', icon: '#1D9E75' },
+  trend:       { border: '#3B8BFF30', bg: '#3B8BFF0a', iconBg: '#3B8BFF18', label: '#3B8BFF', icon: '#3B8BFF' },
 };
 
 // ── Studio mantras — seeded by day of year so they rotate daily ───────────────
@@ -167,17 +167,18 @@ export default function StudioIntelligencePanel({ pulseData, loading, insights =
             <span style={{ fontSize: 12, color: SEVERITY.good.label }}>All clear — studio is running clean</span>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {insights.map((ins) => {
               const s = INSIGHT_STYLE[ins.severity];
               return (
                 <button
                   key={ins.id}
                   onClick={ins.onClick}
+                  title={`${ins.label} · ${ins.cta}`}
                   style={{
-                    display: 'flex', flexDirection: 'column', gap: 5,
+                    display: 'flex', alignItems: 'center', gap: 10,
                     background: s.bg, border: `1px solid ${s.border}`,
-                    borderRadius: 7, padding: '10px 12px',
+                    borderRadius: 8, padding: '8px 10px 8px 8px',
                     textAlign: 'left', width: '100%', fontFamily: 'inherit', cursor: 'pointer',
                     transition: 'border-color 0.15s, background 0.15s',
                   }}
@@ -185,17 +186,27 @@ export default function StudioIntelligencePanel({ pulseData, loading, insights =
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = s.border; }}
                 >
                   <span style={{
-                    display: 'flex', alignItems: 'center', gap: 5,
-                    fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
-                    color: s.label, fontFamily: 'monospace',
+                    width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: s.iconBg, fontSize: 13,
                   }}>
-                    <span style={{ color: s.icon }}>{ins.icon}</span> {ins.label}
+                    {ins.icon}
                   </span>
-                  <span style={{ fontSize: 13, color: '#e4e4e7', fontWeight: 600, lineHeight: 1.3 }}>
-                    {ins.headline}
+                  <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    <span style={{
+                      fontSize: 12, color: '#e4e4e7', fontWeight: 600, lineHeight: 1.25,
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    }}>
+                      {ins.headline}
+                    </span>
+                    <span style={{
+                      fontSize: 10, color: '#71717a',
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    }}>
+                      {ins.detail}
+                    </span>
                   </span>
-                  <span style={{ fontSize: 11, color: '#71717a' }}>{ins.detail}</span>
-                  <span style={{ fontSize: 11, color: s.label, marginTop: 2 }}>{ins.cta}</span>
+                  <span style={{ fontSize: 15, color: s.label, flexShrink: 0 }}>›</span>
                 </button>
               );
             })}
