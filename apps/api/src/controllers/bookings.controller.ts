@@ -200,9 +200,10 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
           status:      'PENDING',
           payment: {
             create: {
-              provider:   'stripe',
+              provider:   'wallet',
               amount_usd: total,
-              status:     'UNPAID',
+              status:     'PAID',
+              paid_at:    new Date(),
             },
           },
         },
