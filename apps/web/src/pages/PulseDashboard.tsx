@@ -396,7 +396,10 @@ function CommandHubPanel({ todaySessions, utilizationPct, studioOnline }: {
 
       {/* THE WAVE — OIANO signature */}
       <div className="chp-wave-zone">
-        <div className="chp-wave-glow" style={{ background: `radial-gradient(ellipse at 50% 100%, ${c.waveColor}18 0%, transparent 70%)` }} />
+        <div
+          className={`chp-wave-glow${state === 'overrun' || state === 'back-to-back' ? ' chp-flare' : ''}`}
+          style={{ background: `radial-gradient(ellipse at 50% 100%, ${c.waveColor}18 0%, transparent 70%)` }}
+        />
         <RoomWave color={c.waveColor} active={isLive} mode={c.waveMode} />
       </div>
 
@@ -927,6 +930,20 @@ const CSS = `
   }
   .cmd.cmd-live::before { opacity:1; animation-duration:4s; }
 
+  /* Sun-arc wash — additive layer, doesn't touch the dome-blue "idle/ready"
+     identity above. Traces the real day (dawn/noon/dusk) via the same
+     --sun-arc-* vars the global ambient glow uses (see StudioState +
+     index.css) so the Command Centre — OIANO's own control room — visibly
+     runs on the same solar clock as its brand mark. */
+  .cmd::after {
+    content:'';
+    position:fixed; inset:0;
+    pointer-events:none; z-index:0;
+    background: radial-gradient(ellipse 55% 45% at 100% 0%, var(--sun-arc-color, #C9A84C) 0%, transparent 65%);
+    opacity: var(--sun-arc-wash-op, 0.05);
+    transition: opacity 3s ease, background 3s ease;
+  }
+
   /* ── Sidebar ── */
   .cmd-sidebar {
     z-index:1; height:100vh; overflow-y:auto; overflow-x:hidden;
@@ -1091,7 +1108,18 @@ const CSS = `
   .chp-wave-glow {
     position:absolute; bottom:0; left:0; right:0; height:100px;
     pointer-events:none;
+    transition: opacity .5s;
   }
+  /* Corona flare — when a session runs hot (overrun / back-to-back), the
+     wave's glow stops being a static wash and starts behaving like an
+     actual solar flare: brighter, wider, breathing faster than the calm
+     idle/active states. Reuses the wave's own color (red for overrun,
+     gold for back-to-back) so it still reads as status, not decoration. */
+  @keyframes corona-flare {
+    0%, 100% { opacity:.65; transform:scale(1)    translateY(0); filter:blur(0); }
+    50%      { opacity:1;   transform:scale(1.22) translateY(-4px); filter:blur(1px); }
+  }
+  .chp-flare { animation: corona-flare 1.3s ease-in-out infinite; }
   .chp-wave-zone .room-wave-wrap {
     width:100%; height:64px; position:relative; z-index:1;
     display:flex; align-items:flex-end; gap:3px;
