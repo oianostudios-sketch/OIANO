@@ -716,6 +716,7 @@ export default function PulseDashboard() {
     return sorted.filter(s => s.starts_at && new Date(s.starts_at) >= weekStart &&
       !['CANCELLED','NO_SHOW'].includes(s.status ?? ''));
   }, [sorted]);
+  const weekRevenue = thisWeekSessions.reduce((sum, s) => sum + paymentAmount(s), 0);
 
   const utilizationPct = pulseData?.utilization.today_pct  ?? 0;
   const cArtists       = useCounter(artists.length);
@@ -1094,7 +1095,11 @@ export default function PulseDashboard() {
             {/* Right: revenue + intelligence */}
             <div className="cmd-intel-col">
 
-              {/* Revenue block */}
+              {/* Revenue block — "Outstanding" used to be duplicated here and
+                  in the TODAY strip above with the identical number. Kept it
+                  in the TODAY strip (matches the Bookings/Revenue/Utilization/
+                  Outstanding spec) and swapped this one for genuinely
+                  different info: all-time collected + this week's revenue. */}
               <div className="cmd-revenue">
                 <p className="cmd-section-label" style={{ marginBottom:14 }}>Revenue</p>
                 <div className="cmd-rev-row">
@@ -1104,10 +1109,10 @@ export default function PulseDashboard() {
                   </div>
                   <div className="cmd-rev-divider" />
                   <div className="cmd-rev-item">
-                    <span className="cmd-rev-val" style={{ color: revenueOutstanding > 0 ? '#5A9BCB' : '#3f3f46' }}>
-                      {fmtCurrency(revenueOutstanding)}
+                    <span className="cmd-rev-val" style={{ color: weekRevenue > 0 ? '#1D9E75' : '#3f3f46' }}>
+                      {fmtCurrency(weekRevenue)}
                     </span>
-                    <span className="cmd-rev-lbl">Outstanding</span>
+                    <span className="cmd-rev-lbl">This week</span>
                   </div>
                 </div>
               </div>
