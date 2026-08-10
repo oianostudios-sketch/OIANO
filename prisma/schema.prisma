@@ -66,6 +66,7 @@ model User {
   notifications    Notification[]
   booking_messages BookingMessage[]
   producer         Producer?
+  engineer         Engineer?
   locale           String?   @default("en-US")
   created_at    DateTime  @default(now())
   updated_at    DateTime  @updatedAt
@@ -129,6 +130,13 @@ model Engineer {
   id              String    @id @default(uuid())
   studio_id       String
   studio          Studio    @relation(fields: [studio_id], references: [id])
+  // Links this bookable-resource record to a real login (User role=ENGINEER).
+  // Previously unset for every Engineer -- the logged-in "engineer" and the
+  // Engineer assigned to a booking were two disconnected records with no way
+  // to tell they're the same person. Nullable: a studio can have Engineers
+  // (e.g. freelancers) with no login of their own.
+  user_id         String?   @unique
+  user            User?     @relation(fields: [user_id], references: [id])
   name            String
   specialties     String[]
   hourly_rate_usd Decimal?  @db.Decimal(10, 2)

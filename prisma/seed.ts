@@ -296,6 +296,16 @@ async function main() {
 
   console.log('✅ Engineer user created:', engineerUser.email);
 
+  // Link the login to a real bookable Engineer record — previously the
+  // logged-in "engineer" and the Engineer assigned to a booking (Marcus/
+  // Priya/Torre) were disconnected, so the dashboard had no way to know
+  // which of the studio's engineers was actually signed in.
+  await prisma.engineer.update({
+    where: { id: 'eng-marcus' },
+    data: { user_id: engineerUser.id },
+  });
+  console.log('✅ Engineer user linked to: Marcus Dean');
+
   // ── Demo Producer ────────────────────────────────────────────────────────────
   const producerPasswordHash = await bcrypt.hash(PRODUCER_PASSWORD, 10);
   const producerUser = await prisma.user.upsert({

@@ -56,6 +56,14 @@ export default function EngineerDashboardPage() {
     refetchInterval: 15_000,
   });
 
+  // The bookable Engineer record (specialties/credits/hourly-rate) linked to
+  // this login, if any — previously there was no way to know which Engineer
+  // a logged-in "engineer" actually was. Null, not a 404, when unlinked.
+  const { data: myEngineer } = useQuery({
+    queryKey: ['engineer-me'],
+    queryFn: async () => (await api.get('/engineers/me')).data,
+  });
+
   const { data: bookings = [], isLoading } = useQuery({
     queryKey: ['bookings'],
     queryFn: async () => { const r = (await api.get('/bookings')).data; return Array.isArray(r) ? r : (r?.data ?? []); },
@@ -106,7 +114,14 @@ export default function EngineerDashboardPage() {
       <header className="border-b border-studio-border px-6 py-4 flex items-center justify-between sticky top-0 bg-studio-bg z-10">
         <div className="flex items-center gap-3">
           <SunMark size={24} />
-          <span className="text-zinc-600 text-xs">Engineer · Studio</span>
+          {myEngineer ? (
+            <span className="text-zinc-400 text-xs">
+              <span className="text-white font-medium">{myEngineer.name}</span>
+              {myEngineer.specialties?.length ? <span className="text-zinc-600"> · {myEngineer.specialties.slice(0, 2).join(', ')}</span> : null}
+            </span>
+          ) : (
+            <span className="text-zinc-600 text-xs">Engineer · Studio</span>
+          )}
         </div>
         {/* Room status strip — live from pulse */}
         <div className="hidden md:flex items-center gap-2">

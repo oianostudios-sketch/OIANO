@@ -28,6 +28,31 @@ engineersRouter.get('/', authenticate, async (req: Request, res: Response, next:
   }
 });
 
+// GET /api/engineers/me — the bookable Engineer record linked to the logged-in
+// user, if any. Engineer.user_id was only just added (previously the login
+// and the record assigned to bookings/specialties/credits were unlinked) —
+// returns null rather than 404 when unset, since not every ENGINEER-role
+// login is guaranteed to be linked to a bookable Engineer record.
+engineersRouter.get('/me', authenticate, requireRole('ENGINEER'), async (req: any, res: Response, next: NextFunction) => {
+  try {
+    const engineer = await prisma.engineer.findUnique({
+      where: { user_id: req.userId },
+      select: {
+        id: true,
+        name: true,
+        bio: true,
+        specialties: true,
+        avatar_url: true,
+        hourly_rate_usd: true,
+        credits: true,
+      },
+    });
+    res.json(engineer);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/engineers/:id — single engineer profile (auth required)
 engineersRouter.get('/:id', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
