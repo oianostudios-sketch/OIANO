@@ -298,18 +298,20 @@ function ProjectCard({ project, onAdvance, onArchive }: {
   onAdvance: (id: string, phase: Phase) => void;
   onArchive: (id: string) => void;
 }) {
+  const navigate = useNavigate();
   const [hovering, setHovering] = useState(false);
 
   return (
     <div
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
+      onClick={() => navigate(`/producer/projects/${project.id}`)}
       style={{
         background: hovering ? 'rgba(255,255,255,0.035)' : 'var(--surface, #141414)',
         border: `1px solid ${hovering ? 'rgba(201,168,76,0.2)' : 'var(--border, #1e1e1e)'}`,
         borderRadius: 12,
         padding: '1rem 1.1rem',
-        cursor: 'default',
+        cursor: 'pointer',
         transition: 'background 0.15s, border-color 0.15s, box-shadow 0.15s',
         position: 'relative',
         boxShadow: hovering ? '0 4px 24px rgba(0,0,0,0.4)' : 'none',

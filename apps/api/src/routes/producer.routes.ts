@@ -159,6 +159,10 @@ producerRouter.get('/projects', requireRole('PRODUCER'), async (req: any, res, n
       where: { producer_id: producer.id },
       include: {
         artist: { select: { id: true, name: true, alias: true, avatar_url: true } },
+        bookings: {
+          include: { room: true, service: true },
+          orderBy: { starts_at: 'desc' },
+        },
       },
       orderBy: { updated_at: 'desc' },
     });

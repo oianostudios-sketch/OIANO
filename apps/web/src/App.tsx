@@ -30,6 +30,7 @@ import NotificationsPage from './pages/NotificationsPage';
 import ProducerDashboardPage from './pages/ProducerDashboardPage';
 import ConnectPage from './pages/ConnectPage';
 import ProducerPassportPage from './pages/ProducerPassportPage';
+import ProjectDetailPage from './pages/ProjectDetailPage';
 
 function RequireAuth({ children, role, roles }: { children: JSX.Element; role?: string; roles?: string[] }) {
   const { token, user } = useAuthStore();
@@ -87,6 +88,7 @@ function AnimatedRoutes() {
         <Route path="/runsheet"     element={<RequireAuth roles={['STUDIO_ADMIN','ENGINEER']}><RunsheetPage /></RequireAuth>} />
         <Route path="/producer"     element={<RequireAuth role="PRODUCER"><ProducerDashboardPage /></RequireAuth>} />
         <Route path="/producer/passport" element={<RequireAuth role="PRODUCER"><ProducerPassportPage /></RequireAuth>} />
+        <Route path="/producer/projects/:id" element={<RequireAuth role="PRODUCER"><ProjectDetailPage /></RequireAuth>} />
         <Route path="/notifications"  element={<RequireAuth><NotificationsPage /></RequireAuth>} />
         <Route path="/connect/:artistId" element={<RequireAuth><ConnectPage /></RequireAuth>} />
         <Route path="/profile"         element={<Navigate to="/passport" replace />} />

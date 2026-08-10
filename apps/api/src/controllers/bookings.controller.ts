@@ -109,7 +109,10 @@ export async function getBookingById(req: Request, res: Response, next: NextFunc
 
     const booking = await prisma.booking.findUnique({
       where: { id: req.params.id },
-      include: { artist: { include: { user: true } }, room: true, engineer: true, service: true, payment: true, session_log: true },
+      include: {
+        artist: { include: { user: true } }, room: true, engineer: true, service: true, payment: true, session_log: true,
+        project: { include: { producer: { select: { id: true, name: true, alias: true } } } },
+      },
     });
     if (!booking) throw new AppError('Booking not found', 404);
 

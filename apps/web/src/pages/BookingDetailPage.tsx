@@ -269,6 +269,33 @@ export default function BookingDetailPage() {
           <p className="text-sm opacity-80">{STATUS_MESSAGES[booking.status] ?? booking.status}</p>
         </div>
 
+        {/* Project context — the one connection (Booking -> Project -> Producer)
+            that already exists in the data but was invisible everywhere in the
+            UI. Only a link when the viewer is the owning producer: /producer/
+            projects/:id is scoped server-side to the requesting producer's own
+            projects, so linking it for other roles would just 404. */}
+        {booking.project && (
+          user?.role === 'PRODUCER' ? (
+            <Link
+              to={`/producer/projects/${booking.project.id}`}
+              className="flex items-center justify-between rounded-xl border border-purple-500/20 bg-purple-500/5 px-5 py-3.5 hover:bg-purple-500/10 transition-colors"
+            >
+              <span className="text-sm text-zinc-300">
+                Part of project <span className="text-purple-300 font-medium">{booking.project.title}</span>
+                {booking.project.producer?.name ? <span className="text-zinc-500"> · {booking.project.producer.name}</span> : null}
+              </span>
+              <span className="text-xs text-purple-300">View project →</span>
+            </Link>
+          ) : (
+            <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 px-5 py-3.5">
+              <span className="text-sm text-zinc-300">
+                Part of project <span className="text-purple-300 font-medium">{booking.project.title}</span>
+                {booking.project.producer?.name ? <span className="text-zinc-500"> · produced by {booking.project.producer.name}</span> : null}
+              </span>
+            </div>
+          )
+        )}
+
         {/* Session details */}
         <div className="bg-studio-surface border border-studio-border rounded-xl p-6 animate-surface-1">
           <p className="label-mono mb-5 flex items-center gap-2"><Calendar size={12} strokeWidth={2} /> Session details</p>
