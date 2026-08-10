@@ -961,6 +961,7 @@ export interface SmartClockProps {
   showStatusBar?: boolean;
   utilizationPct?: number;
   weekSessions?: number;
+  defaultMode?: ClockMode;
 }
 
 export default function SmartClock({
@@ -969,14 +970,14 @@ export default function SmartClock({
   showStatusBar = true,
   utilizationPct = 0,
   weekSessions = 0,
+  defaultMode = 'studio',
 }: SmartClockProps) {
   const { data, loading, error, markActivity, setPhase, logOvertime } = useClockData();
   const studioState = useStudioState();
-  const [mode, setMode]             = useState<ClockMode>('studio');
+  const [mode, setMode]             = useState<ClockMode>(defaultMode);
   const [hoveredId, setHoveredId]   = useState<string | null>(null);
   const [hoveredBk, setHoveredBk]   = useState<any | null>(null);
   const [waveOffset, setWaveOffset] = useState(0);
-  const prevLive = useRef(false);
 
   const status       = data?.sessionStatus ?? 'idle';
   const session      = data?.activeSession ?? null;
@@ -984,12 +985,6 @@ export default function SmartClock({
   const todayBookings = studioState.todaySessions;
   const isLive       = !!session;
   const persona      = getPersonality(status);
-
-  // Auto-switch to STUDIO mode when a session goes live
-  useEffect(() => {
-    if (isLive && !prevLive.current) setMode('studio');
-    prevLive.current = isLive;
-  }, [isLive]);
 
   // Waveform animation (250ms steps when live)
   useEffect(() => {

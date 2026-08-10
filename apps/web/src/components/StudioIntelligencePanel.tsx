@@ -176,9 +176,9 @@ export default function StudioIntelligencePanel({ pulseData, loading, insights =
                   onClick={ins.onClick}
                   title={`${ins.label} · ${ins.cta}`}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
+                    display: 'flex', alignItems: 'flex-start', gap: 10,
                     background: s.bg, border: `1px solid ${s.border}`,
-                    borderRadius: 8, padding: '8px 10px 8px 8px',
+                    borderRadius: 8, padding: '9px 10px',
                     textAlign: 'left', width: '100%', fontFamily: 'inherit', cursor: 'pointer',
                     transition: 'border-color 0.15s, background 0.15s',
                   }}
@@ -192,21 +192,15 @@ export default function StudioIntelligencePanel({ pulseData, loading, insights =
                   }}>
                     {ins.icon}
                   </span>
-                  <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    <span style={{
-                      fontSize: 12, color: '#e4e4e7', fontWeight: 600, lineHeight: 1.25,
-                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                    }}>
+                  <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontSize: 12, color: '#e4e4e7', fontWeight: 600, lineHeight: 1.3 }}>
                       {ins.headline}
                     </span>
-                    <span style={{
-                      fontSize: 10, color: '#71717a',
-                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                    }}>
+                    <span style={{ fontSize: 10, color: '#71717a', lineHeight: 1.35 }}>
                       {ins.detail}
                     </span>
                   </span>
-                  <span style={{ fontSize: 15, color: s.label, flexShrink: 0 }}>›</span>
+                  <span style={{ fontSize: 15, color: s.label, flexShrink: 0, alignSelf: 'flex-start', marginTop: 1 }}>›</span>
                 </button>
               );
             })}

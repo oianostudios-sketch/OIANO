@@ -141,10 +141,23 @@ function PulseDial({ activeSession, nextSession, nextCountdown }: {
   const bigText = isLive ? fmtMins(minsLeft ?? 0) : nextSession ? (nextCountdown ?? '—') : '—';
   const bigSub  = isLive ? 'remaining' : nextSession ? 'until next session' : '';
 
+  // Sweep segment — a short arc that continuously rotates around the track,
+  // independent of the real progress arc. Gives the ring an "always scanning"
+  // read even when idle, instead of only animating via the slow breath.
+  const sweepDeg = 34;
+  const sw0 = -Math.PI / 2;
+  const sw1 = (sweepDeg - 90) * (Math.PI / 180);
+  const swSx = cx + r * Math.cos(sw0), swSy = cy + r * Math.sin(sw0);
+  const swEx = cx + r * Math.cos(sw1), swEy = cy + r * Math.sin(sw1);
+  const sweepPath = `M${swSx.toFixed(2)},${swSy.toFixed(2)} A${r},${r},0,0,1,${swEx.toFixed(2)},${swEy.toFixed(2)}`;
+
   return (
     <div className={`pulse-dial${isLive ? ' pulse-dial-live' : ''}`}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         <circle cx={cx} cy={cy} r={r} fill="none" stroke="#1a1a1a" strokeWidth={sw} />
+        <g className="pulse-dial-sweep-rotor" style={{ color: accent }}>
+          <path d={sweepPath} fill="none" stroke={accent} strokeWidth={sw * 0.55} strokeLinecap="round" opacity={0.5} />
+        </g>
         {isLive && pct > 0 && (
           <path
             d={`M${sx.toFixed(2)},${sy.toFixed(2)} A${r},${r},0,${large},1,${ex.toFixed(2)},${ey.toFixed(2)}`}
@@ -477,6 +490,7 @@ function CommandHubPanel({ todaySessions, utilizationPct, studioOnline }: {
           showStatusBar={false}
           utilizationPct={utilizationPct}
           weekSessions={0}
+          defaultMode="pulse"
         />
       </div>
 
@@ -1256,6 +1270,12 @@ const CSS = `
   .pulse-dial svg { display:block; overflow:visible; }
   .pulse-dial svg path { transition: stroke 0.6s ease; }
   .pulse-dial-breathe { animation: pulse-dial-breathe 3.2s ease-in-out infinite; transform-origin:center; }
+  .pulse-dial-sweep-rotor {
+    transform-origin: 74px 74px;
+    animation: pulse-dial-sweep 5s linear infinite;
+    filter: drop-shadow(0 0 2px currentColor);
+  }
+  @keyframes pulse-dial-sweep { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
   @keyframes pulse-dial-breathe {
     0%, 100% { opacity:.3; transform:scale(1); }
     50%      { opacity:.65; transform:scale(1.015); }
@@ -1313,7 +1333,7 @@ const CSS = `
   /* Body 3-col */
   .cmd-body {
     display:grid;
-    grid-template-columns: 268px minmax(0,1fr) 210px;
+    grid-template-columns: 268px minmax(0,1fr) 250px;
     flex:1; min-height:0; overflow:hidden;
   }
   .cmd-hub-col      { border-right:1px solid #111; overflow:hidden; display:flex; flex-direction:column; }
