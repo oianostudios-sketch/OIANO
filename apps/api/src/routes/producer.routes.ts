@@ -224,6 +224,59 @@ producerRouter.patch('/projects/:id', requireRole('PRODUCER'), async (req: any, 
   } catch (err) { next(err); }
 });
 
+// ── GET /api/producer/projects/:id/available-sessions — this project's
+// artist's unlinked bookings, so the producer can attach an existing session
+// retroactively. Booking creation has no project picker yet, so this is
+// currently the only way a Booking's project_id ever gets set post-creation.
+// A generic "bookings for artist X" endpoint doesn't exist for producers
+// (GET /api/bookings is artist/admin/engineer-scoped only) -- scoping this
+// tightly to the producer's own project avoids needing one.
+producerRouter.get('/projects/:id/available-sessions', requireRole('PRODUCER'), async (req: any, res, next) => {
+  try {
+    const producer = await db.producer.findUnique({ where: { user_id: req.userId } });
+    if (!producer) throw new AppError('Producer not found', 404);
+
+    const project = await db.project.findFirst({ where: { id: req.params.id, producer_id: producer.id } });
+    if (!project) throw new AppError('Project not found', 404);
+    if (!project.artist_id) return res.json([]);
+
+    const bookings = await db.booking.findMany({
+      where: { artist_id: project.artist_id, project_id: null },
+      include: { room: true, service: true },
+      orderBy: { starts_at: 'desc' },
+      take: 20,
+    });
+    res.json(bookings);
+  } catch (err) { next(err); }
+});
+
+// ── POST /api/producer/projects/:id/link-booking — attach an existing
+// booking to this project. Scoped to the producer's own project and that
+// project's artist, so a producer can't link a booking that isn't theirs.
+producerRouter.post('/projects/:id/link-booking', requireRole('PRODUCER'), async (req: any, res, next) => {
+  try {
+    const { booking_id } = z.object({ booking_id: z.string().uuid() }).parse(req.body);
+
+    const producer = await db.producer.findUnique({ where: { user_id: req.userId } });
+    if (!producer) throw new AppError('Producer not found', 404);
+
+    const project = await db.project.findFirst({ where: { id: req.params.id, producer_id: producer.id } });
+    if (!project) throw new AppError('Project not found', 404);
+
+    const booking = await db.booking.findUnique({ where: { id: booking_id } });
+    if (!booking || booking.artist_id !== project.artist_id) {
+      throw new AppError("Booking not found for this project's artist", 404);
+    }
+
+    const updated = await db.booking.update({
+      where: { id: booking_id },
+      data: { project_id: project.id },
+      include: { room: true, service: true },
+    });
+    res.json(updated);
+  } catch (err) { next(err); }
+});
+
 // ── DELETE /api/producer/projects/:id — archive (soft delete) ────────────────
 producerRouter.delete('/projects/:id', requireRole('PRODUCER'), async (req: any, res, next) => {
   try {

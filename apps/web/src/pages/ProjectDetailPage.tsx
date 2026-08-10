@@ -6,6 +6,7 @@
 // place, each linking back to its own BookingDetailPage (which now links
 // back here too — see the project chip added there).
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { ProducerNav } from '../components/ProducerNav';
@@ -76,6 +77,26 @@ export default function ProjectDetailPage() {
       toast.success('Phase updated');
     },
     onError: () => toast.error('Failed to update phase'),
+  });
+
+  // Link an existing session to this project — booking creation has no
+  // project picker yet, so this is currently the only way a booking gets
+  // attached to a project after the fact.
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const { data: availableSessions } = useQuery<Booking[]>({
+    queryKey: ['project-available-sessions', id],
+    queryFn: async () => (await api.get(`/producer/projects/${id}/available-sessions`)).data,
+    enabled: !!id && !!project?.artist_id && pickerOpen,
+  });
+  const linkSession = useMutation({
+    mutationFn: (bookingId: string) => api.post(`/producer/projects/${id}/link-booking`, { booking_id: bookingId }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['producer-projects'] });
+      qc.invalidateQueries({ queryKey: ['project-available-sessions', id] });
+      toast.success('Session linked to project');
+      setPickerOpen(false);
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.error ?? 'Failed to link session'),
   });
 
   if (isLoading) {
@@ -186,9 +207,59 @@ export default function ProjectDetailPage() {
         </div>
 
         {/* Linked sessions — the whole point: this project's booking history in one place */}
-        <p style={{ fontSize: '0.72rem', color: '#555', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.75rem' }}>
-          Sessions ({project.bookings.length})
-        </p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+          <p style={{ margin: 0, fontSize: '0.72rem', color: '#555', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Sessions ({project.bookings.length})
+          </p>
+          {project.artist_id && (
+            <button
+              onClick={() => setPickerOpen(o => !o)}
+              style={{ fontSize: '0.75rem', color: '#3B8BFF', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+            >
+              {pickerOpen ? 'Cancel' : '+ Link a session'}
+            </button>
+          )}
+        </div>
+
+        {/* Picker — this project's artist's bookings that aren't attached to
+            any project yet. Booking creation has no project field, so this
+            is the only way that link gets made after the fact. */}
+        {pickerOpen && (
+          <div style={{ border: '1px solid var(--border, #1e1e1e)', borderRadius: 10, padding: '0.75rem', marginBottom: '0.75rem', background: 'rgba(59,139,255,0.03)' }}>
+            {availableSessions === undefined ? (
+              <p style={{ margin: 0, fontSize: '0.8rem', color: '#555' }}>Loading sessions…</p>
+            ) : availableSessions.length === 0 ? (
+              <p style={{ margin: 0, fontSize: '0.8rem', color: '#555' }}>
+                No unlinked sessions found for {project.artist?.alias ?? project.artist?.name ?? 'this artist'}.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                {availableSessions.map(b => (
+                  <div key={b.id} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem',
+                    padding: '0.6rem 0.75rem', background: 'var(--surface, #141414)', borderRadius: 8,
+                  }}>
+                    <div style={{ fontSize: '0.8rem', color: '#ccc' }}>
+                      {fmtDate(b.starts_at)} · {b.service?.name ?? 'Session'} · {b.room?.name ?? 'Room TBA'}
+                    </div>
+                    <button
+                      onClick={() => linkSession.mutate(b.id)}
+                      disabled={linkSession.isPending}
+                      style={{
+                        fontSize: '0.72rem', color: '#3B8BFF', background: 'rgba(59,139,255,0.1)',
+                        border: '1px solid rgba(59,139,255,0.25)', borderRadius: 6, padding: '0.3rem 0.7rem',
+                        cursor: linkSession.isPending ? 'wait' : 'pointer', flexShrink: 0,
+                      }}
+                    >
+                      Link
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {sortedBookings.length === 0 ? (
           <div style={{ border: '1px dashed var(--border, #1e1e1e)', borderRadius: 10, padding: '2rem 1rem', textAlign: 'center', color: '#444', fontSize: '0.85rem' }}>
             No sessions booked against this project yet.
