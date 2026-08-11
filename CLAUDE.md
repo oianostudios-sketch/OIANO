@@ -314,8 +314,16 @@ export interface Booking {
 
 ## Demo credentials (seed only — rotate before any staging deploy)
 
-- Admin:  `admin@dreamzmusiclab.com` / `admin123`
-- Artist: `demo@artist.com` / `artist123`
+Passwords are set by `SEED_*_PASSWORD` in `.env` / `apps/api/.env`, which
+override the fallbacks below when present — check those files first if a
+login fails. As of this seed run:
+
+- Admin:     `admin@dreamzmusiclab.com` / `DreamzAdmin2026!` (SEED_ADMIN_PASSWORD)
+- Artist:    `demo@artist.com` / `DreamzArtist2026!` (SEED_ARTIST_PASSWORD)
+- Engineer:  `engineer@dreamzmusiclab.com` / `DreamzEngineer2026!` (SEED_ENGINEER_PASSWORD)
+- Producer:  `producer@dreamzmusiclab.com` / `producer123` (SEED_PRODUCER_PASSWORD, root `.env` only — falls back to seed.ts's own `producer123` default either way)
+
+Fallback defaults if no `SEED_*_PASSWORD` is set anywhere: `admin123` / `artist123` / `engineer123` / `producer123` (see `prisma/seed.ts`).
 
 ---
 
