@@ -378,24 +378,6 @@ function resolveHubState(todaySessions: Session[], utilizationPct: number, studi
 }
 
 
-// ── Room session helper ───────────────────────────────────────────────────────
-
-function getRoomSession(sessions: Session[], pattern: string): { active: Session | null; next: Session | null } {
-  const now = Date.now();
-  const room = sessions.filter(s =>
-    s.room?.name?.toLowerCase().includes(pattern.toLowerCase())
-  );
-  const active = room.find(s =>
-    s.starts_at && s.ends_at &&
-    new Date(s.starts_at).getTime() <= now && now < new Date(s.ends_at).getTime()
-  ) ?? null;
-  const next = !active
-    ? room.filter(s => s.starts_at && new Date(s.starts_at).getTime() > now)
-        .sort((a, b) => new Date(a.starts_at!).getTime() - new Date(b.starts_at!).getTime())[0] ?? null
-    : null;
-  return { active, next };
-}
-
 const OPERATING_DAY_START = 8;
 const OPERATING_DAY_END = 22;
 
@@ -442,6 +424,10 @@ function DynamicRoomCard({ room, sessions }: { room: { id: string; name: string 
   const active = roomSessions.find(session => session.starts_at && session.ends_at && new Date(session.starts_at).getTime() <= now && now < new Date(session.ends_at).getTime());
   const next = roomSessions.filter(session => session.starts_at && new Date(session.starts_at).getTime() > now).sort((a, b) => new Date(a.starts_at!).getTime() - new Date(b.starts_at!).getTime())[0];
   const accent = active ? '#5A9BCB' : '#1D9E75';
+  const pct = active
+    ? Math.min(100, Math.max(0, ((now - new Date(active.starts_at!).getTime()) /
+        (new Date(active.ends_at!).getTime() - new Date(active.starts_at!).getTime())) * 100))
+    : 0;
   return (
     <div className={`rcm${active ? ' rcm-live' : ''}`} style={{ borderLeftColor: accent }}>
       <div className="rcm-header"><span className="rcm-name">{room.name}</span><span className="rcm-pill" style={{ color: accent, background: `${accent}10`, border: `1px solid ${accent}30` }}>{active ? '● LIVE' : 'READY'}</span></div>
@@ -449,105 +435,11 @@ function DynamicRoomCard({ room, sessions }: { room: { id: string; name: string 
       <RoomStateTimeline sessions={roomSessions} roomName={room.name} />
       <p className="rcm-artist">{active ? sessionArtist(active) : next ? `Next · ${sessionArtist(next)}` : 'Available'}</p>
       <p className="rcm-sub">{active ? `${fmtTime(active.starts_at)}–${fmtTime(active.ends_at)}` : next ? fmtTime(next.starts_at) : 'No session queued'}</p>
-    </div>
-  );
-}
-
-// ── Main Studio card — gold, wave, left-border architectural ──────────────────
-
-export function MainStudioCard({ sessions }: { sessions: Session[] }) {
-  const { active, next } = getRoomSession(sessions, 'main');
-  const isLive = !!active;
-  const LIVE = '#5A9BCB';
-  const TEAL = '#1D9E75';
-  const accent = isLive ? LIVE : TEAL;
-
-  const minsLeft = active
-    ? Math.max(0, Math.floor((new Date(active.ends_at!).getTime() - Date.now()) / 60_000))
-    : null;
-  const pct = active
-    ? Math.min(100, Math.max(0, ((Date.now() - new Date(active.starts_at!).getTime()) /
-        (new Date(active.ends_at!).getTime() - new Date(active.starts_at!).getTime())) * 100))
-    : 0;
-
-  return (
-    <div className={`rcm${isLive ? ' rcm-live' : ''}`}
-      style={{ borderLeftColor: accent }}>
-      <div className="rcm-header">
-        <span className="rcm-name">Main Studio</span>
-        <span className="rcm-pill"
-          style={{ color: accent, background: `${accent}10`, border: `1px solid ${accent}28`,
-            animation: isLive ? 'breath 2s ease-in-out infinite' : 'none' }}>
-          {isLive ? '● LIVE' : next ? '◑' : '◎'}
-        </span>
-      </div>
-      <div className="rcm-wave">
-        <RoomWave
-          color={accent}
-          active={isLive}
-          mode={isLive ? 'active' : next ? 'idle' : 'idle'}
-        />
-      </div>
-      {(active ?? next) ? (
-        <p className="rcm-artist" style={{ color: isLive ? '#888' : '#3a3a3a' }}>
-          {(active ?? next)?.artist?.name?.split(' ')[0] ?? '—'}
-          {minsLeft !== null ? <span style={{ color: accent }}> · {fmtMins(minsLeft)}</span> : null}
-          {!active && next ? <span> · {fmtTime(next.starts_at)}</span> : null}
-        </p>
-      ) : (
-        <p className="rcm-artist" style={{ color: '#1e1e1e' }}>Open</p>
-      )}
       {active?.engineer?.name && (
-        <p className="rcm-engineer">Producer: {active.engineer.name}</p>
+        <p className="rcm-engineer">Engineer: {active.engineer.name}</p>
       )}
-      {isLive && (
+      {active && (
         <div className="rcm-progress"><div style={{ width: `${pct}%`, background: accent }} /></div>
-      )}
-    </div>
-  );
-}
-
-// ── Studio B card — blue, geometric, different personality ────────────────────
-
-const SB_HEIGHTS = [70, 40, 90, 55, 75, 35, 85, 50, 65];
-
-export function StudioBCard({ sessions }: { sessions: Session[] }) {
-  const { active, next } = getRoomSession(sessions, 'studio b');
-  const isLive = !!active;
-  const BLUE = '#3B8BFF';
-  const pct = active
-    ? Math.min(100, Math.max(0, ((Date.now() - new Date(active.starts_at!).getTime()) /
-        (new Date(active.ends_at!).getTime() - new Date(active.starts_at!).getTime())) * 100))
-    : 0;
-
-  return (
-    <div className={`rcb${isLive ? ' rcb-live' : ''}`}>
-      <div className="rcb-top">
-        <span className="rcb-name">Studio B</span>
-        <span className="rcb-status" style={{ color: isLive ? BLUE : '#2a3a4a' }}>
-          {isLive ? 'LIVE' : next ? 'SOON' : 'OPEN'}
-        </span>
-      </div>
-      {/* Vertical bar equaliser — different geometry from Main's horizontal wave */}
-      <div className="rcb-bars">
-        {SB_HEIGHTS.map((h, i) => (
-          <div key={i}
-            className={`rcb-bar${isLive ? ' rcb-bar-live' : ''}`}
-            style={{ '--sb-h': `${h}%`, '--sb-d': `${i * 0.09}s`, '--sb-c': BLUE } as React.CSSProperties}
-          />
-        ))}
-      </div>
-      <div className="rcb-footer">
-        <span className="rcb-dot" style={{ background: isLive ? BLUE : '#1a2a3a', boxShadow: isLive ? `0 0 5px ${BLUE}` : 'none' }} />
-        <span className="rcb-artist">
-          {(active ?? next)?.artist?.name?.split(' ')[0] ?? (isLive ? '—' : 'Ready')}
-        </span>
-      </div>
-      {active?.engineer?.name && (
-        <p className="rcb-engineer">Producer: {active.engineer.name}</p>
-      )}
-      {isLive && (
-        <div className="rcb-progress"><div style={{ width: `${pct}%`, background: BLUE }} /></div>
       )}
     </div>
   );
