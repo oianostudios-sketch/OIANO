@@ -213,6 +213,7 @@ passportRouter.get('/portfolio', async (req: any, res, next) => {
       where: { user_id: req.userId },
       include: {
         passport: true,
+        wallet: true,
         releases: { orderBy: [{ is_featured: 'desc' }, { release_date: 'desc' }] },
         projects: { orderBy: { updated_at: 'desc' } },
         bookings: { where: { status: { in: ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED'] } } },

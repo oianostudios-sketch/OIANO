@@ -7,6 +7,7 @@ node_modules
 # Local-disk fallback for avatar/track uploads when R2 isn't configured —
 # real user content, not something to commit
 apps/api/uploads/
+apps/api/private-uploads/
 
 # Build artifacts and runtime logs
 apps/api/tsconfig.tsbuildinfo

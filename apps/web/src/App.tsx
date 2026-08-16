@@ -11,6 +11,7 @@ import { StudioStateProvider } from './context/StudioState';
 import CommandPalette from './components/CommandPalette';
 import SessionLiveBar from './components/SessionLiveBar';
 import ErrorBoundary from './components/ErrorBoundary';
+import FeedbackWidget from './components/FeedbackWidget';
 import './styles/artist-experience.css';
 
 const EnterPage = lazy(() => import('./pages/EnterPage'));
@@ -107,17 +108,17 @@ function AnimatedRoutes() {
               : 'artist-route-default';
   return (
     <div key={pathname} className={`page-enter ${user?.role === 'ARTIST' ? `artist-experience ${routeClass}` : ''}`} style={{ minHeight: '100%' }}>
-      <Suspense fallback={<div className="min-h-screen grid place-items-center text-zinc-500"><div className="text-center"><div className="mx-auto mb-4 h-8 w-8 rounded-full border border-dome/20 border-t-dome animate-spin" /><p className="text-xs font-mono tracking-widest uppercase">Opening your space</p></div></div>}><Routes>
+      <Suspense fallback={<div className="min-h-screen grid place-items-center text-zinc-500"><div className="text-center"><div className="mx-auto mb-4 h-8 w-8 rounded-full border border-dome/20 border-t-dome animate-spin" /><p className="text-xs font-mono tracking-widest uppercase">Opening your space</p></div></div>}><ErrorBoundary><Routes>
         <Route path="/onboarding"   element={<RequireAuth role="ARTIST"><OnboardingSequencePage /></RequireAuth>} />
         <Route path="/enter"        element={<EnterPage />} />
         <Route path="/p/:code"      element={<PublicPassportPage />} />
         <Route path="/s/:slug"      element={<StudioPassportPage />} />
         <Route path="/login"        element={<Navigate to="/enter" replace />} />
         <Route path="/signup"       element={<Navigate to="/enter" replace />} />
-        <Route path="/dashboard"    element={<RequireAuth><ErrorBoundary><SmartDashboard /></ErrorBoundary></RequireAuth>} />
+        <Route path="/dashboard"    element={<RequireAuth><SmartDashboard /></RequireAuth>} />
         <Route path="/discover"     element={<RequireAuth roles={['ARTIST', 'PRODUCER']}><DiscoverPage /></RequireAuth>} />
         <Route path="/producers"   element={<RequireAuth><ProducerDiscoverPage /></RequireAuth>} />
-        <Route path="/artists/:id"  element={<RequireAuth><ErrorBoundary><ArtistProfilePage /></ErrorBoundary></RequireAuth>} />
+        <Route path="/artists/:id"  element={<RequireAuth><ArtistProfilePage /></RequireAuth>} />
         <Route path="/book"         element={<RequireAuth role="ARTIST"><BookingPage /></RequireAuth>} />
         <Route path="/bookings/:id" element={<RequireAuth><BookingDetailPage /></RequireAuth>} />
         <Route path="/receipt/:id"  element={<RequireAuth><ReceiptPage /></RequireAuth>} />
@@ -145,7 +146,7 @@ function AnimatedRoutes() {
         <Route path="/connect/:artistId" element={<RequireAuth role="ARTIST"><ConnectPage /></RequireAuth>} />
         <Route path="/profile"         element={<Navigate to="/artist/passport" replace />} />
         <Route path="/"             element={<Navigate to="/dashboard" replace />} />
-      </Routes></Suspense>
+      </Routes></ErrorBoundary></Suspense>
     </div>
   );
 }
@@ -168,6 +169,7 @@ export default function App() {
       <LiveBarSync />
       <Chrome />
       <AnimatedRoutes />
+      <FeedbackWidget />
     </StudioStateProvider>
   );
 }

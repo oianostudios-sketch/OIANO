@@ -226,6 +226,18 @@ export default function ArtistProfilePage() {
     onError: () => toast.error('Delete failed'),
   });
 
+  // Files are private — no bare URL to link to. Exchange a short-lived,
+  // file-scoped ticket first, then open the ticket-gated content route.
+  async function openFile(fileId: string) {
+    try {
+      const { data } = await api.post(`/artists/${id}/files/${fileId}/access-ticket`);
+      const base = (import.meta.env.VITE_API_URL ?? '') + '/api';
+      window.open(`${base}/artists/${id}/files/${fileId}/content?ticket=${encodeURIComponent(data.ticket)}`, '_blank', 'noreferrer');
+    } catch {
+      toast.error('Could not open file');
+    }
+  }
+
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault(); setDragOver(false);
     Array.from(e.dataTransfer.files).forEach(f => uploadFile.mutate(f));
@@ -534,7 +546,7 @@ export default function ArtistProfilePage() {
                         </p>
                       </div>
                       <div style={{ display:'flex', alignItems:'center', gap:12, flexShrink:0 }}>
-                        <a href={file.url} target="_blank" rel="noreferrer" style={{ fontSize:11, color:'#C9A84C', textDecoration:'none', fontFamily:"'JetBrains Mono',monospace" }}>Download</a>
+                        <button onClick={() => openFile(file.id)} style={{ fontSize:11, color:'#C9A84C', background:'none', border:'none', cursor:'pointer', textDecoration:'none', fontFamily:"'JetBrains Mono',monospace", padding:0 }}>Download</button>
                         {(isOwner || user?.role === 'STUDIO_ADMIN') && (
                           <button onClick={() => deleteFile.mutate(file.id)} disabled={deleteFile.isPending} style={{ fontSize:11, color:'#2a2a2a', background:'none', border:'none', cursor:'pointer', fontFamily:'inherit' }}>
                             ✕

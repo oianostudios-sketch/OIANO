@@ -5,6 +5,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { validateEnv } from './lib/env';
 import { errorHandler } from './middleware/error.middleware';
+import { requestId } from './middleware/requestId.middleware';
 import { authRouter } from './routes/auth.routes';
 import { passportRouter } from './routes/passport.routes';
 import { studioRouter } from './routes/studio.routes';
@@ -33,6 +34,7 @@ import { artistActivityRouter } from './routes/artist-activity.routes';
 import { maintenanceRouter } from './routes/maintenance.routes';
 import { networkExchangeRouter } from './routes/network-exchange.routes';
 import { studioCircleRouter } from './routes/studio-circle.routes';
+import { feedbackRouter } from './routes/feedback.routes';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env'), override: true });
 
@@ -57,6 +59,7 @@ const allowedOrigins = new Set([
 // non-localhost origin gets rejected and logs a CORS error per request.
 const LAN_DEV_ORIGIN = /^http:\/\/(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}):(5173|5174|5175)$/;
 
+app.use(requestId);
 app.use(helmet());
 app.use(cors({
   origin: (origin, callback) => {
@@ -116,12 +119,17 @@ app.use('/api/payments',                 paymentsRouter);
 app.use('/api/admin',                    creditRequestRouter);
 app.use('/api/admin',                    adminRouter);
 app.use('/api/artists/discover',         discoverRouter);  // must be before /:id catch-all
-app.use('/api/artists',                  artistsRouter);
+// filesRouter must be mounted before artistsRouter: artistsRouter.use(authenticate)
+// is a blanket, path-unrestricted middleware, so if it ran first it would
+// intercept filesRouter's ticket-only GET .../content route (which must be
+// reachable without a Bearer header) before filesRouter ever got to match it.
 app.use('/api/artists',                  filesRouter);
+app.use('/api/artists',                  artistsRouter);
 app.use('/api/webhooks',                 webhooksRouter);
 app.use('/api/studio-clock',             studioClockRouter);
 app.use('/api/notifications',            notificationsRouter);
 app.use('/api/network-exchange',          networkExchangeRouter);
+app.use('/api/feedback',                  feedbackRouter);
 app.use('/api/studio-circle',             studioCircleRouter);
 app.use('/api/engineers',                engineersRouter);
 app.use('/api/bookings',                 cardRouter);

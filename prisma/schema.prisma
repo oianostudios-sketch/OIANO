@@ -130,6 +130,7 @@ model User {
   created_at           DateTime         @default(now())
   updated_at           DateTime         @updatedAt
   admin_audit_logs     AdminAuditLog[]
+  feedback             Feedback[]
 
   @@map("users")
 }
@@ -1042,4 +1043,32 @@ model ActivityEvent {
   @@index([type])
   @@index([artist_id])
   @@map("activity_events")
+}
+
+enum FeedbackCategory {
+  BUG
+  CONFUSING
+  FEATURE_REQUEST
+  MISSING_INFO
+  OTHER
+}
+
+enum FeedbackStatus {
+  OPEN
+  REVIEWED
+  RESOLVED
+}
+
+model Feedback {
+  id          String           @id @default(uuid())
+  user_id     String
+  user        User             @relation(fields: [user_id], references: [id])
+  category    FeedbackCategory
+  page        String // route/path the tester was on when reporting
+  description String
+  status      FeedbackStatus   @default(OPEN)
+  created_at  DateTime         @default(now())
+
+  @@index([status, created_at])
+  @@map("feedback")
 }

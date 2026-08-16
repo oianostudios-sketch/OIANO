@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import { CalendarDays, CheckCircle2, Clock3, FileAudio, FolderKanban, MessageSquareText, Users } from 'lucide-react';
 import { api } from '../lib/api';
+import { useAuthStore } from '../store/auth.store';
 import ArtistAvatar from '../components/ArtistAvatar';
 import TrustSignal from '../components/TrustSignal';
 import { useToast } from '../components/Toast';
@@ -23,6 +24,20 @@ function relativeDate(value: string) {
 export default function ArtistProjectsPage() {
   const queryClient = useQueryClient();
   const toast = useToast();
+  const artistId = useAuthStore((s) => s.user?.artist?.id);
+
+  // Files are private — no bare URL to link to. Exchange a short-lived,
+  // file-scoped ticket first, then open the ticket-gated content route.
+  async function openFile(fileId: string) {
+    if (!artistId) return;
+    try {
+      const { data } = await api.post(`/artists/${artistId}/files/${fileId}/access-ticket`);
+      const base = (import.meta.env.VITE_API_URL ?? '') + '/api';
+      window.open(`${base}/artists/${artistId}/files/${fileId}/content?ticket=${encodeURIComponent(data.ticket)}`, '_blank', 'noreferrer');
+    } catch {
+      toast.error('Could not open file');
+    }
+  }
   const [params, setParams] = useSearchParams();
   const [filter, setFilter] = useState<'ACTIVE' | 'DELIVERED'>('ACTIVE');
   const [rightsNote, setRightsNote] = useState('');
@@ -114,7 +129,7 @@ export default function ArtistProjectsPage() {
               <div className="grid gap-6 lg:grid-cols-2">
                 <div><h3 className="flex items-center gap-2 text-sm"><Users size={15} className="text-dome"/> Collaborators</h3><div className="mt-3 space-y-2">{selected.collaborators.length ? selected.collaborators.map((person: any) => <div key={`${person.role}-${person.id}`} className="flex items-center gap-3 rounded-lg border border-white/[.05] px-3 py-2.5"><ArtistAvatar src={person.avatar_url} name={person.name} size={32} /><div><p className="text-xs text-zinc-300">{person.name}</p><p className="text-[9px] text-zinc-600">{person.role}</p></div></div>) : <p className="text-xs text-zinc-700">Collaborators will appear when sessions are connected.</p>}</div></div>
                 <div><h3 className="flex items-center gap-2 text-sm"><Clock3 size={15} className="text-dome"/> Linked sessions</h3><div className="mt-3 space-y-2">{selected.bookings.length ? selected.bookings.slice(0,3).map((booking: any) => <Link key={booking.id} to={`/bookings/${booking.id}`} className="block rounded-lg border border-white/[.05] px-3 py-2.5 hover:border-dome/20"><p className="text-xs text-zinc-300">{booking.service?.name ?? 'Studio session'}</p><p className="mt-1 text-[9px] text-zinc-600">{new Date(booking.starts_at).toLocaleDateString()} · {booking.room?.name}</p></Link>) : <p className="text-xs text-zinc-700">No studio sessions linked yet.</p>}</div></div>
-                <div><h3 className="flex items-center gap-2 text-sm"><FileAudio size={15} className="text-gold"/> Project files</h3><div className="mt-3 space-y-2">{selected.files.length ? selected.files.slice(0,4).map((file: any) => <a key={file.id} href={file.url} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-lg border border-white/[.05] px-3 py-2.5"><span className="truncate text-xs text-zinc-400">{file.name}</span><span className="text-[9px] text-zinc-700">OPEN</span></a>) : <p className="text-xs text-zinc-700">Files saved inside a folder matching this project will appear here.</p>}</div></div>
+                <div><h3 className="flex items-center gap-2 text-sm"><FileAudio size={15} className="text-gold"/> Project files</h3><div className="mt-3 space-y-2">{selected.files.length ? selected.files.slice(0,4).map((file: any) => <button key={file.id} onClick={() => openFile(file.id)} className="flex w-full items-center justify-between rounded-lg border border-white/[.05] px-3 py-2.5 text-left"><span className="truncate text-xs text-zinc-400">{file.name}</span><span className="text-[9px] text-zinc-700">OPEN</span></button>) : <p className="text-xs text-zinc-700">Files saved inside a folder matching this project will appear here.</p>}</div></div>
                 <div><h3 className="flex items-center gap-2 text-sm"><MessageSquareText size={15} className="text-gold"/> Creative notes</h3><div className="mt-3 space-y-2">{selected.feedback.length ? selected.feedback.slice(0,3).map((item: any) => <div key={item.id} className="rounded-lg border border-white/[.05] px-3 py-2.5"><p className="line-clamp-2 text-xs leading-5 text-zinc-400">“{item.body}”</p><p className="mt-1 text-[9px] text-zinc-700">{item.source}</p></div>) : <p className="text-xs text-zinc-700">Session notes and collaborator feedback will appear here.</p>}</div></div>
                 <div className="lg:col-span-2"><h3 className="flex items-center gap-2 text-sm"><FileAudio size={15} className="text-dome"/> Project credit sheet</h3><p className="mt-1 text-[9px] text-zinc-700">Credits record contribution, not rights or ownership.</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{selected.credits?.length ? selected.credits.map((credit: any) => <div key={credit.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/[.05] px-3 py-2.5"><div><p className="text-xs text-zinc-300">{credit.credited_name}</p><p className="mt-1 text-[9px] text-zinc-600">{credit.role.replaceAll('_',' ')} · {credit.scope || 'Whole project'}</p></div><span className={`rounded-full border px-2 py-1 text-[8px] font-mono ${credit.status === 'CONFIRMED' ? 'border-emerald-500/15 text-emerald-500' : credit.status === 'DISPUTED' ? 'border-red-500/15 text-red-400' : 'border-white/[.07] text-zinc-600'}`}>{credit.status}</span></div>) : <p className="text-xs text-zinc-700">The producer has not added structured credits yet.</p>}</div></div>
               </div>

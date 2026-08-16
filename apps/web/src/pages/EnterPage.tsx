@@ -6,6 +6,7 @@ import { useAuthStore } from '../store/auth.store';
 
 const SignatureUniverse3D = lazy(() => import('../components/SignatureUniverse3D'));
 import OianoBrand from '../components/OianoBrand';
+import RingedPlanetGlyph from '../components/RingedPlanetGlyph';
 
 function UniverseFallback() {
   return <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle at 48% 42%, rgba(58,111,142,.18), transparent 24%), radial-gradient(circle at 52% 48%, rgba(201,168,76,.08), transparent 44%), #020304' }} />;
@@ -103,6 +104,16 @@ export default function EnterPage() {
         .enter-orbit-depth.back{clip-path:inset(0 0 50% 0)}
         .enter-orbit-depth.front{clip-path:inset(50% 0 0 0)}
         .enter-orbit-planet:before{left:50%;top:-3.5%;width:6.8%;transform:translateX(-50%) scaleY(1.72)}
+        /* Ring pass v2: the CSS-border ring (1.15px, then 3px) never read as a
+           real ring at this scale -- borders can't band or glow. Replaced with
+           RingedPlanetGlyph, a canvas component with real gradient/band/occlusion
+           control (see components/RingedPlanetGlyph.tsx). The dead
+           .enter-final-o-image/.enter-orbit-depth/.enter-orbit-planet* rules
+           above are now unused (their elements were removed from the JSX) --
+           left in place rather than risk surgically dissecting the dense
+           multi-selector lines they're tangled with; harmless since nothing
+           renders them anymore. */
+        .enter-ringed-o-slot{position:absolute;z-index:2;right:calc(var(--final-o-right) - 8%);top:calc(var(--final-o-top) - 1%);width:calc(var(--final-o-width) + 9%);pointer-events:none;filter:drop-shadow(0 10px 14px rgba(0,0,0,.5))}
       `}</style>
       <section className="login-brand-panel" style={{ position: 'relative', overflow: 'hidden', background: '#020101' }} aria-label="OIANO artist workspace">
         <AdaptiveUniverse intensified={focused} />
@@ -114,10 +125,9 @@ export default function EnterPage() {
               className="enter-realistic-wordmark"
             />
             <span className="enter-solar-motion" aria-hidden="true" />
-            <img className="enter-final-o-image" src="/brand/oiano-final-o-master-v6.png" alt="" aria-hidden="true" />
-            <span className="enter-orbit-depth back" aria-hidden="true" />
-            <span className="enter-orbit-depth front" aria-hidden="true" />
-            <span className="enter-orbit-planet-stage" aria-hidden="true"><span className="enter-orbit-planet" /></span>
+            <div className="enter-ringed-o-slot" aria-hidden="true">
+              <RingedPlanetGlyph size={70} />
+            </div>
           </div>
           <div className="enter-wordmark-ground" />
           <div className="enter-wordmark-rule" />

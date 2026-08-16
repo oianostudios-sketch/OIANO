@@ -96,3 +96,27 @@ export async function deleteFromR2(publicUrl: string): Promise<void> {
     }),
   );
 }
+
+/**
+ * Fetch an object's bytes + content type from R2 by its stored public URL.
+ * Used by the ticket-gated content route so private files are streamed
+ * through the API rather than handing the client the raw bucket URL.
+ */
+export async function getFromR2(publicUrl: string): Promise<{ body: NodeJS.ReadableStream; contentType?: string }> {
+  if (!isR2Configured) throw new Error('R2 is not configured');
+  const base = process.env.R2_PUBLIC_URL!.replace(/\/$/, '');
+  if (!publicUrl.startsWith(base + '/')) throw new Error('URL is not an R2 object');
+
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { GetObjectCommand } = require('@aws-sdk/client-s3');
+
+  const key = publicUrl.slice(base.length + 1);
+  const result = await getClient().send(
+    new GetObjectCommand({
+      Bucket: process.env.R2_BUCKET_NAME!,
+      Key:    key,
+    }),
+  );
+
+  return { body: result.Body, contentType: result.ContentType };
+}
