@@ -83,44 +83,48 @@ export async function getBookings(req: Request, res: Response, next: NextFunctio
       ? { starts_at: { gte: new Date(fromParam), lte: new Date(toParam) } }
       : {};
 
-    if (role === 'STUDIO_ADMIN') {
+    // Shared include shape — every role except ARTIST also gets `artist`
+    // (an artist already knows who they are; everyone else needs it).
+    const staffInclude = { artist: true, room: true, engineer: true, service: true, payment: true, project: { select: { id: true, title: true, phase: true } } };
+    const artistInclude = { room: true, engineer: true, service: true, payment: true, project: { select: { id: true, title: true, phase: true } } };
+
+    if (role === 'STUDIO_ADMIN' || role === 'ENGINEER') {
       const where = { studio_id: staffStudio!.id, ...dateRange };
       [bookings, total] = await Promise.all([
-        prisma.booking.findMany({
-          where,
-          include: { artist: true, room: true, engineer: true, service: true, payment: true, project: { select: { id: true, title: true, phase: true } } },
-          orderBy: { starts_at: 'asc' },
-          take,
-          skip,
-        }),
+        prisma.booking.findMany({ where, include: staffInclude, orderBy: { starts_at: 'asc' }, take, skip }),
         prisma.booking.count({ where }),
       ]);
-    } else if (role === 'ENGINEER') {
-      const where = { studio_id: staffStudio!.id, ...dateRange };
+    } else if (role === 'PRODUCER') {
+      // A Producer has no bookings of their own — only bookings linked to a
+      // project they own (see producer.routes.ts's link-booking endpoint).
+      const producer = await prisma.producer.findUnique({ where: { user_id: userId } });
+      if (!producer) throw new AppError('Producer profile not found', 404);
+      const where = { project: { producer_id: producer.id }, ...dateRange };
       [bookings, total] = await Promise.all([
-        prisma.booking.findMany({
-          where,
-          include: { artist: true, room: true, engineer: true, service: true, payment: true, project: { select: { id: true, title: true, phase: true } } },
-          orderBy: { starts_at: 'asc' },
-          take,
-          skip,
-        }),
+        prisma.booking.findMany({ where, include: staffInclude, orderBy: { starts_at: 'asc' }, take, skip }),
         prisma.booking.count({ where }),
       ]);
-    } else {
+    } else if (role === 'OIANO_ADMIN') {
+      // Network-wide superuser — no studio filter, same as maintenance.routes.ts.
+      const where = { ...dateRange };
+      [bookings, total] = await Promise.all([
+        prisma.booking.findMany({ where, include: staffInclude, orderBy: { starts_at: 'asc' }, take, skip }),
+        prisma.booking.count({ where }),
+      ]);
+    } else if (role === 'ARTIST') {
       const artist = await prisma.artist.findUnique({ where: { user_id: userId } });
       if (!artist) throw new AppError('Artist not found', 404);
       const where = { artist_id: artist.id, ...dateRange };
       [bookings, total] = await Promise.all([
-        prisma.booking.findMany({
-          where,
-          include: { room: true, engineer: true, service: true, payment: true, project: { select: { id: true, title: true, phase: true } } },
-          orderBy: { starts_at: 'asc' },
-          take,
-          skip,
-        }),
+        prisma.booking.findMany({ where, include: artistInclude, orderBy: { starts_at: 'asc' }, take, skip }),
         prisma.booking.count({ where }),
       ]);
+    } else {
+      // Every real role is handled explicitly above — this only fires for a
+      // JWT with a role string that doesn't match any known role, which
+      // shouldn't happen in practice. Fail loudly rather than silently
+      // guessing "must be an artist" (the previous behavior, AUD-015).
+      throw new AppError('Unsupported role for booking list', 403);
     }
 
     const page = Math.max(1, parseInt(String(req.query.page ?? '1')));
