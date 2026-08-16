@@ -148,9 +148,15 @@ export default function AdminDashboardPage() {
     queryFn: async () => { const r = (await api.get('/bookings')).data; return Array.isArray(r) ? r : (r?.data ?? []); },
   });
 
+  const [artistSearch, setArtistSearch] = useState('');
   const { data: artists = [], isLoading: loadingArtists } = useQuery({
-    queryKey: ['artists'],
-    queryFn: async () => { const r = (await api.get('/artists')).data; return Array.isArray(r) ? r : (r?.data ?? []); },
+    queryKey: ['artists', artistSearch],
+    queryFn: async () => { const r = (await api.get('/artists', { params: artistSearch ? { q: artistSearch } : {} })).data; return Array.isArray(r) ? r : (r?.data ?? []); },
+  });
+  const deleteArtist = useMutation({
+    mutationFn: (id: string) => api.delete(`/artists/${id}`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['artists'] }); toast.success('Artist deleted'); },
+    onError: (error: any) => toast.error(error?.response?.data?.error ?? 'Could not delete artist'),
   });
 
   const { data: creditRequests = [] } = useQuery({
@@ -606,8 +612,19 @@ export default function AdminDashboardPage() {
               <p className="label-mono mb-3">
                 Roster · {loadingArtists ? '…' : (artists as any[]).length} artists
               </p>
+              <input
+                type="text"
+                value={artistSearch}
+                onChange={(e) => setArtistSearch(e.target.value)}
+                placeholder="Search by name, alias, or email…"
+                className="w-full mb-3 bg-studio-surface border border-studio-border rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-dome/40"
+              />
               {loadingArtists ? (
                 <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <SkeletonArtistCard key={i} />)}</div>
+              ) : (artists as any[]).length === 0 ? (
+                <p className="text-zinc-600 text-xs py-4 text-center">
+                  {artistSearch ? `No artists match "${artistSearch}".` : 'No artists yet.'}
+                </p>
               ) : (
                 <div className="space-y-2">
                   {(artists as any[]).map((a) => {
@@ -645,6 +662,15 @@ export default function AdminDashboardPage() {
                               onClick={() => { setCreditTarget({ id: a.id, name: a.name }); setCreditAmount(100); }}
                               className="text-[10px] bg-dome/10 border border-dome/20 text-dome px-2 py-0.5 rounded hover:bg-dome/20 transition-colors"
                             >+$</button>
+                            <button
+                              onClick={() => {
+                                if (window.confirm(`Delete ${a.name}? This only works for accounts with zero booking/session/file history — anything else will be refused.`)) {
+                                  deleteArtist.mutate(a.id);
+                                }
+                              }}
+                              disabled={deleteArtist.isPending}
+                              className="text-[10px] bg-red-500/10 border border-red-500/20 text-red-400 px-2 py-0.5 rounded hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                            >Delete</button>
                           </div>
                         </div>
                       </div>

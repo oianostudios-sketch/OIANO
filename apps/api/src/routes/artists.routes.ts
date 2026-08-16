@@ -6,6 +6,7 @@ import { AppError } from '../lib/errors';
 import { emitActivityEvent } from '../lib/activityEvents';
 import { computeArtistTier } from '../lib/artistTier';
 import { broadcastAll } from './notifications.routes';
+import { writeAdminAudit } from '../lib/adminAudit';
 
 export const artistsRouter = Router();
 artistsRouter.use(authenticate);
@@ -43,16 +44,75 @@ artistsRouter.get('/', requireRole('STUDIO_ADMIN'), async (req, res, next) => {
     const take = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? '100'))));
     const page = Math.max(1, parseInt(String(req.query.page ?? '1')));
     const skip = (page - 1) * take;
+
+    // ART-05: search by name, alias, or account email. Case-insensitive,
+    // substring match — clearing the query (empty/absent `q`) restores the
+    // full roster since the where-clause is only added when q is present.
+    const q = (req.query.q as string | undefined)?.trim();
+    const where = q
+      ? {
+          OR: [
+            { name: { contains: q, mode: 'insensitive' as const } },
+            { alias: { contains: q, mode: 'insensitive' as const } },
+            { user: { email: { contains: q, mode: 'insensitive' as const } } },
+          ],
+        }
+      : {};
+
     const [artists, total] = await Promise.all([
       prisma.artist.findMany({
+        where,
         include: { passport: true, wallet: true, user: { select: { email: true, created_at: true } } },
         orderBy: { created_at: 'desc' },
         take,
         skip,
       }),
-      prisma.artist.count(),
+      prisma.artist.count({ where }),
     ]);
     res.json({ data: artists, total, page, limit: take, hasMore: skip + take < total });
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/artists/:id — ART-04. Deliberately conservative: only allows
+// deleting artists with zero booking/session/file history (the real-world
+// use case is cleaning up a duplicate/mistaken signup, not offboarding a
+// customer with financial history). Anyone with real activity is refused
+// with a clear 409 rather than either silently orphaning records or
+// cascading through payments/ledger entries — a buggy financial cascade
+// would be a far worse bug than the missing delete button.
+artistsRouter.delete('/:id', requireRole('STUDIO_ADMIN'), async (req: any, res, next) => {
+  try {
+    const artist = await prisma.artist.findUnique({
+      where: { id: req.params.id },
+      include: {
+        user: { select: { id: true, email: true } },
+        _count: { select: { bookings: true, files: true, session_logs: true, releases: true } },
+      },
+    });
+    if (!artist) throw new AppError('Artist not found', 404);
+
+    const { bookings, files, session_logs, releases } = artist._count;
+    if (bookings > 0 || files > 0 || session_logs > 0 || releases > 0) {
+      throw new AppError(
+        `Cannot delete ${artist.name} — this account has ${bookings} booking(s), ${files} file(s), ` +
+        `${session_logs} session log(s), and ${releases} release(s). Deleting would either destroy ` +
+        `real studio/financial history or orphan records. Set their status instead, or contact support ` +
+        `for accounts that genuinely need to be removed.`,
+        409,
+      );
+    }
+
+    await prisma.$transaction([
+      prisma.studioCircleMember.deleteMany({ where: { artist_id: artist.id } }),
+      prisma.artistPassport.delete({ where: { artist_id: artist.id } }),
+      prisma.wallet.delete({ where: { artist_id: artist.id } }),
+      prisma.artist.delete({ where: { id: artist.id } }),
+      prisma.user.delete({ where: { id: artist.user.id } }),
+    ]);
+
+    await writeAdminAudit(req.userId, 'artist.deleted', req, { artist_id: artist.id, artist_name: artist.name, email: artist.user.email });
+
+    res.json({ success: true });
   } catch (err) { next(err); }
 });
 
