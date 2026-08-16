@@ -10,7 +10,7 @@ import {
   updateSessionNotes,
   deliverSessionFiles,
   rescheduleBooking,
-  assignBookingProducer,
+  assignBookingEngineer,
   reviewDeliverable,
 } from '../controllers/bookings.controller';
 
@@ -23,7 +23,7 @@ bookingsRouter.get('/', getBookings);
 bookingsRouter.get('/:id', getBookingById);
 bookingsRouter.post('/', requireRole('ARTIST'), createBooking);
 bookingsRouter.patch('/:id/status', requireRole('STUDIO_ADMIN'), updateBookingStatus);
-bookingsRouter.patch('/:id/producer', requireRole('STUDIO_ADMIN'), assignBookingProducer);
+bookingsRouter.patch('/:id/engineer', requireRole('STUDIO_ADMIN'), assignBookingEngineer);
 bookingsRouter.patch('/:id/session-notes', requireRole('ENGINEER', 'STUDIO_ADMIN'), updateSessionNotes);
 // POST /:id/deliver — engineer marks session delivered + attaches file URLs
 bookingsRouter.post('/:id/deliver', requireRole('ENGINEER', 'STUDIO_ADMIN'), deliverSessionFiles);

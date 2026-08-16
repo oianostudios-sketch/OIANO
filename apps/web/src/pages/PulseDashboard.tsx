@@ -656,14 +656,14 @@ export default function PulseDashboard() {
     }
   }, [loadData, loadPulse, loadCurrentWork, toast]);
 
-  const assignProducer = useCallback(async (booking: Session, producerId: string) => {
+  const assignEngineer = useCallback(async (booking: Session, engineerId: string) => {
     setUpdatingBooking(booking.id);
     try {
-      await api.patch(`/bookings/${booking.id}/producer`, { producer_id: producerId || null });
+      await api.patch(`/bookings/${booking.id}/engineer`, { engineer_id: engineerId || null });
       await loadData();
-      toast.success(producerId ? 'Producer assigned' : 'Producer assignment cleared');
+      toast.success(engineerId ? 'Engineer assigned' : 'Engineer assignment cleared');
       setAssigningBooking(null);
-    } catch { toast.error('Could not assign the producer'); }
+    } catch { toast.error('Could not assign the engineer'); }
     finally { setUpdatingBooking(null); }
   }, [loadData, toast]);
 
@@ -1195,8 +1195,8 @@ export default function PulseDashboard() {
                         </div>
                         <div className="csr-right">
                           <span className="csr-amount">${Number(s.total_usd ?? 0).toFixed(0)}</span>
-                          <button className="pulse-producer-trigger" onClick={event => { event.stopPropagation(); setAssigningBooking(assigningBooking === s.id ? null : s.id); }}>{s.engineer?.name ?? 'Assign producer'}</button>
-                          {assigningBooking === s.id && <div className="pulse-producer-menu" onClick={event => event.stopPropagation()}><button onClick={()=>assignProducer(s,'')}>Unassigned</button>{(pulseData?.producers ?? []).map(producer=><button key={producer.id} onClick={()=>assignProducer(s,producer.id)}>{producer.name}</button>)}</div>}
+                          <button className="pulse-engineer-trigger" onClick={event => { event.stopPropagation(); setAssigningBooking(assigningBooking === s.id ? null : s.id); }}>{s.engineer?.name ?? 'Assign engineer'}</button>
+                          {assigningBooking === s.id && <div className="pulse-engineer-menu" onClick={event => event.stopPropagation()}><button onClick={()=>assignEngineer(s,'')}>Unassigned</button>{(pulseData?.engineers ?? []).map(engineer=><button key={engineer.id} onClick={()=>assignEngineer(s,engineer.id)}>{engineer.name}</button>)}</div>}
                           {s.status === 'PENDING' && <button disabled={updatingBooking === s.id} className="pulse-row-action confirm" onClick={event => { event.stopPropagation(); changeBookingStatus(s, 'CONFIRMED'); }}>{updatingBooking === s.id ? 'Saving…' : 'Confirm'}</button>}
                           {s.status === 'CONFIRMED' && !isActive && <button disabled={updatingBooking === s.id} className="pulse-row-action start" onClick={event => { event.stopPropagation(); changeBookingStatus(s, 'IN_PROGRESS'); }}>{updatingBooking === s.id ? 'Starting…' : 'Start'}</button>}
                           {(s.status === 'IN_PROGRESS' || isActive) && <button disabled={updatingBooking === s.id} className="pulse-row-action complete" onClick={event => { event.stopPropagation(); changeBookingStatus(s, 'COMPLETED'); }}>{updatingBooking === s.id ? 'Saving…' : 'Complete'}</button>}
@@ -1711,10 +1711,10 @@ const CSS = `
   .pulse-row-action.start { color:#5A9BCB; border:1px solid #5A9BCB35; background:#5A9BCB0b; }
   .pulse-row-action.complete { color:#1D9E75; border:1px solid #1D9E7535; background:#1D9E750b; }
   .pulse-row-action:hover { filter:brightness(1.35); }
-  .pulse-producer-trigger { max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; border:0; background:transparent; color:#71717a; font-size:9px; cursor:pointer; text-decoration:underline; text-decoration-color:#27272a; text-underline-offset:3px; }
-  .pulse-producer-menu { position:absolute; right:8px; top:calc(100% - 4px); z-index:50; min-width:150px; overflow:hidden; border:1px solid #27272a; border-radius:7px; background:#101010; box-shadow:0 14px 30px #000a; }
-  .pulse-producer-menu button { display:block; width:100%; border:0; border-bottom:1px solid #1b1b1b; padding:8px 10px; background:transparent; color:#a1a1aa; text-align:left; font-size:10px; cursor:pointer; }
-  .pulse-producer-menu button:hover { background:#181818; color:#fff; }
+  .pulse-engineer-trigger { max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; border:0; background:transparent; color:#71717a; font-size:9px; cursor:pointer; text-decoration:underline; text-decoration-color:#27272a; text-underline-offset:3px; }
+  .pulse-engineer-menu { position:absolute; right:8px; top:calc(100% - 4px); z-index:50; min-width:150px; overflow:hidden; border:1px solid #27272a; border-radius:7px; background:#101010; box-shadow:0 14px 30px #000a; }
+  .pulse-engineer-menu button { display:block; width:100%; border:0; border-bottom:1px solid #1b1b1b; padding:8px 10px; background:transparent; color:#a1a1aa; text-align:left; font-size:10px; cursor:pointer; }
+  .pulse-engineer-menu button:hover { background:#181818; color:#fff; }
   .csr-amount { font-size:12px; color:#555; font-family:'JetBrains Mono',monospace; }
   .csr-pill { font-size:9px; font-family:'JetBrains Mono',monospace; letter-spacing:.04em; padding:2px 7px; border-radius:4px; }
   .pill-live  { color:#5A9BCB; background:#5A9BCB10; border:1px solid #5A9BCB30; animation:breath 2s ease-in-out infinite; }

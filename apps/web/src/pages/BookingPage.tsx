@@ -11,7 +11,7 @@ type Step = 'studio' | 'engineer' | 'service' | 'room' | 'datetime' | 'confirm';
 const ALL_STEPS: Step[] = ['studio', 'service', 'room', 'datetime', 'confirm'];
 const STEP_LABELS: Record<Step, string> = {
   studio: 'Studio',
-  engineer: 'Producer assignment',
+  engineer: 'Engineer assignment',
   service:  'Session type',
   room:     'Room',
   datetime: 'Date & time',
@@ -192,7 +192,7 @@ export default function BookingPage() {
   const progressPercent = Math.round(((stepIndex + 1) / visibleSteps.length) * 100);
   const selectionSummary = [
     studio?.name && { label: 'Studio', value: studio.name },
-    stepIndex > 0 && { label: 'Producer', value: 'Assigned by studio' },
+    stepIndex > 0 && { label: 'Engineer', value: 'Assigned by studio' },
     selectedService?.name && { label: 'Session', value: selectedService.name },
     selectedRoom?.name && { label: 'Room', value: selectedRoom.name },
     selectedProject?.title && { label: 'Project', value: selectedProject.title },
@@ -466,8 +466,11 @@ export default function BookingPage() {
             </div>
           )}
 
-          {/* ── Step 1: Service ─────────────────────────────────────────── */}
-          {/* ── Step 1: Engineer ────────────────────────────────────────── */}
+          {/* ── Dead step: 'engineer' is not in ALL_STEPS/visibleSteps, so this
+               branch is unreachable in the live wizard — the studio now assigns
+               the engineer after booking instead (see bookings.controller.ts).
+               Left in place rather than deleted without sign-off; see the
+               system audit (docs/OIANO_SYSTEM_AUDIT.md) for the removal call. ── */}
           {step === 'engineer' && (
             <div className="p-6">
               <p className="text-zinc-500 text-xs font-mono uppercase tracking-widest mb-1">Step {visibleStepNumber('engineer')} of {visibleSteps.length}</p>
@@ -883,7 +886,7 @@ export default function BookingPage() {
                     { label: 'Studio',   value: studio?.name ?? '—' },
                     { label: 'Service',  value: selectedService?.name ?? '—' },
                     { label: 'Room',     value: selectedRoom?.name ?? '—' },
-                    { label: 'Producer', value: 'Assigned by Dreamz Music Lab' },
+                    { label: 'Engineer', value: 'Assigned by Dreamz Music Lab' },
                     { label: 'Project',  value: selectedProject?.title ?? 'Standalone session' },
                     {
                       label: 'Date',

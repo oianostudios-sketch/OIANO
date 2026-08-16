@@ -53,7 +53,7 @@ pulseRouter.get(
         weekRevenue,
         todayRevenue,
         totalBookingCount,
-        producers,
+        engineers,
       ] = await Promise.all([
         // Today's sessions for utilization calc
         prisma.booking.findMany({
@@ -268,7 +268,7 @@ pulseRouter.get(
           operating_close_hour: (req as any).studio.operating_close_hour,
         },
         rooms: rooms.map((room) => ({ ...room, hourly_rate: room.hourly_rate == null ? null : Number(room.hourly_rate) })),
-        producers,
+        engineers,
         finance: {
           collected_usd: Number(paidRevenue._sum.amount_usd ?? 0),
           outstanding_usd: Number(outstandingRevenue._sum.amount_usd ?? 0),

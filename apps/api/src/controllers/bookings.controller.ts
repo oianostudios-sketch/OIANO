@@ -24,7 +24,7 @@ const CreateBookingSchema = z.object({
   room_id: z.string().min(1),
   studio_id: z.string().min(1).optional(),
   service_id: z.string().min(1),
-  // The studio assigns the session producer after booking.
+  // The studio assigns the session engineer after booking.
   starts_at: z.string().datetime(),
   ends_at: z.string().datetime(),
   notes: z.string().optional(),
@@ -38,22 +38,22 @@ const CreateBookingSchema = z.object({
 const UpdateStatusSchema = z.object({
   status: z.enum(['PENDING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'NO_SHOW']),
 });
-const AssignProducerSchema = z.object({ producer_id: z.string().min(1).nullable() });
+const AssignEngineerSchema = z.object({ engineer_id: z.string().min(1).nullable() });
 
-export async function assignBookingProducer(req: Request, res: Response, next: NextFunction) {
+export async function assignBookingEngineer(req: Request, res: Response, next: NextFunction) {
   try {
-    const { producer_id } = AssignProducerSchema.parse(req.body);
+    const { engineer_id } = AssignEngineerSchema.parse(req.body);
     const studio = await resolveStaffStudio((req as any).userId);
     const booking = await prisma.booking.findFirst({ where: { id: req.params.id, studio_id: studio.id } });
     if (!booking) throw new AppError('Booking not found', 404);
-    if (['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(booking.status)) throw new AppError('Producer assignment is closed for this booking', 409);
-    if (producer_id) {
-      const producer = await prisma.engineer.findFirst({ where: { id: producer_id, studio_id: studio.id } });
-      if (!producer) throw new AppError('Producer not found at this studio', 404);
+    if (['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(booking.status)) throw new AppError('Engineer assignment is closed for this booking', 409);
+    if (engineer_id) {
+      const engineer = await prisma.engineer.findFirst({ where: { id: engineer_id, studio_id: studio.id } });
+      if (!engineer) throw new AppError('Engineer not found at this studio', 404);
     }
     const updated = await prisma.booking.update({
       where: { id: booking.id },
-      data: { engineer_id: producer_id },
+      data: { engineer_id },
       include: { artist: true, room: true, engineer: true, service: true, payment: true },
     });
     res.json(updated);
