@@ -19,7 +19,7 @@ export interface PulseData {
   next_moves: Array<{ type: string; message: string; count: number; severity: string }>;
   studio?: { id: string; name: string; timezone: string; currency: string; operating_open_hour: number; operating_close_hour: number };
   rooms?: Array<{ id: string; name: string; capacity: number | null; hourly_rate: number | null }>;
-  producers?: Array<{ id: string; name: string; specialties: string[] }>;
+  engineers?: Array<{ id: string; name: string; specialties: string[] }>;
   finance?: { collected_usd: number; outstanding_usd: number; week_collected_usd: number; today_booked_usd: number };
   coverage?: { artist_count: number; booking_count: number; room_count: number; generated_at: string };
 }
