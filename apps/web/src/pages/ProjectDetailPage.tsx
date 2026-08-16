@@ -11,6 +11,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { ProducerNav } from '../components/ProducerNav';
 import { useToast } from '../components/Toast';
+import ProjectMessageThread from '../components/ProjectMessageThread';
+import ProjectActionPanel from '../components/ProjectActionPanel';
 import { fmtDate, fmtDuration, fmtCurrency } from '../lib/fmt';
 
 type Phase = 'PRE_PRODUCTION' | 'TRACKING' | 'EDITING' | 'MIXING' | 'MASTERING' | 'DELIVERED';
@@ -27,6 +29,7 @@ interface Booking {
 
 interface Project {
   id: string;
+  artist_id: string | null;
   title: string;
   phase: Phase;
   notes: string | null;
@@ -36,7 +39,18 @@ interface Project {
   created_at: string;
   artist: { id: string; name: string; alias: string | null; avatar_url: string | null } | null;
   bookings: Booking[];
+  participants: Array<{ id: string; display_name: string; email: string | null; role: string }>;
+  credits: Array<{ id: string; credited_name: string; role: string; scope: string | null; status: string }>;
+  promotional_consents: Array<{ id: string; subject: string; purpose: string; channels: string[]; assets: string[]; status: string; expires_at: string | null }>;
+  rights_agreements: Array<{ id: string; agreement_type: string; title: string; status: string; response_note: string | null; shares: Array<{ id: string; holder_name: string; percentage: number | string }> }>;
 }
+
+const PARTICIPANT_ROLES = [
+  'FEATURED_ARTIST', 'PRODUCER', 'ENGINEER', 'SONGWRITER', 'COMPOSER',
+  'MIX_ENGINEER', 'MASTERING_ENGINEER', 'MANAGER', 'OTHER',
+] as const;
+const roleLabel = (role: string) => role.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, letter => letter.toUpperCase());
+const CREDIT_ROLES = ['PRIMARY_ARTIST','FEATURED_ARTIST','PRODUCER','CO_PRODUCER','SONGWRITER','COMPOSER','ENGINEER','RECORDING_ENGINEER','MIX_ENGINEER','MASTERING_ENGINEER','MUSICIAN','VOCALS','OTHER'] as const;
 
 const PHASES: { key: Phase; label: string; color: string }[] = [
   { key: 'PRE_PRODUCTION', label: 'Pre-Production', color: '#3B8BFF' },
@@ -57,6 +71,20 @@ export default function ProjectDetailPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const toast = useToast();
+  const [teamOpen, setTeamOpen] = useState(false);
+  const [participantName, setParticipantName] = useState('');
+  const [participantEmail, setParticipantEmail] = useState('');
+  const [participantRole, setParticipantRole] = useState<(typeof PARTICIPANT_ROLES)[number]>('FEATURED_ARTIST');
+  const [creditsOpen, setCreditsOpen] = useState(false);
+  const [creditName, setCreditName] = useState('');
+  const [creditRole, setCreditRole] = useState<(typeof CREDIT_ROLES)[number]>('PRODUCER');
+  const [creditScope, setCreditScope] = useState('');
+  const [promoOpen, setPromoOpen] = useState(false);
+  const [promoPurpose, setPromoPurpose] = useState('');
+  const [promoChannel, setPromoChannel] = useState('INSTAGRAM');
+  const [rightsOpen, setRightsOpen] = useState(false);
+  const [rightsType, setRightsType] = useState<'MASTER' | 'PUBLISHING'>('MASTER');
+  const [artistShare, setArtistShare] = useState(50);
 
   const { data: projects, isLoading } = useQuery<Project[]>({
     queryKey: ['producer-projects'],
@@ -97,6 +125,54 @@ export default function ProjectDetailPage() {
       setPickerOpen(false);
     },
     onError: (e: any) => toast.error(e?.response?.data?.error ?? 'Failed to link session'),
+  });
+
+  const addParticipant = useMutation({
+    mutationFn: () => api.post(`/producer/projects/${id}/participants`, {
+      display_name: participantName,
+      email: participantEmail,
+      role: participantRole,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['producer-projects'] });
+      setParticipantName('');
+      setParticipantEmail('');
+      setTeamOpen(false);
+      toast.success('Participant added to project');
+    },
+    onError: (error: any) => toast.error(error?.response?.data?.error ?? 'Failed to add participant'),
+  });
+  const removeParticipant = useMutation({
+    mutationFn: (participantId: string) => api.delete(`/producer/projects/${id}/participants/${participantId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['producer-projects'] });
+      toast.success('Participant removed');
+    },
+    onError: () => toast.error('Failed to remove participant'),
+  });
+  const addCredit = useMutation({
+    mutationFn: () => api.post(`/producer/projects/${id}/credits`, { credited_name: creditName, role: creditRole, scope: creditScope || undefined }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['producer-projects'] }); setCreditName(''); setCreditScope(''); setCreditsOpen(false); toast.success('Credit added'); },
+    onError: (error: any) => toast.error(error?.response?.data?.error ?? 'Failed to add credit'),
+  });
+  const setCreditStatus = useMutation({
+    mutationFn: ({ creditId, status }: { creditId: string; status: string }) => api.patch(`/producer/projects/${id}/credits/${creditId}`, { status }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['producer-projects'] }),
+    onError: () => toast.error('Credit status could not be updated'),
+  });
+  const removeCredit = useMutation({
+    mutationFn: (creditId: string) => api.delete(`/producer/projects/${id}/credits/${creditId}`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['producer-projects'] }); toast.success('Credit removed'); },
+  });
+  const requestPromotion = useMutation({
+    mutationFn: () => api.post(`/producer/projects/${id}/promotional-consents`, { subject: project?.title ?? 'Project promotion', purpose: promoPurpose, channels: [promoChannel], assets: ['NAME', 'IMAGE', 'PROJECT_TITLE'] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['producer-projects'] }); setPromoPurpose(''); setPromoOpen(false); toast.success('Permission request sent to artist'); },
+    onError: (error: any) => toast.error(error?.response?.data?.error ?? 'Permission request failed'),
+  });
+  const proposeRights = useMutation({
+    mutationFn: () => api.post(`/producer/projects/${id}/rights-agreements`, { agreement_type: rightsType, title: `${project?.title ?? 'Project'} ${rightsType === 'MASTER' ? 'master ownership' : 'publishing split'}`, terms_note: 'Recorded through OIANO; independent legal advice may still be appropriate.', shares: [{ holder_name: project?.artist?.alias ?? project?.artist?.name ?? 'Primary Artist', holder_type: 'ARTIST', holder_ref_id: project?.artist?.id, role: rightsType === 'MASTER' ? 'Master owner' : 'Writer / publisher', percentage: artistShare }, { holder_name: producerMe?.alias ?? producerMe?.name ?? 'Producer', holder_type: 'PRODUCER', holder_ref_id: producerMe?.id, role: rightsType === 'MASTER' ? 'Producer master share' : 'Composer / publisher', percentage: 100 - artistShare }] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['producer-projects'] }); setRightsOpen(false); toast.success('Rights proposal sent to artist'); },
+    onError: (error: any) => toast.error(error?.response?.data?.error ?? 'Rights proposal failed'),
   });
 
   if (isLoading) {
@@ -205,6 +281,58 @@ export default function ProjectDetailPage() {
             </div>
           ))}
         </div>
+
+        {/* Project team: core artist/producer roles plus explicit collaborators. */}
+        <div style={{ marginBottom: '2rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+            <p style={{ margin: 0, fontSize: '0.72rem', color: '#555', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              Project team ({(project.participants?.length ?? 0) + (project.artist ? 1 : 0) + 1})
+            </p>
+            <button onClick={() => setTeamOpen(open => !open)} style={{ fontSize: '0.75rem', color: '#C9A84C', background: 'none', border: 'none', cursor: 'pointer' }}>
+              {teamOpen ? 'Cancel' : '+ Add participant'}
+            </button>
+          </div>
+
+          {teamOpen && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.4fr 1fr auto', gap: 8, padding: 12, marginBottom: 10, border: '1px solid rgba(201,168,76,.2)', borderRadius: 10, background: 'rgba(201,168,76,.035)' }}>
+              <input value={participantName} onChange={event => setParticipantName(event.target.value)} placeholder="Name" maxLength={120} style={{ background: '#101010', border: '1px solid #242424', borderRadius: 7, padding: '9px 10px', color: '#eee', fontSize: 12 }} />
+              <input value={participantEmail} onChange={event => setParticipantEmail(event.target.value)} placeholder="Email (optional)" type="email" style={{ background: '#101010', border: '1px solid #242424', borderRadius: 7, padding: '9px 10px', color: '#eee', fontSize: 12 }} />
+              <select value={participantRole} onChange={event => setParticipantRole(event.target.value as any)} style={{ background: '#101010', border: '1px solid #242424', borderRadius: 7, padding: '9px 10px', color: '#eee', fontSize: 12 }}>
+                {PARTICIPANT_ROLES.map(role => <option key={role} value={role}>{roleLabel(role)}</option>)}
+              </select>
+              <button onClick={() => addParticipant.mutate()} disabled={!participantName.trim() || addParticipant.isPending} style={{ border: 0, borderRadius: 7, padding: '0 14px', background: '#C9A84C', color: '#090909', fontWeight: 700, cursor: 'pointer', opacity: !participantName.trim() ? .45 : 1 }}>Add</button>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 9, border: '1px solid #1e1e1e', background: '#121212' }}>
+              <span style={{ color: '#ddd', fontSize: 13 }}>{producerMe?.alias ?? producerMe?.name ?? 'Producer'}</span><span style={{ color: '#777', fontSize: 11 }}>Project Producer · Owner</span>
+            </div>
+            {project.artist && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 9, border: '1px solid #1e1e1e', background: '#121212' }}><span style={{ color: '#ddd', fontSize: 13 }}>{project.artist.alias ?? project.artist.name}</span><span style={{ color: '#777', fontSize: 11 }}>Primary Artist</span></div>}
+            {(project.participants ?? []).map(participant => (
+              <div key={participant.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 9, border: '1px solid #1e1e1e', background: '#121212' }}>
+                <div><span style={{ color: '#ddd', fontSize: 13 }}>{participant.display_name}</span>{participant.email && <span style={{ color: '#555', fontSize: 10, marginLeft: 8 }}>{participant.email}</span>}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><span style={{ color: '#C9A84C', fontSize: 11 }}>{roleLabel(participant.role)}</span><button onClick={() => removeParticipant.mutate(participant.id)} aria-label={`Remove ${participant.display_name}`} style={{ color: '#666', background: 'none', border: 0, cursor: 'pointer', fontSize: 16 }}>×</button></div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: '2rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}><div><p style={{ margin: 0, fontSize: 11, color: '#666', textTransform: 'uppercase', letterSpacing: '.08em' }}>Credit sheet ({project.credits?.length ?? 0})</p><p style={{ margin: '4px 0 0', fontSize: 10, color: '#444' }}>Contribution records only · ownership is handled separately</p></div><button onClick={() => setCreditsOpen(open => !open)} style={{ fontSize: 12, color: '#C9A84C', background: 'none', border: 0, cursor: 'pointer' }}>{creditsOpen ? 'Cancel' : '+ Add credit'}</button></div>
+          {creditsOpen && <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1.5fr auto', gap: 8, marginBottom: 10, padding: 12, border: '1px solid rgba(201,168,76,.2)', borderRadius: 10 }}><input value={creditName} onChange={event => setCreditName(event.target.value)} placeholder="Credited name" style={{ background: '#101010', border: '1px solid #242424', borderRadius: 7, padding: 9, color: '#eee', fontSize: 12 }}/><select value={creditRole} onChange={event => setCreditRole(event.target.value as any)} style={{ background: '#101010', border: '1px solid #242424', borderRadius: 7, padding: 9, color: '#eee', fontSize: 12 }}>{CREDIT_ROLES.map(role => <option key={role} value={role}>{roleLabel(role)}</option>)}</select><input value={creditScope} onChange={event => setCreditScope(event.target.value)} placeholder="Scope, track or contribution" style={{ background: '#101010', border: '1px solid #242424', borderRadius: 7, padding: 9, color: '#eee', fontSize: 12 }}/><button onClick={() => addCredit.mutate()} disabled={!creditName.trim() || addCredit.isPending} style={{ border: 0, borderRadius: 7, background: '#C9A84C', color: '#090909', padding: '0 14px', fontWeight: 700, opacity: creditName.trim() ? 1 : .4 }}>Add</button></div>}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{(project.credits ?? []).map(credit => <div key={credit.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.4fr auto auto', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid #1e1e1e', borderRadius: 9, background: '#121212' }}><strong style={{ fontSize: 12, color: '#ddd' }}>{credit.credited_name}</strong><span style={{ fontSize: 10, color: '#C9A84C' }}>{roleLabel(credit.role)}</span><span style={{ fontSize: 10, color: '#666' }}>{credit.scope || 'Whole project'}</span><select value={credit.status} onChange={event => setCreditStatus.mutate({ creditId: credit.id, status: event.target.value })} style={{ background: '#0d0d0d', border: '1px solid #252525', borderRadius: 6, color: '#888', padding: '5px 7px', fontSize: 9 }}><option value="DRAFT">Draft</option><option value="CONFIRMED">Confirmed</option><option value="DISPUTED">Disputed</option></select><button onClick={() => removeCredit.mutate(credit.id)} aria-label={`Remove ${credit.credited_name} credit`} style={{ background: 'none', border: 0, color: '#555', cursor: 'pointer', fontSize: 16 }}>×</button></div>)}{!project.credits?.length && <div style={{ padding: 18, border: '1px dashed #222', borderRadius: 9, color: '#444', fontSize: 12, textAlign: 'center' }}>No structured credits recorded yet.</div>}</div>
+        </div>
+
+        <div style={{ marginBottom: '2rem' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}><div><p style={{ margin: 0, color: '#666', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.08em' }}>Promotional permissions</p><p style={{ margin: '4px 0 0', color: '#444', fontSize: 10 }}>Artist consent is required before promotional use.</p></div>{project.artist && <button onClick={() => setPromoOpen(open => !open)} style={{ background: 'none', border: 0, color: '#C9A84C', cursor: 'pointer', fontSize: 12 }}>{promoOpen ? 'Cancel' : '+ Request permission'}</button>}</div>{promoOpen && <div style={{ display: 'grid', gridTemplateColumns: '1.5fr .8fr auto', gap: 8, padding: 12, border: '1px solid rgba(201,168,76,.2)', borderRadius: 10, marginBottom: 10 }}><input value={promoPurpose} onChange={event => setPromoPurpose(event.target.value)} placeholder="Purpose — e.g. announce release week" style={{ background: '#101010', border: '1px solid #242424', borderRadius: 7, padding: 9, color: '#eee', fontSize: 12 }}/><select value={promoChannel} onChange={event => setPromoChannel(event.target.value)} style={{ background: '#101010', border: '1px solid #242424', borderRadius: 7, color: '#eee', padding: 9, fontSize: 12 }}>{['INSTAGRAM','TIKTOK','YOUTUBE','WEBSITE','PRESS','PAID_ADS','EMAIL'].map(channel => <option key={channel}>{roleLabel(channel)}</option>)}</select><button onClick={() => requestPromotion.mutate()} disabled={!promoPurpose.trim()} style={{ border: 0, borderRadius: 7, background: '#C9A84C', color: '#090909', padding: '0 14px', fontWeight: 700, opacity: promoPurpose.trim() ? 1 : .4 }}>Send</button></div>}<div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{project.promotional_consents?.map(consent => <div key={consent.id} style={{ padding: '10px 12px', border: '1px solid #1e1e1e', borderRadius: 9, background: '#121212', display: 'flex', justifyContent: 'space-between', gap: 12 }}><div><strong style={{ color: '#ddd', fontSize: 12 }}>{consent.subject}</strong><p style={{ margin: '3px 0 0', color: '#666', fontSize: 10 }}>{consent.purpose} · {consent.channels.map(roleLabel).join(', ')}</p></div><span style={{ color: consent.status === 'APPROVED' ? '#1D9E75' : consent.status === 'DECLINED' || consent.status === 'WITHDRAWN' ? '#D94A4A' : '#C9A84C', fontSize: 10 }}>{consent.status}</span></div>)}{!project.promotional_consents?.length && <div style={{ border: '1px dashed #222', borderRadius: 9, padding: 16, color: '#444', textAlign: 'center', fontSize: 11 }}>No promotional permission requested.</div>}</div></div>
+
+        <div style={{ marginBottom: 32 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}><div><p style={{ margin: 0, color: '#666', fontSize: 11, textTransform: 'uppercase' }}>Rights & ownership</p><p style={{ margin: '4px 0 0', color: '#444', fontSize: 10 }}>Master and publishing splits remain separate.</p></div>{project.artist && <button onClick={() => setRightsOpen(open => !open)} style={{ background: 'none', border: 0, color: '#C9A84C', cursor: 'pointer' }}>{rightsOpen ? 'Cancel' : '+ Propose split'}</button>}</div>
+          {rightsOpen && <div style={{ padding: 12, border: '1px solid rgba(201,168,76,.2)', borderRadius: 10, marginBottom: 10 }}><div style={{ display: 'flex', gap: 8 }}><select value={rightsType} onChange={event => setRightsType(event.target.value as any)} style={{ flex: 1, background: '#101010', color: '#eee', border: '1px solid #242424', borderRadius: 7, padding: 9 }}><option value="MASTER">Master ownership</option><option value="PUBLISHING">Publishing split</option></select><label style={{ color: '#888', fontSize: 11 }}>Artist <input type="number" min={1} max={99} value={artistShare} onChange={event => setArtistShare(Math.max(1, Math.min(99, Number(event.target.value))))} style={{ width: 55, margin: '0 5px', background: '#101010', color: '#eee', border: '1px solid #242424', borderRadius: 7, padding: 8 }}/>% · Producer {100 - artistShare}%</label><button onClick={() => proposeRights.mutate()} style={{ border: 0, borderRadius: 7, background: '#C9A84C', color: '#090909', padding: '0 13px', fontWeight: 700 }}>Send</button></div><p style={{ color: '#555', fontSize: 9 }}>Must equal 100%. OIANO records acceptance; independent legal advice may still be appropriate.</p></div>}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>{project.rights_agreements?.map(agreement => <div key={agreement.id} style={{ padding: 12, border: '1px solid #1e1e1e', borderRadius: 9, background: '#121212' }}><div style={{ display: 'flex', justifyContent: 'space-between' }}><strong style={{ color: '#ddd', fontSize: 12 }}>{agreement.title}</strong><span style={{ color: agreement.status === 'APPROVED' ? '#1D9E75' : agreement.status === 'DISPUTED' ? '#D94A4A' : '#C9A84C', fontSize: 10 }}>{agreement.status}</span></div><div style={{ display: 'flex', gap: 7, marginTop: 8 }}>{agreement.shares.map(share => <span key={share.id} style={{ border: '1px solid #252525', borderRadius: 99, padding: '4px 8px', color: '#777', fontSize: 10 }}>{share.holder_name} · {Number(share.percentage)}%</span>)}</div>{agreement.response_note && <p style={{ margin: '8px 0 0', color: '#777', fontSize: 10 }}>{agreement.response_note}</p>}</div>)}{!project.rights_agreements?.length && <div style={{ padding: 16, border: '1px dashed #222', borderRadius: 9, color: '#444', textAlign: 'center', fontSize: 11 }}>No ownership split proposed.</div>}</div>
+        </div>
+
+        <div style={{ marginBottom: '2rem' }}><ProjectActionPanel project={project}/><ProjectMessageThread projectId={project.id}/></div>
 
         {/* Linked sessions — the whole point: this project's booking history in one place */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>

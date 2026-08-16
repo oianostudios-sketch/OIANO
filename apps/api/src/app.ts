@@ -20,12 +20,19 @@ import { notificationsRouter } from './routes/notifications.routes';
 import { engineersRouter } from './routes/engineers.routes';
 import { cardRouter } from './routes/card.routes';
 import { messagesRouter } from './routes/messages.routes';
+import { projectMessagesRouter } from './routes/project-messages.routes';
 import { artistReviewRouter } from './routes/artist-review.routes';
 import { discoverRouter } from './routes/discover.routes';
 import { statsRouter } from './routes/stats.routes';
 import { pulseRouter } from './routes/pulse.routes';
+import { universalPaymentsRouter } from './payments/routes';
 import { producerRouter } from './routes/producer.routes';
 import { connectRouter } from './routes/connect.routes';
+import { artistProjectsRouter } from './routes/artist-projects.routes';
+import { artistActivityRouter } from './routes/artist-activity.routes';
+import { maintenanceRouter } from './routes/maintenance.routes';
+import { networkExchangeRouter } from './routes/network-exchange.routes';
+import { studioCircleRouter } from './routes/studio-circle.routes';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env'), override: true });
 
@@ -83,6 +90,8 @@ app.use('/uploads', (_req, res, next) => {
 
 // Raw body for Stripe — must be before express.json()
 app.use('/api/webhooks', express.raw({ type: 'application/json' }));
+// Provider-neutral callbacks also require exact bytes for signature verification.
+app.use('/api/payments/webhooks', express.raw({ type: 'application/json', limit: '1mb' }));
 app.use(express.json());
 
 app.get('/health', (_req, res) => {
@@ -92,12 +101,17 @@ app.get('/health', (_req, res) => {
 app.use('/api/auth',                     authRouter);
 app.use('/api/passport',                 passportRouter);
 app.use('/api/passport/stats',           statsRouter);
-app.use('/api/studio',                   studioRouter);
 app.use('/api/studio/pulse',             pulseRouter);
+app.use('/api/studio',                   studioRouter);
 app.use('/api/availability',             availabilityRouter);
 app.use('/api/bookings',                 bookingsRouter);
 app.use('/api/bookings/:id/messages',    messagesRouter);
+app.use('/api/projects/:id/messages',    projectMessagesRouter);
 app.use('/api/bookings/:id/artist-review', artistReviewRouter);
+// Canonical provider-neutral payments API. Keep this before the legacy router so
+// /checkout, list and detail resolve here while existing /stripe and /wallet
+// endpoints continue to fall through unchanged.
+app.use('/api/payments',                 universalPaymentsRouter);
 app.use('/api/payments',                 paymentsRouter);
 app.use('/api/admin',                    creditRequestRouter);
 app.use('/api/admin',                    adminRouter);
@@ -107,10 +121,15 @@ app.use('/api/artists',                  filesRouter);
 app.use('/api/webhooks',                 webhooksRouter);
 app.use('/api/studio-clock',             studioClockRouter);
 app.use('/api/notifications',            notificationsRouter);
+app.use('/api/network-exchange',          networkExchangeRouter);
+app.use('/api/studio-circle',             studioCircleRouter);
 app.use('/api/engineers',                engineersRouter);
 app.use('/api/bookings',                 cardRouter);
 app.use('/api/producer',                 producerRouter);
 app.use('/api/connect',                  connectRouter);
+app.use('/api/artist-projects',          artistProjectsRouter);
+app.use('/api/artist-activity',          artistActivityRouter);
+app.use('/api/maintenance',              maintenanceRouter);
 
 app.use(errorHandler);
 

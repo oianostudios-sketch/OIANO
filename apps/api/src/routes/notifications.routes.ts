@@ -1,8 +1,9 @@
 // apps/api/src/routes/notifications.routes.ts
 // Server-Sent Events for real-time booking status updates
 import { Router, Request, Response } from 'express';
-import jwt from 'jsonwebtoken';
 import type { Prisma } from '@prisma/client';
+import { authenticate } from '../middleware/auth.middleware';
+import { issueNotificationStreamTicket, verifyNotificationStreamTicket } from '../lib/notificationStreamTicket';
 
 export const notificationsRouter = Router();
 
@@ -37,19 +38,25 @@ export function broadcastAll(event: Record<string, unknown>) {
   }
 }
 
-// GET /api/notifications/stream?token=<jwt>
-// SSE can't set custom headers in the browser, so token comes via query param
+// Exchange the normal Authorization header for a short-lived, purpose-bound
+// ticket. EventSource cannot send custom headers, so only this limited ticket
+// appears in the stream URL rather than the user's long-lived access token.
+notificationsRouter.post('/stream-ticket', authenticate, (req: any, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ ticket: issueNotificationStreamTicket(req.userId), expiresInSeconds: 60 });
+});
+
+// GET /api/notifications/stream?ticket=<short-lived-ticket>
 notificationsRouter.get('/stream', (req: Request, res: Response) => {
-  const token = req.query.token as string | undefined;
-  if (!token) {
-    res.status(401).json({ error: 'Missing token' });
+  const ticket = req.query.ticket as string | undefined;
+  if (!ticket) {
+    res.status(401).json({ error: 'Missing stream ticket' });
     return;
   }
 
   let userId: string;
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET!) as { sub: string };
-    userId = payload.sub;
+    userId = verifyNotificationStreamTicket(ticket);
   } catch {
     res.status(401).json({ error: 'Invalid token' });
     return;
@@ -85,7 +92,6 @@ notificationsRouter.get('/stream', (req: Request, res: Response) => {
   });
 });
 
-import { authenticate } from '../middleware/auth.middleware';
 import { prisma } from '../lib/prisma';
 
 // ── GET /api/notifications — last 40 notifications for the caller ─────────────
@@ -111,6 +117,22 @@ notificationsRouter.patch('/read', authenticate, async (req: any, res, next) => 
   } catch (err) { next(err); }
 });
 
+notificationsRouter.patch('/:id/read', authenticate, async (req:any,res,next)=>{
+  try{
+    const result=await prisma.notification.updateMany({where:{id:req.params.id,user_id:req.userId},data:{read_at:new Date()}});
+    if(!result.count)return res.status(404).json({error:'NOTIFICATION_NOT_FOUND'});
+    res.json({success:true});
+  }catch(err){next(err)}
+});
+
+notificationsRouter.delete('/:id', authenticate, async (req:any,res,next)=>{
+  try{
+    const result=await prisma.notification.deleteMany({where:{id:req.params.id,user_id:req.userId}});
+    if(!result.count)return res.status(404).json({error:'NOTIFICATION_NOT_FOUND'});
+    res.json({success:true});
+  }catch(err){next(err)}
+});
+
 // ── helper: persist + broadcast ───────────────────────────────────────────────
 export async function createNotification(params: {
   user_id: string;
@@ -118,6 +140,9 @@ export async function createNotification(params: {
   title:   string;
   body:    string;
   payload?: Record<string, unknown>;
+  priority?: 'LOW'|'NORMAL'|'HIGH'|'CRITICAL';
+  action_url?: string;
+  category?: 'BOOKING'|'PAYMENT'|'PROJECT'|'MESSAGE'|'SYSTEM'|'NETWORK';
 }) {
   const notif = await prisma.notification.create({
     data: {
@@ -125,7 +150,7 @@ export async function createNotification(params: {
       type:    params.type,
       title:   params.title,
       body:    params.body,
-      payload: (params.payload ?? {}) as Prisma.InputJsonValue,
+      payload: ({ ...(params.payload ?? {}), priority:params.priority??'NORMAL', action_url:params.action_url, category:params.category??'SYSTEM' }) as Prisma.InputJsonValue,
     },
   });
   // Also push over SSE so the bell badge updates live

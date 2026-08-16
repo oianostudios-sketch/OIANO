@@ -34,7 +34,8 @@ export default function OianoUniverse({ intensified = false }: { intensified?: b
     resize();
 
     // ── Stars — generated once ────────────────────────────────────────────
-    const STARS = Array.from({ length: 700 }, () => ({
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const STARS = Array.from({ length: reducedMotion ? 120 : 360 }, () => ({
       x:  Math.random(),
       y:  Math.random() * 0.73,
       r:  0.15 + Math.random() * 1.05,
@@ -52,7 +53,7 @@ export default function OianoUniverse({ intensified = false }: { intensified?: b
     ];
 
     // ── City lights on globe surface ──────────────────────────────────────
-    const CITIES = Array.from({ length: 220 }, () => ({
+    const CITIES = Array.from({ length: reducedMotion ? 70 : 150 }, () => ({
       theta: Math.random() * Math.PI * 2,
       phi:   (Math.random() * 0.55 - 0.08) * Math.PI,
       br:    0.12 + Math.random() * 0.88,
@@ -64,24 +65,25 @@ export default function OianoUniverse({ intensified = false }: { intensified?: b
       x: number; y: number;
       vx: number; vy: number;
       sz: number; life: number;
-      spd: number; maxOp: number;
+      spd: number; maxOp: number; depth: number;
     }
     const particles: P[] = [];
 
     function spawnParticle(w: number, h: number, cx: number, cy: number, R: number, boost: number) {
-      const angle = (Math.random() - 0.5) * Math.PI * 0.88;
+      const angle = (Math.random() - 0.5) * Math.PI * 0.76;
       const r     = R * (0.95 + Math.random() * 0.07);
       const px    = cx + Math.sin(angle) * r;
       const py    = cy - Math.cos(angle) * r;
       if (px < 0 || px > w || py < 0 || py > h) return;
       particles.push({
         x: px, y: py,
-        vx: (Math.random() - 0.5) * 0.10,
-        vy: -(0.04 + Math.random() * 0.16) * boost,
-        sz:     0.25 + Math.random() * 1.55,
+        vx: Math.cos(angle) * (0.025 + Math.random() * 0.055) + (Math.random() - 0.5) * 0.025,
+        vy: -(0.035 + Math.random() * 0.11) * boost,
+        sz:     0.25 + Math.random() * 1.15,
         life:   0,
-        spd:    (0.0012 + Math.random() * 0.0035) * boost,
-        maxOp:  0.10   + Math.random() * 0.72,
+        spd:    (0.0016 + Math.random() * 0.0028) * boost,
+        maxOp:  0.08   + Math.random() * 0.48,
+        depth:  0.35 + Math.random() * 0.65,
       });
     }
 
@@ -250,20 +252,30 @@ export default function OianoUniverse({ intensified = false }: { intensified?: b
       // Layer 4 — hot lens point (sunrise/sunrise-adjacent on the limb)
       const flx = gcx + gR * 0.11;
       const fly = gcy - gR * 0.999;
-      const fl  = gctx.createRadialGradient(flx, fly, 0, flx, fly, 80);
-      fl.addColorStop(0,    `rgba(255,255,245,${(0.78 * pulse).toFixed(3)})`);
-      fl.addColorStop(0.12, `rgba(255,248,190,${(0.55 * pulse).toFixed(3)})`);
-      fl.addColorStop(0.35, `rgba(255,220,120,${(0.22 * pulse).toFixed(3)})`);
+      const coreRadius = Math.max(38, Math.min(64, w * 0.055));
+      const fl  = gctx.createRadialGradient(flx, fly, 0, flx, fly, coreRadius);
+      fl.addColorStop(0,    `rgba(255,255,238,${(0.90 * pulse).toFixed(3)})`);
+      fl.addColorStop(0.10, `rgba(255,239,169,${(0.68 * pulse).toFixed(3)})`);
+      fl.addColorStop(0.34, `rgba(238,179,70,${(0.25 * pulse).toFixed(3)})`);
       fl.addColorStop(1,    'rgba(0,0,0,0)');
       gctx.fillStyle = fl;
-      gctx.fillRect(flx - 80, fly - 80, 160, 160);
+      gctx.fillRect(flx - coreRadius, fly - coreRadius, coreRadius * 2, coreRadius * 2);
+      gctx.beginPath();
+      gctx.arc(flx, fly, 4.2 * pulse, 0, Math.PI * 2);
+      gctx.fillStyle = 'rgba(255,250,218,.92)';
+      gctx.fill();
+      gctx.beginPath();
+      gctx.arc(flx, fly, coreRadius * .48, 0, Math.PI * 2);
+      gctx.strokeStyle = `rgba(218,174,80,${(0.13 * pulse).toFixed(3)})`;
+      gctx.lineWidth = 1;
+      gctx.stroke();
 
       // ── Particles ─────────────────────────────────────────────────────
       // Intensified (input focused) → spawn faster/brighter, the "system is
       // now listening" cue from the wireframe spec.
       const boost = intensifiedRef.current ? 2.1 : 1;
-      const spawnChance = intensifiedRef.current ? 0.82 : 0.48;
-      if (particles.length < 950 && Math.random() < spawnChance) {
+      const spawnChance = reducedMotion ? 0.04 : intensifiedRef.current ? 0.48 : 0.22;
+      if (particles.length < (reducedMotion ? 35 : 320) && Math.random() < spawnChance) {
         spawnParticle(w, h, gcx, gcy, gR, boost);
       }
 
@@ -278,13 +290,18 @@ export default function OianoUniverse({ intensified = false }: { intensified?: b
         else if (p.life < 0.74) op = p.maxOp;
         else                    op = ((1 - p.life) / 0.26) * p.maxOp;
 
-        p.x  += p.vx;
-        p.y  += p.vy;
-        p.vy *= 0.99982;   // very slight deceleration
+        const dx = p.x - flx;
+        const dy = p.y - fly;
+        const distance = Math.max(30, Math.hypot(dx, dy));
+        p.vx += (-dy / distance) * 0.00045 * p.depth;
+        p.vy += (dx / distance) * 0.00045 * p.depth;
+        p.x  += p.vx * p.depth;
+        p.y  += p.vy * p.depth;
+        p.vy *= 0.9997;
 
         // Subtle twinkle
         const tw = 1 + Math.sin(t * (2 + p.sz) + p.x * 0.1) * 0.18;
-        const finalOp = Math.min(1, op * tw);
+        const finalOp = Math.min(0.72, op * tw * p.depth);
 
         // Color: warm gold at horizon → cooler champagne as they rise
         const rise = Math.max(0, Math.min(1, 1 - p.y / h));
@@ -298,7 +315,7 @@ export default function OianoUniverse({ intensified = false }: { intensified?: b
         gctx.fill();
 
         // Glow for larger particles
-        if (p.sz > 1.0 && finalOp > 0.08) {
+        if (p.sz > .9 && finalOp > 0.08) {
           const pg2 = gctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.sz * 4.5);
           pg2.addColorStop(0,  `rgba(255,218,110,${(finalOp * 0.32).toFixed(3)})`);
           pg2.addColorStop(1,  'rgba(0,0,0,0)');

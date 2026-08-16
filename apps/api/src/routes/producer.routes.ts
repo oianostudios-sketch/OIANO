@@ -10,9 +10,12 @@ import { isR2Configured, uploadToR2, deleteFromR2 } from '../lib/r2';
 import { getImageUpload } from '../lib/imageUpload';
 import { getAudioUpload } from '../lib/audioUpload';
 import { generatePassportCode } from '../lib/passport';
+import { auditSuccessfulMutation } from '../lib/adminAudit';
+import { ownershipSharesAreValid } from '../lib/resourceAuthorization';
 
 export const producerRouter = Router();
 producerRouter.use(authenticate);
+producerRouter.use(auditSuccessfulMutation);
 
 const db = prisma as any; // cast until prisma generate runs with new schema
 
@@ -160,13 +163,156 @@ producerRouter.get('/projects', requireRole('PRODUCER'), async (req: any, res, n
       include: {
         artist: { select: { id: true, name: true, alias: true, avatar_url: true } },
         bookings: {
-          include: { room: true, service: true },
+          include: { room: true, service: true, deliverables: { select: { id: true, title: true, status: true, current_version: true } } },
           orderBy: { starts_at: 'desc' },
         },
+        participants: { where: { status: 'ACTIVE' }, orderBy: { created_at: 'asc' } },
+        credits: { orderBy: { created_at: 'asc' } },
+        promotional_consents: { orderBy: { created_at: 'desc' } },
+        rights_agreements: { include: { shares: { orderBy: { percentage: 'desc' } } }, orderBy: { created_at: 'desc' } },
       },
       orderBy: { updated_at: 'desc' },
     });
     res.json(projects);
+  } catch (err) { next(err); }
+});
+
+const ParticipantSchema = z.object({
+  display_name: z.string().trim().min(1).max(120),
+  email: z.string().trim().email().max(254).optional().or(z.literal('')),
+  role: z.enum(['FEATURED_ARTIST', 'PRODUCER', 'ENGINEER', 'SONGWRITER', 'COMPOSER', 'MIX_ENGINEER', 'MASTERING_ENGINEER', 'MANAGER', 'OTHER']),
+});
+
+producerRouter.post('/projects/:id/participants', requireRole('PRODUCER'), async (req: any, res, next) => {
+  try {
+    const data = ParticipantSchema.parse(req.body);
+    const producer = await db.producer.findUnique({ where: { user_id: req.userId } });
+    if (!producer) throw new AppError('Producer not found', 404);
+    const project = await db.project.findFirst({ where: { id: req.params.id, producer_id: producer.id, is_active: true } });
+    if (!project) throw new AppError('Project not found', 404);
+
+    const duplicate = await db.projectParticipant.findFirst({
+      where: {
+        project_id: project.id,
+        display_name: { equals: data.display_name, mode: 'insensitive' },
+        role: data.role,
+        status: 'ACTIVE',
+      },
+    });
+    if (duplicate) throw new AppError('This participant already has that role', 409);
+
+    const participant = await db.projectParticipant.create({
+      data: {
+        project_id: project.id,
+        display_name: data.display_name,
+        email: data.email || null,
+        role: data.role,
+        added_by: req.userId,
+      },
+    });
+    res.status(201).json(participant);
+  } catch (err) { next(err); }
+});
+
+producerRouter.delete('/projects/:id/participants/:participantId', requireRole('PRODUCER'), async (req: any, res, next) => {
+  try {
+    const producer = await db.producer.findUnique({ where: { user_id: req.userId } });
+    if (!producer) throw new AppError('Producer not found', 404);
+    const participant = await db.projectParticipant.findFirst({
+      where: { id: req.params.participantId, project_id: req.params.id, project: { producer_id: producer.id } },
+    });
+    if (!participant) throw new AppError('Project participant not found', 404);
+    await db.projectParticipant.update({ where: { id: participant.id }, data: { status: 'REMOVED' } });
+    res.json({ success: true });
+  } catch (err) { next(err); }
+});
+
+const CreditSchema = z.object({
+  credited_name: z.string().trim().min(1).max(120),
+  role: z.enum(['PRIMARY_ARTIST', 'FEATURED_ARTIST', 'PRODUCER', 'CO_PRODUCER', 'SONGWRITER', 'COMPOSER', 'ENGINEER', 'RECORDING_ENGINEER', 'MIX_ENGINEER', 'MASTERING_ENGINEER', 'MUSICIAN', 'VOCALS', 'OTHER']),
+  scope: z.string().trim().max(500).optional(),
+  participant_id: z.string().uuid().optional(),
+});
+
+producerRouter.post('/projects/:id/credits', requireRole('PRODUCER'), async (req: any, res, next) => {
+  try {
+    const data = CreditSchema.parse(req.body);
+    const producer = await db.producer.findUnique({ where: { user_id: req.userId } });
+    if (!producer) throw new AppError('Producer not found', 404);
+    const project = await db.project.findFirst({ where: { id: req.params.id, producer_id: producer.id, is_active: true } });
+    if (!project) throw new AppError('Project not found', 404);
+    if (data.participant_id) {
+      const participant = await db.projectParticipant.findFirst({ where: { id: data.participant_id, project_id: project.id, status: 'ACTIVE' } });
+      if (!participant) throw new AppError('Project participant not found', 404);
+    }
+    const duplicate = await db.projectCredit.findFirst({ where: { project_id: project.id, credited_name: { equals: data.credited_name, mode: 'insensitive' }, role: data.role } });
+    if (duplicate) throw new AppError('This credit is already listed', 409);
+    const credit = await db.projectCredit.create({ data: { ...data, scope: data.scope || null, participant_id: data.participant_id || null, project_id: project.id, added_by: req.userId } });
+    res.status(201).json(credit);
+  } catch (err) { next(err); }
+});
+
+producerRouter.patch('/projects/:id/credits/:creditId', requireRole('PRODUCER'), async (req: any, res, next) => {
+  try {
+    const data = z.object({ status: z.enum(['DRAFT', 'CONFIRMED', 'DISPUTED']) }).parse(req.body);
+    const producer = await db.producer.findUnique({ where: { user_id: req.userId } });
+    if (!producer) throw new AppError('Producer not found', 404);
+    const credit = await db.projectCredit.findFirst({ where: { id: req.params.creditId, project_id: req.params.id, project: { producer_id: producer.id } } });
+    if (!credit) throw new AppError('Project credit not found', 404);
+    res.json(await db.projectCredit.update({ where: { id: credit.id }, data }));
+  } catch (err) { next(err); }
+});
+
+producerRouter.delete('/projects/:id/credits/:creditId', requireRole('PRODUCER'), async (req: any, res, next) => {
+  try {
+    const producer = await db.producer.findUnique({ where: { user_id: req.userId } });
+    if (!producer) throw new AppError('Producer not found', 404);
+    const credit = await db.projectCredit.findFirst({ where: { id: req.params.creditId, project_id: req.params.id, project: { producer_id: producer.id } } });
+    if (!credit) throw new AppError('Project credit not found', 404);
+    await db.projectCredit.delete({ where: { id: credit.id } });
+    res.json({ success: true });
+  } catch (err) { next(err); }
+});
+
+producerRouter.post('/projects/:id/promotional-consents', requireRole('PRODUCER'), async (req: any, res, next) => {
+  try {
+    const requestData = { ...req.body, channels: Array.isArray(req.body?.channels) ? req.body.channels.map((channel: unknown) => String(channel).toUpperCase().replace(/\s+/g, '_')) : req.body?.channels };
+    const data = z.object({
+      subject: z.string().trim().min(1).max(160),
+      purpose: z.string().trim().min(1).max(500),
+      channels: z.array(z.enum(['INSTAGRAM', 'TIKTOK', 'YOUTUBE', 'WEBSITE', 'PRESS', 'PAID_ADS', 'EMAIL'])).min(1),
+      assets: z.array(z.enum(['NAME', 'IMAGE', 'VIDEO', 'AUDIO', 'PROJECT_TITLE', 'QUOTE'])).min(1),
+      expires_at: z.string().datetime().optional(),
+    }).parse(requestData);
+    const producer = await db.producer.findUnique({ where: { user_id: req.userId } });
+    if (!producer) throw new AppError('Producer not found', 404);
+    const project = await db.project.findFirst({ where: { id: req.params.id, producer_id: producer.id, artist_id: { not: null } }, include: { artist: true } });
+    if (!project) throw new AppError('Project with an artist not found', 404);
+    const consent = await db.promotionalConsent.create({ data: { ...data, expires_at: data.expires_at ? new Date(data.expires_at) : null, project_id: project.id, requested_by: req.userId } });
+    await db.notification.create({ data: { user_id: project.artist!.user_id, type: 'PROMOTIONAL_CONSENT_REQUESTED', title: 'Promotion permission requested', body: `${producer.alias ?? producer.name} requested permission for ${project.title}.`, payload: { project_id: project.id, consent_id: consent.id } } });
+    res.status(201).json(consent);
+  } catch (err) { next(err); }
+});
+
+producerRouter.post('/projects/:id/rights-agreements', requireRole('PRODUCER'), async (req: any, res, next) => {
+  try {
+    const data = z.object({
+      agreement_type: z.enum(['MASTER', 'PUBLISHING']),
+      title: z.string().trim().min(1).max(200),
+      terms_note: z.string().trim().max(2000).optional(),
+      shares: z.array(z.object({ holder_name: z.string().trim().min(1).max(120), holder_type: z.enum(['ARTIST','PRODUCER','PARTICIPANT','COMPANY']), holder_ref_id: z.string().optional(), role: z.string().trim().min(1).max(80), percentage: z.number().positive().max(100) })).min(2).max(20),
+    }).superRefine((value, ctx) => {
+      if (!ownershipSharesAreValid(value.shares)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Ownership must have unique holders and total exactly 100%', path: ['shares'] });
+    }).parse(req.body);
+    const producer = await db.producer.findUnique({ where: { user_id: req.userId } });
+    if (!producer) throw new AppError('Producer not found', 404);
+    const project = await db.project.findFirst({ where: { id: req.params.id, producer_id: producer.id, artist_id: { not: null } }, include: { artist: true } });
+    if (!project) throw new AppError('Project with an artist not found', 404);
+    const existing = await db.rightsAgreement.findFirst({ where: { project_id: project.id, agreement_type: data.agreement_type, status: { in: ['PROPOSED','APPROVED'] } } });
+    if (existing) throw new AppError(`An active ${data.agreement_type.toLowerCase()} agreement already exists`, 409);
+    const agreement = await db.rightsAgreement.create({ data: { project_id: project.id, agreement_type: data.agreement_type, title: data.title, terms_note: data.terms_note, created_by: req.userId, shares: { create: data.shares } }, include: { shares: true } });
+    await db.notification.create({ data: { user_id: project.artist!.user_id, type: 'RIGHTS_PROPOSAL', title: `${data.agreement_type === 'MASTER' ? 'Master' : 'Publishing'} split proposed`, body: `Review the ownership proposal for ${project.title}.`, payload: { project_id: project.id, agreement_id: agreement.id } } });
+    res.status(201).json(agreement);
   } catch (err) { next(err); }
 });
 

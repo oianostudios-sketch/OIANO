@@ -4,16 +4,26 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
 import { useToast } from '../components/Toast';
+import TrustSignal from '../components/TrustSignal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Step = 'engineer' | 'service' | 'room' | 'datetime' | 'confirm';
-const STEPS: Step[] = ['engineer', 'service', 'room', 'datetime', 'confirm'];
+type Step = 'studio' | 'engineer' | 'service' | 'room' | 'datetime' | 'confirm';
+const ALL_STEPS: Step[] = ['studio', 'service', 'room', 'datetime', 'confirm'];
 const STEP_LABELS: Record<Step, string> = {
-  engineer: 'Engineer',
-  service:  'Service',
+  studio: 'Studio',
+  engineer: 'Producer assignment',
+  service:  'Session type',
   room:     'Room',
-  datetime: 'When',
-  confirm:  'Confirm',
+  datetime: 'Date & time',
+  confirm:  'Review',
+};
+
+const STEP_CTA: Record<Exclude<Step, 'confirm'>, string> = {
+  studio: 'Choose this studio',
+  engineer: 'Continue to session type',
+  service: 'Continue to rooms',
+  room: 'Continue to dates',
+  datetime: 'Review session request',
 };
 
 // ─── Time helpers ─────────────────────────────────────────────────────────────
@@ -81,7 +91,7 @@ export default function BookingPage() {
 
   // Rebook prefill from BookingDetailPage
   const prefill = (location.state as any)?.prefill as {
-    service_id?: string; room_id?: string; engineer_id?: string;
+    studio_id?: string; service_id?: string; room_id?: string; engineer_id?: string; project_id?: string;
   } | undefined;
 
   // Calendar click prefill — ?date=YYYY-MM-DD&time=HH:00&room_id=...
@@ -89,11 +99,12 @@ export default function BookingPage() {
   const calDate   = searchParams.get('date')    ?? '';
   const calTime   = searchParams.get('time')    ?? '';
   const calRoomId = searchParams.get('room_id') ?? '';
+  const calStudioId = searchParams.get('studio') ?? '';
 
-  const hasCalPrefill = !!(calDate || calRoomId);
   const [step, setStep] = useState<Step>(
-    prefill ? 'datetime' : hasCalPrefill ? 'datetime' : 'engineer'
+    prefill ? 'datetime' : (calDate || calRoomId) ? 'datetime' : calStudioId ? 'service' : 'studio'
   );
+  const [selectedStudioId, setSelectedStudioId] = useState(prefill?.studio_id ?? calStudioId);
   const [repeatEnabled, setRepeatEnabled] = useState(false);
   const [repeatWeeks, setRepeatWeeks] = useState(4);
   const [selected, setSelected] = useState({
@@ -104,29 +115,40 @@ export default function BookingPage() {
     start_time:  calTime,
     end_time:    calTime ? `${String(parseInt(calTime)+2).padStart(2,'0')}:00` : '',
     intent:      '', // session goal / label — stored in notes
-    project_id:  '',  // optional — links booking to a producer project
+    project_id:  prefill?.project_id ?? '',
   });
 
   // ── Queries ────────────────────────────────────────────────────────────────
-  // Producer projects — only fetched when user has PRODUCER role
-  const { data: producerProjects = [] } = useQuery({
-    queryKey: ['producer', 'projects'],
-    queryFn: async () => (await api.get('/producer/projects')).data,
-    enabled: user?.role === 'PRODUCER',
+  const { data: studioOptions = [], isLoading: loadingStudioOptions, isError: studioOptionsError, refetch: refetchStudioOptions } = useQuery({
+    queryKey: ['studio-options'],
+    queryFn: async () => (await api.get('/studio/options')).data,
   });
-  const { data: studio, isLoading: loadingStudio } = useQuery({
-    queryKey: ['studio'],
-    queryFn: async () => (await api.get('/studio')).data,
+  const effectiveStudioId = selectedStudioId;
+  const visibleSteps = ALL_STEPS;
+  const visibleStepNumber = (target: Step) => visibleSteps.indexOf(target) + 1;
+  const { data: studio, isLoading: loadingStudioDetails, isError: studioDetailsError, refetch: refetchStudio } = useQuery({
+    queryKey: ['studio', effectiveStudioId],
+    queryFn: async () => (await api.get(`/studio/${effectiveStudioId}`)).data,
+    enabled: !!effectiveStudioId,
   });
+  const loadingStudio = loadingStudioOptions || (!!effectiveStudioId && loadingStudioDetails);
+  const studioError = studioOptionsError || studioDetailsError;
 
-  const { data: availData, isFetching: loadingAvail } = useQuery({
-    queryKey: ['availability', selected.date, selected.room_id],
+  const { data: availData, isFetching: loadingAvail, isError: availabilityError, refetch: refetchAvailability } = useQuery({
+    queryKey: ['availability', effectiveStudioId, selected.date, selected.room_id],
     queryFn: async () =>
-      (await api.get(`/availability?date=${selected.date}&room_id=${selected.room_id}`)).data,
-    enabled: !!(selected.date && selected.room_id),
+      (await api.get(`/availability?date=${selected.date}&room_id=${selected.room_id}&studio_id=${effectiveStudioId}`)).data,
+    enabled: !!(effectiveStudioId && selected.date && selected.room_id),
   });
 
   const bookedSlots: any[] = availData?.bookings ?? [];
+
+  const { data: artistProjects = [] } = useQuery<any[]>({
+    queryKey: ['artist-projects'],
+    queryFn: async () => (await api.get('/artist-projects')).data,
+  });
+  const activeProjects = artistProjects.filter((project: any) => project.is_active && project.phase !== 'DELIVERED');
+  const selectedProject = activeProjects.find((project: any) => project.id === selected.project_id);
 
   // ── Derived ────────────────────────────────────────────────────────────────
   const services  = studio?.services  ?? [];
@@ -135,7 +157,6 @@ export default function BookingPage() {
 
   const selectedService  = services.find((s: any)  => s.id === selected.service_id);
   const selectedRoom     = rooms.find((r: any)      => r.id === selected.room_id);
-  const selectedEngineer = engineers.find((e: any)  => e.id === selected.engineer_id);
 
   const hours    = calcHours(selected.start_time, selected.end_time);
   const total    = useMemo(() => {
@@ -144,27 +165,46 @@ export default function BookingPage() {
       ? Number(selectedService.min_price_usd) * Math.max(hours, 0)
       : Number(selectedService.min_price_usd);
   }, [selectedService, hours]);
+  const sessionCount = repeatEnabled ? repeatWeeks : 1;
+  const grandTotal = total * sessionCount;
+  const selectionConflicts = useMemo(() => {
+    if (!selected.date || !selected.start_time || !selected.end_time) return false;
+    const start = new Date(toLocalISO(selected.date, selected.start_time)).getTime();
+    const end = new Date(toLocalISO(selected.date, selected.end_time)).getTime();
+    return bookedSlots.some((booking: any) =>
+      new Date(booking.starts_at).getTime() < end && new Date(booking.ends_at).getTime() > start,
+    );
+  }, [bookedSlots, selected.date, selected.start_time, selected.end_time]);
 
   // Live wallet balance — auth store is stale after transactions
-  const { data: meData, isLoading: loadingMe } = useQuery({
+  const { data: meData, isLoading: loadingMe, isError: walletError, refetch: refetchWallet } = useQuery({
     queryKey: ['me'],
     queryFn: async () => (await api.get('/auth/me')).data,
     staleTime: 30_000,
   });
   // Prefer live meData; fall back to auth store while loading
   const walletBalance = Number(meData?.artist?.wallet?.balance_usd ?? user?.artist?.wallet?.balance_usd ?? 0);
-  const afterBalance  = walletBalance - total;
-  const canAfford     = walletBalance >= total;
+  const afterBalance  = walletBalance - grandTotal;
+  const canAfford     = !walletError && walletBalance >= grandTotal;
 
   const [walletGateDismissed, setWalletGateDismissed] = useState(false);
-  const stepIndex = STEPS.indexOf(step);
+  const stepIndex = visibleSteps.indexOf(step);
+  const progressPercent = Math.round(((stepIndex + 1) / visibleSteps.length) * 100);
+  const selectionSummary = [
+    studio?.name && { label: 'Studio', value: studio.name },
+    stepIndex > 0 && { label: 'Producer', value: 'Assigned by studio' },
+    selectedService?.name && { label: 'Session', value: selectedService.name },
+    selectedRoom?.name && { label: 'Room', value: selectedRoom.name },
+    selectedProject?.title && { label: 'Project', value: selectedProject.title },
+    selected.date && { label: 'Date', value: new Date(`${selected.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) },
+  ].filter(Boolean) as { label: string; value: string }[];
 
   // ── Validation ─────────────────────────────────────────────────────────────
   function canProceed(): boolean {
-    if (step === 'engineer') return true; // optional
+    if (step === 'studio') return !!effectiveStudioId;
     if (step === 'service')  return !!selected.service_id;
     if (step === 'room')     return !!selected.room_id;
-    if (step === 'datetime') return !!selected.date && !!selected.start_time && !!selected.end_time && hours > 0;
+    if (step === 'datetime') return !!selected.date && !!selected.start_time && !!selected.end_time && hours > 0 && !availabilityError && !selectionConflicts;
     return canAfford;
   }
 
@@ -197,14 +237,14 @@ export default function BookingPage() {
       const ends_at   = toLocalISO(selected.date, selected.end_time);
       const notes = selected.intent || undefined;
       return (await api.post('/bookings', {
+        studio_id:    effectiveStudioId,
         service_id:   selected.service_id,
         room_id:      selected.room_id,
-        engineer_id:  selected.engineer_id || undefined,
         starts_at,
         ends_at,
         notes,
         repeat_weeks: repeatEnabled ? repeatWeeks : 1,
-        project_id:  selected.project_id || undefined,
+        project_id: selected.project_id || undefined,
       })).data;
     },
     onSuccess: (data: any) => {
@@ -227,7 +267,7 @@ export default function BookingPage() {
   // ── UI ─────────────────────────────────────────────────────────────────────
   // ── Wallet gate — intercept zero-balance artists before they waste time ──────
   // Only gate after /me resolves — avoids flash for funded artists during load
-  const showWalletGate = !walletGateDismissed && !loadingMe && walletBalance === 0;
+  const showWalletGate = !walletGateDismissed && !loadingMe && !walletError && !studioError && walletBalance === 0;
 
   if (!loadingStudio && showWalletGate) {
     return (
@@ -250,7 +290,7 @@ export default function BookingPage() {
             Fund your wallet first
           </p>
           <p style={{ fontSize: 13, color: '#555', lineHeight: 1.6, marginBottom: 28 }}>
-            Your OIANO wallet is empty. Add funds before booking — sessions are charged at confirmation.
+            Your OIANO wallet is empty. Credits are deducted when you submit a booking.
           </p>
 
           {/* Balance display */}
@@ -308,12 +348,27 @@ export default function BookingPage() {
     );
   }
 
+  if (studioError) {
+    return (
+      <div className="min-h-screen bg-studio-bg text-white flex items-center justify-center p-6">
+        <div role="alert" className="w-full max-w-md rounded-xl border border-red-900/40 bg-red-950/20 p-6 text-center">
+          <h1 className="font-display text-2xl text-white mb-2">Studio details unavailable</h1>
+          <p className="text-zinc-400 text-sm mb-5">We couldn't load rooms, services, or engineers. No booking information has been lost.</p>
+          <div className="flex justify-center gap-3">
+            <button type="button" onClick={() => { refetchStudioOptions(); refetchStudio(); }} className="rounded-lg bg-dome px-4 py-2 text-sm font-semibold text-black">Try again</button>
+            <button type="button" onClick={() => navigate('/dashboard')} className="rounded-lg border border-studio-border px-4 py-2 text-sm text-zinc-300">Dashboard</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-studio-bg text-white">
       {/* Header */}
       <header className="border-b border-studio-border px-6 py-4 flex items-center gap-4 sticky top-0 bg-studio-bg z-10">
         <Link to="/dashboard" className="text-zinc-500 hover:text-white text-sm transition-colors">← Back</Link>
-        <h1 className="font-display text-xl text-dome font-semibold">Book a Session</h1>
+        <h1 className="font-display text-xl text-dome font-semibold">Plan your studio session</h1>
         <div className="ml-auto flex items-center gap-2">
           <span className="text-zinc-600 text-xs font-mono">Balance</span>
           <span className={`text-sm font-semibold font-mono ${walletBalance < 50 ? 'text-yellow-400' : 'text-white'}`}>
@@ -324,12 +379,39 @@ export default function BookingPage() {
 
       <main className="max-w-2xl mx-auto px-6 py-10">
 
-        {/* Step indicator */}
-        <div className="flex items-center gap-0 mb-10">
-          {STEPS.map((s, i) => (
+        {walletError && (
+          <div role="alert" className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-yellow-900/40 bg-yellow-950/20 px-4 py-3">
+            <p className="text-sm text-yellow-200">Your latest wallet balance could not be verified. Confirming is disabled until it refreshes.</p>
+            <button type="button" onClick={() => refetchWallet()} className="shrink-0 rounded-lg border border-yellow-700/50 px-3 py-1.5 text-xs text-yellow-100">Retry</button>
+          </div>
+        )}
+
+        {studio && step !== 'studio' && (
+          <div className="mb-6 flex items-center justify-between gap-4 overflow-hidden rounded-xl border border-dome/20 bg-dome/5 pr-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <img src={studio.image_url || '/images/mock/oiano-studio-editorial-v1.png'} alt={`${studio.name} interior`} className="h-[66px] w-[92px] shrink-0 object-cover" />
+              <div><p className="text-[10px] font-mono uppercase tracking-widest text-zinc-600">Booking at</p><p className="text-sm font-semibold text-white mt-0.5">{studio.name}</p>{studio.address && <p className="text-xs text-zinc-500 mt-0.5">{studio.address}</p>}</div>
+            </div>
+            {studioOptions.length > 1 && <button type="button" onClick={() => setStep('studio')} className="shrink-0 rounded-lg border border-dome/30 px-3 py-2 text-xs text-dome">Change studio</button>}
+          </div>
+        )}
+
+        {/* Progress: readable on mobile, detailed on larger screens */}
+        <div className="mb-4 flex items-center justify-between text-[10px] font-mono uppercase tracking-[0.16em] text-zinc-600">
+          <span>Step {stepIndex + 1} of {visibleSteps.length}</span>
+          <span className="text-dome">{progressPercent}% complete</span>
+        </div>
+        <div className="mb-7 h-1 overflow-hidden rounded-full bg-studio-muted" aria-hidden="true">
+          <div className="h-full rounded-full bg-dome transition-all duration-500" style={{ width: `${progressPercent}%` }} />
+        </div>
+        <div className="flex items-center gap-0 mb-6" aria-label="Booking progress">
+          {visibleSteps.map((s, i) => (
             <div key={s} className="flex items-center flex-1 last:flex-none">
               <button
+                type="button"
                 onClick={() => i < stepIndex && setStep(s)}
+                aria-current={i === stepIndex ? 'step' : undefined}
+                aria-label={`${STEP_LABELS[s]}${i < stepIndex ? ', completed' : i === stepIndex ? ', current step' : ''}`}
                 className={`flex items-center gap-2 group ${i < stepIndex ? 'cursor-pointer' : 'cursor-default'}`}
               >
                 <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold transition-colors ${
@@ -339,27 +421,58 @@ export default function BookingPage() {
                 }`}>
                   {i < stepIndex ? '✓' : i + 1}
                 </div>
-                <span className={`text-xs transition-colors ${i <= stepIndex ? 'text-white' : 'text-zinc-600'}`}>
+                <span className={`hidden text-xs transition-colors sm:inline ${i <= stepIndex ? 'text-white' : 'text-zinc-600'}`}>
                   {STEP_LABELS[s]}
                 </span>
               </button>
-              {i < STEPS.length - 1 && (
+              {i < visibleSteps.length - 1 && (
                 <div className={`flex-1 h-px mx-3 transition-colors ${i < stepIndex ? 'bg-dome/40' : 'bg-studio-border'}`} />
               )}
             </div>
           ))}
         </div>
 
+        {selectionSummary.length > 0 && step !== 'studio' && (
+          <div className="mb-6 flex gap-2 overflow-x-auto pb-1" aria-label="Current booking selections">
+            {selectionSummary.map((item) => (
+              <div key={item.label} className="shrink-0 rounded-full border border-studio-border bg-studio-surface px-3 py-2">
+                <span className="mr-1.5 text-[9px] font-mono uppercase tracking-wider text-zinc-600">{item.label}</span>
+                <span className="text-xs text-zinc-300">{item.value}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Step content card */}
         <div className="bg-studio-surface border border-studio-border rounded-2xl overflow-hidden">
+
+          {step === 'studio' && (
+            <div className="p-6">
+              <p className="text-zinc-500 text-xs font-mono uppercase tracking-widest mb-1">Step {visibleStepNumber('studio')} of {visibleSteps.length}</p>
+              <h2 className="font-display text-2xl text-white mb-1">Choose your studio</h2>
+              <p className="text-zinc-500 text-sm mb-6">Your studio determines the available engineers, services, rooms, pricing and schedule.</p>
+              <div className="space-y-3">
+                {studioOptions.map((option: any) => (
+                  <button key={option.id} type="button" aria-pressed={effectiveStudioId === option.id} onClick={() => { setSelectedStudioId(option.id); setSelected((current) => ({ ...current, service_id: '', room_id: '', engineer_id: '', date: '', start_time: '', end_time: '' })); }} className={`group w-full overflow-hidden text-left rounded-xl border transition-all ${effectiveStudioId === option.id ? 'border-dome bg-dome/8 ring-1 ring-dome/20' : 'border-studio-border bg-studio-muted hover:border-zinc-600'}`}>
+                    <img src={option.image_url} alt={`${option.name} interior`} className="h-36 w-full object-cover transition-transform duration-700 group-hover:scale-[1.025]" />
+                    <div className="px-5 py-5">
+                    <div className="flex justify-between gap-4"><div><p className="text-base font-semibold text-white">{option.name}</p>{option.address && <p className="text-zinc-500 text-xs mt-1">{option.address}</p>}</div>{effectiveStudioId === option.id && <span className="text-dome text-xs">✓ Selected</span>}</div>
+                    <div className="flex flex-wrap gap-4 mt-3 text-[10px] font-mono text-zinc-600"><span>{option._count.rooms} rooms</span><span>{option._count.engineers} engineers</span><span>{option._count.services} services</span><span className="ml-auto text-dome opacity-70 transition-opacity group-hover:opacity-100">View availability →</span></div>
+                    <div className="mt-3 flex flex-wrap gap-1.5">{option.amenities?.map((amenity: string) => <span key={amenity} className="rounded-full border border-white/10 px-2 py-1 text-[9px] text-zinc-500">{amenity}</span>)}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* ── Step 1: Service ─────────────────────────────────────────── */}
           {/* ── Step 1: Engineer ────────────────────────────────────────── */}
           {step === 'engineer' && (
             <div className="p-6">
-              <p className="text-zinc-500 text-xs font-mono uppercase tracking-widest mb-1">Step 1</p>
-              <h2 className="font-display text-2xl text-white mb-1">Who's behind the desk?</h2>
-              <p className="text-zinc-500 text-sm mb-6">Pick your engineer first — or skip and we'll assign one for you.</p>
+              <p className="text-zinc-500 text-xs font-mono uppercase tracking-widest mb-1">Step {visibleStepNumber('engineer')} of {visibleSteps.length}</p>
+              <h2 className="font-display text-2xl text-white mb-1">Choose your engineer</h2>
+              <p className="text-zinc-500 text-sm mb-6">Choose the right creative partner, or let the studio match one to your session.</p>
 
               <div className="space-y-2 mb-4">
                 {/* No preference option */}
@@ -371,8 +484,7 @@ export default function BookingPage() {
                       : 'border-studio-border bg-studio-muted hover:border-zinc-600'
                   }`}
                 >
-                  <p className="text-sm font-semibold text-white">No preference</p>
-                  <p className="text-zinc-500 text-xs mt-0.5">Studio will assign the best available engineer</p>
+                  <div className="flex items-center gap-3"><div className="grid h-12 w-12 shrink-0 place-items-center rounded-full border border-dome/20 bg-dome/10 text-lg text-dome">◎</div><div><p className="text-sm font-semibold text-white">Match me with an engineer</p><p className="text-zinc-500 text-xs mt-0.5">The studio will choose the strongest available fit</p><span className="mt-1.5 inline-block text-[9px] font-mono uppercase tracking-wider text-dome">Recommended if you are flexible</span></div></div>
                 </button>
 
                 {engineers.map((e: any) => {
@@ -391,7 +503,9 @@ export default function BookingPage() {
                       }`}
                     >
                       <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 min-w-0">
+                        <div className="flex min-w-0 flex-1 gap-3">
+                          <img src={e.avatar_url} alt={`${e.name}, recording engineer`} className="h-16 w-16 shrink-0 rounded-xl object-cover object-top" />
+                          <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <p className="text-sm font-semibold text-white">{e.name}</p>
                             {avgRating && (
@@ -406,6 +520,7 @@ export default function BookingPage() {
                               ))}
                             </div>
                           )}
+                          </div>
                         </div>
                         <div className="text-right flex-shrink-0">
                           {e.hourly_rate_usd && (
@@ -428,8 +543,9 @@ export default function BookingPage() {
 
           {step === 'service' && (
             <div className="p-6">
-              <p className="text-zinc-500 text-xs font-mono uppercase tracking-widest mb-1">Step 1</p>
-              <h2 className="font-display text-2xl text-white mb-6">What do you need?</h2>
+              <p className="text-zinc-500 text-xs font-mono uppercase tracking-widest mb-1">Step {visibleStepNumber('service')} of {visibleSteps.length}</p>
+              <h2 className="font-display text-2xl text-white mb-2">What are you creating?</h2>
+              <p className="mb-6 text-sm text-zinc-500">Choose the session type that best matches the result you want.</p>
               <div className="grid grid-cols-1 gap-3">
                 {services.map((s: any) => (
                   <button
@@ -465,25 +581,32 @@ export default function BookingPage() {
           {/* ── Step 2: Room + Engineer ──────────────────────────────────── */}
           {step === 'room' && (
             <div className="p-6">
-              <p className="text-zinc-500 text-xs font-mono uppercase tracking-widest mb-1">Step 3</p>
-              <h2 className="font-display text-2xl text-white mb-6">Pick your space</h2>
+              <p className="text-zinc-500 text-xs font-mono uppercase tracking-widest mb-1">Step {visibleStepNumber('room')} of {visibleSteps.length}</p>
+              <h2 className="font-display text-2xl text-white mb-2">Choose where you’ll create</h2>
+              <p className="mb-6 text-sm text-zinc-500">Match the room to the sound and energy you want from this session.</p>
 
-              <div className="space-y-2 mb-8">
+              <div className="grid gap-3 mb-8 sm:grid-cols-2">
                 {rooms.map((r: any) => (
                   <button
                     key={r.id}
                     onClick={() => setSelected((p) => ({ ...p, room_id: r.id }))}
-                    className={`w-full text-left px-5 py-4 rounded-xl border transition-all ${
+                    className={`group w-full overflow-hidden text-left rounded-xl border transition-all ${
                       selected.room_id === r.id
                         ? 'border-dome bg-dome/8 ring-1 ring-dome/20'
                         : 'border-studio-border bg-studio-muted hover:border-zinc-600'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <div>
+                    <div className="relative h-32 overflow-hidden">
+                      <img src={r.image_url || '/images/mock/oiano-live-room-v1.png'} alt={`${r.name} interior`} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.025]" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
+                      <span className="absolute bottom-3 left-4 rounded-full border border-white/15 bg-black/45 px-2.5 py-1 text-[9px] font-mono uppercase tracking-wider text-zinc-300 backdrop-blur-sm">Live room</span>
+                    </div>
+                    <div className="flex items-center justify-between px-4 py-4">
+                      <div className="min-w-0">
                         <p className="text-sm font-semibold text-white">{r.name}</p>
-                        {r.description && <p className="text-xs text-zinc-500 mt-0.5">{r.description}</p>}
+                        {r.description && <p className="mt-0.5 line-clamp-1 text-xs text-zinc-500">{r.description}</p>}
                         <p className="text-xs text-zinc-600 mt-1">Capacity: {r.capacity}</p>
+                        <div className="mt-2 flex flex-wrap gap-1">{r.amenities?.slice(0, 3).map((amenity: string) => <span key={amenity} className="rounded-full border border-white/10 px-2 py-0.5 text-[9px] text-zinc-500">{amenity}</span>)}</div>
                       </div>
                       <div className="text-right flex-shrink-0 ml-4">
                         <p className="text-dome text-sm font-semibold">${r.hourly_rate}</p>
@@ -499,8 +622,8 @@ export default function BookingPage() {
           {step === 'datetime' && (
             <div className="p-6 space-y-6">
               <div>
-                <p className="text-zinc-500 text-xs font-mono uppercase tracking-widest mb-1">Step 4</p>
-                <h2 className="font-display text-2xl text-white">When?</h2>
+                <p className="text-zinc-500 text-xs font-mono uppercase tracking-widest mb-1">Step {visibleStepNumber('datetime')} of {visibleSteps.length}</p>
+                <h2 className="font-display text-2xl text-white">Choose your date and time</h2>
               </div>
 
               {/* Date picker */}
@@ -545,6 +668,19 @@ export default function BookingPage() {
                     </div>
                   </div>
 
+                  {availabilityError && (
+                    <div role="alert" className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-red-900/40 bg-red-950/20 px-4 py-3">
+                      <span className="text-xs text-red-200">Availability couldn't be loaded. Choose no time until this refreshes.</span>
+                      <button type="button" onClick={() => refetchAvailability()} className="shrink-0 text-xs text-red-100 underline underline-offset-2">Retry</button>
+                    </div>
+                  )}
+
+                  {selectionConflicts && (
+                    <div role="alert" className="mb-4 rounded-lg border border-yellow-800/40 bg-yellow-950/20 px-4 py-3 text-xs text-yellow-100">
+                      Part of this time range is already booked. Choose a different start time or shorter duration.
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-4 gap-1.5 mb-4">
                     {HOUR_SLOTS.map((slot) => {
                       const booked  = isSlotBooked(slot, bookedSlots, selected.date);
@@ -553,7 +689,7 @@ export default function BookingPage() {
                       return (
                         <button
                           key={slot}
-                          disabled={booked}
+                          disabled={booked || availabilityError}
                           onClick={() => handleSlotClick(slot)}
                           className={`py-2.5 text-xs rounded-lg border font-mono transition-colors ${
                             booked
@@ -653,24 +789,25 @@ export default function BookingPage() {
                 </div>
               )}
 
-              {/* Producer project picker — only visible for PRODUCER role */}
-              {user?.role === 'PRODUCER' && producerProjects.length > 0 && (
-                <div>
-                  <label className="text-zinc-500 text-xs mb-1.5 block">Attach to project (optional)</label>
-                  <select
-                    value={selected.project_id}
-                    onChange={(e) => setSelected((p) => ({ ...p, project_id: e.target.value }))}
-                    className="w-full bg-studio-muted border border-studio-border text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-dome transition-colors"
-                  >
-                    <option value="">No project</option>
-                    {(producerProjects as any[]).map((proj: any) => (
-                      <option key={proj.id} value={proj.id}>
-                        {proj.title} · {proj.phase.replace(/_/g, ' ').toLowerCase()}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              {/* Keep the studio session inside the artist's wider body of work. */}
+              <div>
+                <label className="text-zinc-500 text-xs mb-1.5 block">Connect to a project (optional)</label>
+                <select
+                  value={selected.project_id}
+                  onChange={(e) => setSelected((p) => ({ ...p, project_id: e.target.value }))}
+                  className="w-full bg-studio-muted border border-studio-border text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-dome transition-colors"
+                >
+                  <option value="">Standalone studio session</option>
+                  {activeProjects.map((project: any) => (
+                    <option key={project.id} value={project.id}>
+                      {project.title} · {String(project.phase).replaceAll('_', ' ')}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-zinc-600 text-xs mt-2">
+                  Linked sessions stay with the project timeline, collaborators and deliverables.
+                </p>
+              </div>
 
               {/* Session intent */}
               <div>
@@ -732,8 +869,9 @@ export default function BookingPage() {
           {/* ── Step 4: Confirm ──────────────────────────────────────────── */}
           {step === 'confirm' && (
             <div className="p-6">
-              <p className="text-zinc-500 text-xs font-mono uppercase tracking-widest mb-1">Step 4</p>
-              <h2 className="font-display text-2xl text-white mb-6">Review & confirm</h2>
+              <p className="text-zinc-500 text-xs font-mono uppercase tracking-widest mb-1">Step {visibleStepNumber('confirm')} of {visibleSteps.length}</p>
+              <h2 className="font-display text-2xl text-white mb-2">Review your session</h2>
+              <p className="mb-6 text-sm text-zinc-500">Check the details before sending your request to the studio.</p>
 
               {/* Invoice breakdown */}
               <div className="border border-studio-border rounded-xl overflow-hidden mb-5">
@@ -742,9 +880,11 @@ export default function BookingPage() {
                 </div>
                 <div className="divide-y divide-studio-border">
                   {[
+                    { label: 'Studio',   value: studio?.name ?? '—' },
                     { label: 'Service',  value: selectedService?.name ?? '—' },
                     { label: 'Room',     value: selectedRoom?.name ?? '—' },
-                    { label: 'Engineer', value: selectedEngineer?.name ?? 'None' },
+                    { label: 'Producer', value: 'Assigned by Dreamz Music Lab' },
+                    { label: 'Project',  value: selectedProject?.title ?? 'Standalone session' },
                     {
                       label: 'Date',
                       value: new Date(selected.date).toLocaleDateString('en-US', {
@@ -774,7 +914,7 @@ export default function BookingPage() {
                       {repeatEnabled ? `Total (${repeatWeeks} sessions)` : 'Total'}
                     </span>
                     <span className="text-2xl font-display font-semibold text-dome">
-                      ${(total * (repeatEnabled ? repeatWeeks : 1)).toFixed(2)}
+                      ${grandTotal.toFixed(2)}
                     </span>
                   </div>
                 </div>
@@ -789,13 +929,13 @@ export default function BookingPage() {
                 <div className="flex justify-between items-center">
                   <div>
                     <p className={`text-sm font-medium ${canAfford ? 'text-green-400' : 'text-red-400'}`}>
-                      {canAfford ? 'Wallet sufficient' : 'Insufficient balance'}
+                      {canAfford ? 'Studio Credit ready' : 'More Studio Credit needed'}
                     </p>
                     <p className="text-zinc-500 text-xs mt-0.5">
                       ${walletBalance.toFixed(2)} balance
                       {canAfford
                         ? ` → $${afterBalance.toFixed(2)} after booking`
-                        : ` — need $${(total - walletBalance).toFixed(2)} more`}
+                        : ` — need $${(grandTotal - walletBalance).toFixed(2)} more`}
                     </p>
                   </div>
                   <span className={`text-lg ${canAfford ? 'text-green-400' : 'text-red-400'}`}>
@@ -813,9 +953,9 @@ export default function BookingPage() {
               )}
 
               <div className="bg-dome/5 border border-dome/10 rounded-xl px-5 py-3 text-xs text-zinc-500 leading-relaxed">
-                Your booking will be <span className="text-zinc-400">pending</span> until confirmed by the studio team.
-                Wallet is charged only on confirmation.
+                Credits are deducted when you submit this booking. The session remains <span className="text-zinc-400">pending</span> until the studio team confirms the schedule.
               </div>
+              <div className="mt-3"><TrustSignal kind="studio" compact /></div>
 
               {createBooking.isError && (
                 <div className="mt-4 bg-red-900/10 border border-red-900/30 rounded-xl px-5 py-3 text-red-400 text-sm">
@@ -825,19 +965,19 @@ export default function BookingPage() {
 
               <button
                 onClick={() => createBooking.mutate()}
-                disabled={!canAfford || createBooking.isPending}
+                disabled={!canAfford || selectionConflicts || availabilityError || createBooking.isPending}
                 className="w-full mt-6 bg-dome text-black font-semibold py-3.5 rounded-xl hover:bg-dome-light transition-colors disabled:opacity-40 disabled:cursor-not-allowed font-display text-sm tracking-wide"
               >
-                {createBooking.isPending ? 'Booking…' : repeatEnabled ? `Confirm ${repeatWeeks} sessions →` : 'Confirm booking →'}
+                {createBooking.isPending ? 'Securing your session…' : `Request ${repeatEnabled ? `${repeatWeeks} sessions` : 'this session'} · $${grandTotal.toFixed(2)} studio credit →`}
               </button>
             </div>
           )}
         </div>
 
         {/* Navigation */}
-        <div className="flex justify-between mt-6">
+        <div className="sticky bottom-0 z-10 -mx-6 mt-6 flex justify-between border-t border-studio-border bg-studio-bg/95 px-6 py-4 backdrop-blur-xl">
           <button
-            onClick={() => setStep(STEPS[stepIndex - 1])}
+                onClick={() => setStep(visibleSteps[stepIndex - 1])}
             disabled={stepIndex === 0}
             className="px-5 py-2.5 text-sm text-zinc-500 hover:text-white transition-colors disabled:opacity-0"
           >
@@ -845,11 +985,11 @@ export default function BookingPage() {
           </button>
           {step !== 'confirm' && (
             <button
-              onClick={() => setStep(STEPS[stepIndex + 1])}
+              onClick={() => setStep(visibleSteps[stepIndex + 1])}
               disabled={!canProceed()}
               className="px-6 py-2.5 text-sm bg-dome text-black font-semibold rounded-xl hover:bg-dome-light transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              Continue →
+              {STEP_CTA[step as Exclude<Step, 'confirm'>]} →
             </button>
           )}
         </div>

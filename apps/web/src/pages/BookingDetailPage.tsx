@@ -106,6 +106,8 @@ export default function BookingDetailPage() {
   const [dawLinked, setDawLinked] = useState(false);
   const [deliverOpen, setDeliverOpen] = useState(false);
   const [deliverUrls, setDeliverUrls] = useState('');
+  const [deliveryNotes, setDeliveryNotes] = useState('');
+  const [reviewNote, setReviewNote] = useState('');
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [rescheduleStart, setRescheduleStart] = useState('');
@@ -131,13 +133,26 @@ export default function BookingDetailPage() {
   const deliver = useMutation({
     mutationFn: () => api.post(`/bookings/${id}/deliver`, {
       file_urls: deliverUrls.split('\n').map(s => s.trim()).filter(Boolean),
+      notes: deliveryNotes.trim() || undefined,
     }),
     onSuccess: () => {
       toast.success('Files delivered — artist notified');
       setDeliverOpen(false);
+      setDeliveryNotes('');
       qc.invalidateQueries({ queryKey: ['booking', id] });
     },
     onError: (e: any) => toast.error(e?.response?.data?.error ?? 'Delivery failed'),
+  });
+
+  const reviewDeliverable = useMutation({
+    mutationFn: ({ deliverableId, decision }: { deliverableId: string; decision: 'APPROVED' | 'CHANGES_REQUESTED' }) =>
+      api.patch(`/bookings/${id}/deliverables/${deliverableId}/review`, { decision, note: reviewNote || undefined }),
+    onSuccess: (_response, variables) => {
+      toast.success(variables.decision === 'APPROVED' ? 'Deliverable approved' : 'Revision request sent');
+      setReviewNote('');
+      qc.invalidateQueries({ queryKey: ['booking', id] });
+    },
+    onError: (error: any) => toast.error(error?.response?.data?.error ?? 'Review could not be saved'),
   });
 
   const backTo = user?.role === 'STUDIO_ADMIN' ? '/admin' : '/dashboard';
@@ -286,6 +301,17 @@ export default function BookingDetailPage() {
               </span>
               <span className="text-xs text-purple-300">View project →</span>
             </Link>
+          ) : user?.role === 'ARTIST' ? (
+            <Link
+              to="/projects"
+              className="flex items-center justify-between rounded-xl border border-purple-500/20 bg-purple-500/5 px-5 py-3.5 hover:bg-purple-500/10 transition-colors"
+            >
+              <span className="text-sm text-zinc-300">
+                Part of project <span className="text-purple-300 font-medium">{booking.project.title}</span>
+                {booking.project.producer?.name ? <span className="text-zinc-500"> · produced by {booking.project.producer.name}</span> : null}
+              </span>
+              <span className="text-xs text-purple-300">Open projects →</span>
+            </Link>
           ) : (
             <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 px-5 py-3.5">
               <span className="text-sm text-zinc-300">
@@ -305,7 +331,7 @@ export default function BookingDetailPage() {
               { label: 'Time',     value: `${fmtTime(booking.starts_at)} → ${fmtTime(booking.ends_at)} (${fmtDuration(booking.starts_at, booking.ends_at)})` },
               { label: 'Room',     value: booking.room?.name ?? '—' },
               { label: 'Service',  value: booking.service?.name ?? '—' },
-              { label: 'Engineer', value: booking.engineer?.name ?? 'No engineer assigned' },
+              { label: 'Producer', value: booking.engineer?.name ?? 'Assigned by studio' },
             ].map((row) => (
               <div key={row.label} className="flex justify-between text-sm border-b border-studio-border pb-4 last:border-0 last:pb-0">
                 <span className="text-zinc-500">{row.label}</span>
@@ -433,6 +459,7 @@ export default function BookingDetailPage() {
                   rows={4}
                   className="w-full bg-studio-bg border border-studio-border text-white text-xs font-mono placeholder-zinc-700 rounded-lg px-3 py-2.5 focus:outline-none focus:border-dome resize-none"
                 />
+                <textarea value={deliveryNotes} onChange={e => setDeliveryNotes(e.target.value)} placeholder="Version notes for the artist — what changed, what to review" rows={3} className="w-full bg-studio-bg border border-studio-border text-white text-xs placeholder-zinc-700 rounded-lg px-3 py-2.5 focus:outline-none focus:border-dome resize-none" />
                 <button onClick={() => deliver.mutate()} disabled={!deliverUrls.trim() || deliver.isPending}
                   className="w-full bg-dome hover:bg-dome-light text-black font-semibold text-sm py-2.5 rounded-lg transition-colors disabled:opacity-40">
                   {deliver.isPending ? 'Delivering…' : 'Deliver & notify artist →'}
@@ -442,8 +469,23 @@ export default function BookingDetailPage() {
           </div>
         )}
 
-        {/* Artist: view delivered files */}
-        {user?.role === 'ARTIST' && booking?.session_log?.tracks_worked?.length > 0 && (
+        {/* Artist approval workflow with immutable version history. */}
+        {user?.role === 'ARTIST' && booking?.deliverables?.map((deliverable: any) => {
+          const latest = deliverable.versions?.[0];
+          return (
+          <div key={deliverable.id} className="rounded-xl border border-dome/20 bg-dome/5 px-6 py-5 animate-surface">
+            <div className="mb-4 flex items-start justify-between gap-4"><div><p className="label-mono text-dome flex items-center gap-2"><Download size={12} strokeWidth={2} /> {deliverable.title}</p><p className="mt-1 text-[10px] text-zinc-600">Version {deliverable.current_version} · {deliverable.status.replaceAll('_', ' ')}{deliverable.review_due_at && deliverable.status === 'PENDING_REVIEW' ? ` · review by ${new Date(deliverable.review_due_at).toLocaleDateString()}` : ''}</p></div><span className={`rounded-full border px-2.5 py-1 text-[9px] font-mono ${deliverable.status === 'APPROVED' ? 'border-emerald-500/20 text-emerald-400' : deliverable.status === 'CHANGES_REQUESTED' ? 'border-orange-500/20 text-orange-400' : 'border-dome/20 text-dome'}`}>{deliverable.status.replaceAll('_', ' ')}</span></div>
+            <div className="space-y-2">{latest?.file_urls?.map((url: string, index: number) => <a key={url} href={url} target="_blank" rel="noreferrer" download className="flex items-center gap-2 truncate font-mono text-sm text-dome hover:text-dome-light"><Download size={13}/>{url.split('/').pop() ?? `File ${index + 1}`}</a>)}</div>
+            {latest?.notes && <p className="mt-4 rounded-lg border border-white/[.05] bg-black/20 p-3 text-xs leading-5 text-zinc-500">{latest.notes}</p>}
+            {deliverable.status !== 'APPROVED' && <div className="mt-5 border-t border-white/[.06] pt-4"><textarea value={reviewNote} onChange={event => setReviewNote(event.target.value)} placeholder="Revision notes (required when requesting changes)" rows={3} className="w-full resize-none rounded-lg border border-studio-border bg-studio-bg px-3 py-2.5 text-xs text-white outline-none focus:border-dome"/><div className="mt-3 flex gap-2"><button onClick={() => reviewDeliverable.mutate({ deliverableId: deliverable.id, decision: 'APPROVED' })} disabled={reviewDeliverable.isPending} className="flex-1 rounded-lg bg-emerald-500 px-3 py-2.5 text-xs font-semibold text-black disabled:opacity-40">Approve version {deliverable.current_version}</button><button onClick={() => reviewDeliverable.mutate({ deliverableId: deliverable.id, decision: 'CHANGES_REQUESTED' })} disabled={!reviewNote.trim() || reviewDeliverable.isPending} className="flex-1 rounded-lg border border-orange-500/25 px-3 py-2.5 text-xs text-orange-400 disabled:opacity-40">Request changes</button></div></div>}
+            {deliverable.versions?.length > 1 && <details className="mt-4 border-t border-white/[.06] pt-3"><summary className="cursor-pointer text-[10px] text-zinc-600">Version history · {deliverable.versions.length} versions</summary><div className="mt-3 space-y-2">{deliverable.versions.slice(1).map((version: any) => <div key={version.id} className="rounded-lg border border-white/[.05] p-3"><p className="text-[10px] text-zinc-500">Version {version.version_number} · {new Date(version.created_at).toLocaleDateString()}</p><p className="mt-1 text-[9px] text-zinc-700">{version.file_urls.length} file{version.file_urls.length === 1 ? '' : 's'}</p></div>)}</div></details>}
+            {deliverable.reviews?.length > 0 && <details className="mt-3 border-t border-white/[.06] pt-3"><summary className="cursor-pointer text-[10px] text-zinc-600">Decision history · {deliverable.reviews.length}</summary><div className="mt-3 space-y-2">{deliverable.reviews.map((review: any) => <div key={review.id} className="rounded-lg border border-white/[.05] p-3"><p className="text-[10px] text-zinc-400">Version {review.version_number} · {review.decision.replaceAll('_', ' ')}</p>{review.note && <p className="mt-1 text-xs leading-5 text-zinc-600">{review.note}</p>}<p className="mt-1 text-[9px] text-zinc-700">{new Date(review.created_at).toLocaleString()}</p></div>)}</div></details>}
+          </div>
+          );
+        })}
+
+        {/* Legacy deliveries created before version tracking. */}
+        {user?.role === 'ARTIST' && !booking?.deliverables?.length && booking?.session_log?.tracks_worked?.length > 0 && (
           <div className="rounded-xl border border-dome/20 bg-dome/5 px-6 py-5 animate-surface">
             <p className="label-mono text-dome mb-3 flex items-center gap-2"><Download size={12} strokeWidth={2} /> Your Files Are Ready</p>
             <div className="space-y-2">

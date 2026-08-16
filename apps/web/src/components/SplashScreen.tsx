@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import OianoBrand from './OianoBrand';
 
 // Bar heights as percentage (0–100) — symmetric, peaks in center
 const BAR_HEIGHTS = [18, 28, 42, 62, 80, 92, 100, 96, 88, 72, 55, 36, 24, 16, 10];
@@ -60,15 +61,9 @@ export default function SplashScreen({ onDone }: Props) {
       {/* Logo + waveform stack */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, position: 'relative' }}>
 
-        {/* OIANO wordmark */}
+        {/* Canonical OIANO signature */}
         <div
           style={{
-            fontFamily: '"Playfair Display", serif',
-            fontSize: 'clamp(52px, 8vw, 72px)',
-            fontWeight: 700,
-            color: '#5A9BCB',
-            letterSpacing: '0.22em',
-            lineHeight: 1,
             marginBottom: 6,
             animation: phase === 'logo' || phase === 'tag' || phase === 'exit'
               ? 'splashLogoReveal 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards'
@@ -76,7 +71,7 @@ export default function SplashScreen({ onDone }: Props) {
             opacity: phase === 'enter' ? 0 : undefined,
           }}
         >
-          OIANO
+          <OianoBrand variant="full" size={52} />
         </div>
 
         {/* Divider line */}

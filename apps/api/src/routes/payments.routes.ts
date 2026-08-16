@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import { authenticate } from '../middleware/auth.middleware';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
+import { z } from 'zod';
 
 export const paymentsRouter = Router();
 paymentsRouter.use(authenticate);
@@ -10,6 +11,14 @@ paymentsRouter.use(authenticate);
 const TOP_UP_PRESETS = [50, 100, 200, 500];
 const TOP_UP_MIN = 10;
 const TOP_UP_MAX = 5000;
+
+const CheckoutSchema = z.object({
+  booking_id: z.string().uuid(),
+}).strict();
+
+const TopUpSchema = z.object({
+  amount_usd: z.coerce.number().finite(),
+}).strict();
 
 function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY;
@@ -21,14 +30,21 @@ function getStripe() {
 // Artist pays for a booking via Stripe checkout
 paymentsRouter.post('/stripe/checkout-session', async (req: any, res, next) => {
   try {
-    const { booking_id } = req.body;
-    if (!booking_id) throw new AppError('booking_id is required', 400);
+    const { booking_id } = CheckoutSchema.parse(req.body);
 
     const booking = await prisma.booking.findUnique({
       where: { id: booking_id },
       include: { service: true, artist: { include: { user: true } }, payment: true },
     });
     if (!booking) throw new AppError('Booking not found', 404);
+
+    // Artists may only initiate payment for their own bookings. Studio admins
+    // can assist with a checkout, but every other role is denied.
+    if (req.userRole !== 'STUDIO_ADMIN') {
+      if (req.userRole !== 'ARTIST' || booking.artist?.user_id !== req.userId) {
+        throw new AppError('Booking not found', 404);
+      }
+    }
     if (booking.payment?.status === 'PAID') throw new AppError('Booking is already paid', 400);
 
     const stripe = getStripe();
@@ -86,7 +102,7 @@ paymentsRouter.post('/stripe/checkout-session', async (req: any, res, next) => {
 paymentsRouter.post('/wallet/top-up', async (req: any, res, next) => {
   try {
     const userId = req.userId as string;
-    const { amount_usd } = req.body;
+    const { amount_usd } = TopUpSchema.parse(req.body);
 
     const amt = Math.round(Number(amount_usd) * 100) / 100; // round to cents
     if (isNaN(amt) || amt < TOP_UP_MIN || amt > TOP_UP_MAX) {

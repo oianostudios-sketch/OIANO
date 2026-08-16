@@ -26,19 +26,19 @@ function useNavItems(navigate: ReturnType<typeof useNavigate>, role?: string): P
 
   if (role === 'STUDIO_ADMIN') {
     items.push({ id: 'pulse',   icon: '◉', label: 'Studio Pulse',      group: 'QUICK ACTIONS', hint: 'P', action: () => navigate('/pulse') });
-    items.push({ id: 'admin',   icon: '⚙',  label: 'Admin dashboard',   group: 'QUICK ACTIONS', hint: 'A', action: () => navigate('/admin') });
+    items.push({ id: 'admin',   icon: '⚙',  label: 'Operator dashboard', group: 'QUICK ACTIONS', hint: 'O', action: () => navigate('/admin') });
     items.push({ id: 'run',     icon: '◳',  label: 'Runsheet',          group: 'QUICK ACTIONS',            action: () => navigate('/runsheet') });
   }
 
   if (role === 'ARTIST') {
-    items.push({ id: 'passport',  icon: '🛂', label: 'My passport',    group: 'QUICK ACTIONS', action: () => navigate('/passport') });
+    items.push({ id: 'passport',  icon: '🛂', label: 'My passport',    group: 'QUICK ACTIONS', action: () => navigate('/artist/passport') });
     items.push({ id: 'discover',  icon: '◈',  label: 'Discover artists', group: 'QUICK ACTIONS', action: () => navigate('/discover') });
   }
 
   // Navigate group — catch-all
   items.push({ id: 'dash',  icon: '→', label: 'Dashboard',  group: 'NAVIGATE', action: () => navigate('/dashboard') });
   if (role !== 'ARTIST') {
-    items.push({ id: 'admin2', icon: '→', label: 'Admin',   group: 'NAVIGATE', action: () => navigate('/admin') });
+    items.push({ id: 'admin2', icon: '→', label: 'Studio Operator', group: 'NAVIGATE', action: () => navigate('/admin') });
   }
   items.push({ id: 'cal2',  icon: '→', label: 'Calendar',   group: 'NAVIGATE', action: () => navigate('/calendar') });
 

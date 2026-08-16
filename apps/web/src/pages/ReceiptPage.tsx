@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import OianoBrand from '../components/OianoBrand';
 
 export default function ReceiptPage() {
   const { id } = useParams<{ id: string }>();
@@ -98,17 +99,7 @@ export default function ReceiptPage() {
           }}
         >
           <div>
-            <p
-              style={{
-                fontFamily: "'Playfair Display', serif",
-                fontSize: 28,
-                color: '#C9A84C',
-                margin: 0,
-                letterSpacing: 2,
-              }}
-            >
-              OIANO
-            </p>
+            <OianoBrand variant="compact" size={22} />
             <p style={{ color: '#666', fontSize: 11, margin: '4px 0 0', letterSpacing: 1 }}>
               DREAMZ MUSIC LAB · STUDIO RECEIPT
             </p>

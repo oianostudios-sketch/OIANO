@@ -16,39 +16,44 @@ export default function VUMeter({ active = false, bars = 20, height = 32, classN
   const segments = useMemo(() => {
     return Array.from({ length: bars }, (_, i) => {
       const pct = i / bars;
-      // Color: green 0–60%, amber 60–85%, red 85–100%
-      let color: string;
-      if (pct < 0.60) color = active ? '#4ade80' : '#22c55e40';
-      else if (pct < 0.85) color = active ? '#C9A84C' : '#C9A84C40';
-      else color = active ? '#ef4444' : '#ef444430';
-
-      // How "lit" each bar is depends on active level and position
-      const lit = active
-        ? pct < 0.78 + Math.random() * 0.15
-        : pct < 0.35 + Math.random() * 0.1;
-
-      const dur = active
-        ? `${0.25 + (i % 5) * 0.07}s`
-        : `${1.0 + (i % 7) * 0.2}s`;
-
-      return { color: lit ? color : color.replace(/[^#]+$/, '') + '18', dur, i };
+      const color = !active
+        ? '#1D9E75'
+        : pct < 0.68 ? '#5A9BCB' : pct < 0.88 ? '#C9A84C' : '#E8823A';
+      const lit = active ? pct < 0.82 : i < Math.max(2, Math.round(bars * 0.28));
+      return { color, lit, i };
     });
   }, [active, bars]);
 
   return (
     <div
       className={`vu-meter ${active ? 'live' : 'idle'} ${className}`}
-      style={{ height }}
-      aria-hidden="true"
+      style={{
+        height,
+        display: 'grid',
+        gridTemplateColumns: `repeat(${bars}, minmax(2px, 1fr))`,
+        alignItems: 'stretch',
+        gap: 2,
+      }}
+      role="img"
+      aria-label={active ? 'Studio in use — active session' : 'Studio ready — no active session'}
     >
-      {segments.map(({ color, dur, i }) => (
+      {segments.map(({ color, lit, i }) => (
         <div
           key={i}
           className="vu-seg"
           style={{
             background: color,
-            '--dur': dur,
-            animationDelay: `${i * 0.02}s`,
+            borderRadius: 2,
+            opacity: lit ? (active ? 0.72 : 0.48) : 0.09,
+            boxShadow: lit ? `0 0 ${active ? 7 : 3}px ${color}55` : 'none',
+            transform: active && lit ? `scaleY(${0.62 + ((i * 7) % 5) * 0.09})` : 'scaleY(1)',
+            transformOrigin: 'bottom',
+            animationName: active && lit ? 'breath' : 'none',
+            animationDuration: `${0.72 + (i % 4) * 0.12}s`,
+            animationTimingFunction: 'ease-in-out',
+            animationIterationCount: active && lit ? 'infinite' : '1',
+            animationDelay: `${i * 0.035}s`,
+            transition: 'background .25s ease, opacity .25s ease, transform .25s ease',
           } as React.CSSProperties}
         />
       ))}

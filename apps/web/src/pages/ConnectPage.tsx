@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
 import ArtistFacetMark from '../components/ArtistFacetMark';
+import ArtistAvatar from '../components/ArtistAvatar';
 
 // ── ConnectPage ───────────────────────────────────────────────────────────────
 // Slide-over style artist-to-artist message thread.
@@ -93,13 +94,7 @@ export default function ConnectPage() {
       <div style={{ borderBottom: '1px solid var(--border)', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12, background: 'var(--surface)', position: 'sticky', top: 0, zIndex: 10 }}>
         <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: 18, padding: '0 4px', lineHeight: 1 }}>←</button>
 
-        {otherArtist?.avatar_url ? (
-          <img src={otherArtist.avatar_url} alt="" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border)' }} />
-        ) : (
-          <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: '#888' }}>
-            {displayName.charAt(0).toUpperCase()}
-          </div>
-        )}
+        <ArtistAvatar src={otherArtist?.avatar_url} name={displayName} size={36} />
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}>

@@ -37,7 +37,7 @@ const TABS = [
   {
     id: 'passport',
     label: 'Passport',
-    path: '/passport',
+    path: '/artist/passport',
     icon: (active: boolean) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
         stroke={active ? '#5A9BCB' : '#555'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -49,8 +49,8 @@ const TABS = [
   },
   {
     id: 'inbox',
-    label: 'Inbox',
-    path: '/notifications',
+    label: 'Workrooms',
+    path: '/workrooms',
     icon: (active: boolean) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
         stroke={active ? '#5A9BCB' : '#555'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">

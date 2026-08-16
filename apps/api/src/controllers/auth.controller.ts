@@ -8,6 +8,8 @@ import { generatePassportCode } from '../lib/passport';
 import { AppError } from '../lib/errors';
 import { DEFAULT_STUDIO_SLUG } from '@oiano/shared';
 import { emitActivityEvent } from '../lib/activityEvents';
+import { writeAdminAudit } from '../lib/adminAudit';
+import { decryptTotp, encryptTotp, newTotpSecret, verifyTotp } from '../lib/totp';
 
 const SignupSchema = z.object({
   email: z.string().email(),
@@ -32,6 +34,7 @@ function signToken(userId: string, role: string): string {
     expiresIn: '7d',
   });
 }
+function signMfaChallenge(userId:string, purpose:'setup'|'verify'){return jwt.sign({sub:userId,purpose,type:'mfa'},process.env.JWT_SECRET!,{expiresIn:'5m'});}
 
 // POST /api/auth/signup
 export async function signup(req: Request, res: Response, next: NextFunction) {
@@ -130,6 +133,14 @@ export async function login(req: Request, res: Response, next: NextFunction) {
     const valid = await bcrypt.compare(data.password, user.password_hash);
     if (!valid) throw new AppError('Invalid credentials', 401);
 
+    if (user.role === 'OIANO_ADMIN') {
+      if (!user.mfa_enabled || !user.mfa_secret_encrypted) {
+        const secret=newTotpSecret(); await prisma.user.update({where:{id:user.id},data:{mfa_secret_encrypted:encryptTotp(secret),mfa_enabled:false}});
+        await writeAdminAudit(user.id,'mfa.enrollment.started',req);
+        return res.json({mfa_required:true,mfa_setup:true,challenge:signMfaChallenge(user.id,'setup'),secret,otpauth_uri:`otpauth://totp/OIANO:${encodeURIComponent(user.email)}?secret=${secret}&issuer=OIANO&digits=6&period=30`});
+      }
+      return res.json({mfa_required:true,mfa_setup:false,challenge:signMfaChallenge(user.id,'verify')});
+    }
     const token = signToken(user.id, user.role);
     res.json({ token, user: sanitizeUser(user) });
   } catch (err) {
@@ -137,6 +148,16 @@ export async function login(req: Request, res: Response, next: NextFunction) {
 
   }
 }
+
+export async function verifyMfa(req:Request,res:Response,next:NextFunction){try{
+ const {challenge,code}=z.object({challenge:z.string(),code:z.string().regex(/^\d{6}$/)}).parse(req.body);
+ const payload=jwt.verify(challenge,process.env.JWT_SECRET!) as any;if(payload.type!=='mfa'||!['setup','verify'].includes(payload.purpose))throw new AppError('Invalid MFA challenge',401);
+ const user=await prisma.user.findUnique({where:{id:payload.sub}});if(!user||user.role!=='OIANO_ADMIN'||!user.mfa_secret_encrypted)throw new AppError('Invalid MFA challenge',401);
+ if(!verifyTotp(decryptTotp(user.mfa_secret_encrypted),code)){await writeAdminAudit(user.id,'mfa.verification.failed',req);throw new AppError('Invalid authenticator code',401);}
+ if(payload.purpose==='setup')await prisma.user.update({where:{id:user.id},data:{mfa_enabled:true}});
+ await writeAdminAudit(user.id,payload.purpose==='setup'?'mfa.enrollment.completed':'auth.login.success',req);
+ const refreshed=await prisma.user.findUnique({where:{id:user.id}});res.json({token:signToken(user.id,user.role),user:sanitizeUser(refreshed)});
+ }catch(error){next(error);}}
 
 // POST /api/auth/enter — unified entry: verifies an existing account or
 // creates a new ARTIST one, so the client never has to ask "signup or login?"

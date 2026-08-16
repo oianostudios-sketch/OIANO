@@ -5,7 +5,7 @@ import { useAuthStore } from '../store/auth.store';
 import { api } from '../lib/api';
 import { useToast } from '../components/Toast';
 import { SkeletonRow } from '../components/Skeleton';
-import SunMark from '../components/SunMark';
+import OianoBrand from '../components/OianoBrand';
 import { fmtTime, fmtDate } from '../lib/fmt';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -113,14 +113,15 @@ export default function EngineerDashboardPage() {
       {/* Header */}
       <header className="border-b border-studio-border px-6 py-4 flex items-center justify-between sticky top-0 bg-studio-bg z-10">
         <div className="flex items-center gap-3">
-          <SunMark size={24} />
+          <OianoBrand variant="compact" size={20} />
           {myEngineer ? (
             <span className="text-zinc-400 text-xs">
               <span className="text-white font-medium">{myEngineer.name}</span>
+              <span className="text-zinc-600"> · Session Engineer</span>
               {myEngineer.specialties?.length ? <span className="text-zinc-600"> · {myEngineer.specialties.slice(0, 2).join(', ')}</span> : null}
             </span>
           ) : (
-            <span className="text-zinc-600 text-xs">Engineer · Studio</span>
+            <span className="text-zinc-600 text-xs">Studio Team · Session Engineer</span>
           )}
         </div>
         {/* Room status strip — live from pulse */}

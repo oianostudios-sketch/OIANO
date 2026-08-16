@@ -8,8 +8,10 @@ import { api } from '../lib/api';
 import VUMeter from '../components/VUMeter';
 import SmartClock from '../components/SmartClock/SmartClock';
 import StudioIntelligencePanel, { PulseData, Insight } from '../components/StudioIntelligencePanel';
-import SunMark from '../components/SunMark';
-import { Activity, LayoutDashboard, Calendar, CalendarPlus, Eye, DollarSign, Gauge, Wallet } from 'lucide-react';
+import OianoBrand from '../components/OianoBrand';
+import { Activity, LayoutDashboard, Calendar, ClipboardList, DollarSign, Gauge, Wallet } from 'lucide-react';
+import { useToast } from '../components/Toast';
+import ArtistAvatar from '../components/ArtistAvatar';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -21,6 +23,7 @@ interface Artist {
 interface Session {
   id: string; title?: string; starts_at?: string; ends_at?: string;
   status?: string; payment_status?: string; total_usd?: number | string | null;
+  payment?: { status?: string; amount_usd?: number | string | null } | null;
   service?: { id?: string; name?: string } | null;
   artist?: { id: string; name: string; alias: string | null };
   room?: { id: string; name: string; room_type: string; status: string } | null;
@@ -28,16 +31,48 @@ interface Session {
   notes?: string | null;
 }
 
+interface CircleMember {
+  id: string;
+  consent_status: 'ELIGIBLE' | 'REQUESTED' | 'ACCEPTED' | 'DECLINED' | 'WITHDRAWN';
+  visibility: 'HIDDEN' | 'INITIALS' | 'STAGE_NAME' | 'FULL_PROFILE';
+  session_count: number;
+  last_session_at: string;
+  artist: {
+    id: string; name: string; alias: string | null; avatar_url: string | null;
+    passport?: { passport_code: string; creative_dna: { genres?: string[] } | null; profile_strength: number } | null;
+  };
+}
+
+interface CircleData {
+  total_verified: number;
+  visible_count: number;
+  pending_consent: number;
+  members: CircleMember[];
+}
+
+interface WorkPerson { id: string; name: string; alias?: string | null; avatar_url?: string | null }
+interface CurrentWorkProject {
+  id: string; title: string; phase: string; last_session_at?: string | null;
+  artist?: WorkPerson | null; producer: WorkPerson;
+  bookings: Array<{ id: string; starts_at: string; ends_at: string; status: string; room: { name: string }; engineer?: WorkPerson | null }>;
+}
+interface CurrentWorkSession {
+  id: string; starts_at: string; ends_at: string; status: string;
+  artist: WorkPerson; engineer?: WorkPerson | null; room: { name: string }; service: { name: string };
+}
+interface CurrentWorkData { privacy: string; projects: CurrentWorkProject[]; sessions: CurrentWorkSession[] }
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function sessionStart(s: Session)  { return s.starts_at ?? ''; }
 function sessionTitle(s: Session)  { return s.service?.name ?? s.title ?? 'Studio session'; }
 function sessionArtist(s: Session) { return s.artist?.name ?? 'Unknown'; }
 function paymentAmount(s: Session) { return Number(s.total_usd ?? 0); }
+function paymentStatus(s: Session) { return s.payment?.status ?? s.payment_status ?? 'UNPAID'; }
 
-function fmtTime(iso?: string) {
+function fmtTime(iso?: string, timeZone?: string) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone });
 }
 function fmtCurrency(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -84,17 +119,18 @@ function useCounter(target: number, duration = 800) {
 
 // ── Ticking clock ─────────────────────────────────────────────────────────────
 
-function LiveClock() {
+function LiveClock({ timeZone }: { timeZone?: string }) {
   const [now, setNow] = useState(new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
-  const hh = now.getHours().toString().padStart(2, '0');
-  const mm = now.getMinutes().toString().padStart(2, '0');
-  const ss = now.getSeconds().toString().padStart(2, '0');
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone, hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false }).formatToParts(now);
+  const hh = parts.find(part => part.type === 'hour')?.value ?? '00';
+  const mm = parts.find(part => part.type === 'minute')?.value ?? '00';
+  const ss = parts.find(part => part.type === 'second')?.value ?? '00';
   return (
-    <span className="cmd-clock">
+    <span className="cmd-clock" aria-label={`Studio time ${hh}:${mm}`}>
       {hh}<span style={{ opacity: now.getSeconds() % 2 === 0 ? 1 : 0.25, transition: 'opacity 0.2s' }}>:</span>{mm}
       <span className="cmd-clock-sec">:{ss}</span>
     </span>
@@ -105,8 +141,8 @@ function LiveClock() {
 // session is live, a slow breathing ring otherwise, with the state/countdown
 // text set inside it rather than beside it. ────────────────────────────────
 
-function PulseDial({ activeSession, nextSession, nextCountdown }: {
-  activeSession?: Session; nextSession?: Session | null; nextCountdown?: string | null;
+function PulseDial({ activeSession, nextSession, nextCountdown, studioName }: {
+  activeSession?: Session; nextSession?: Session | null; nextCountdown?: string | null; studioName?: string;
 }) {
   const size = 148, r = 62, cx = size / 2, cy = size / 2, sw = 5;
   const isLive = !!activeSession;
@@ -153,7 +189,22 @@ function PulseDial({ activeSession, nextSession, nextCountdown }: {
 
   return (
     <div className={`pulse-dial${isLive ? ' pulse-dial-live' : ''}`}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <svg className="pulse-vinyl" width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-label={`${studioName ?? 'Oiano Studio'} vinyl status`}>
+        <defs>
+          <radialGradient id="vinylFace" cx="38%" cy="30%">
+            <stop offset="0" stopColor="#24282d"/><stop offset=".42" stopColor="#111316"/><stop offset="1" stopColor="#030405"/>
+          </radialGradient>
+          <radialGradient id="vinylLabel" cx="38%" cy="32%">
+            <stop offset="0" stopColor="#e1c86f"/><stop offset="1" stopColor="#8d7130"/>
+          </radialGradient>
+        </defs>
+        <g className="pulse-vinyl-rotor">
+          <circle cx={cx} cy={cy} r="58" fill="url(#vinylFace)" stroke="#ffffff12" strokeWidth="1"/>
+          {[52,48,43,38].map(groove=><circle key={groove} cx={cx} cy={cy} r={groove} fill="none" stroke="#ffffff10" strokeWidth=".7"/>)}
+          <path d="M34 47 A48 48 0 0 1 96 31" fill="none" stroke="#ffffff16" strokeWidth="2" strokeLinecap="round"/>
+          <circle cx={cx} cy={cy} r="22" fill="url(#vinylLabel)" stroke="#f4dea050" strokeWidth="1"/>
+          <circle cx={cx} cy={cy} r="3" fill="#08090a" stroke="#fff4c755" strokeWidth="1"/>
+        </g>
         <circle cx={cx} cy={cy} r={r} fill="none" stroke="#1a1a1a" strokeWidth={sw} />
         <g className="pulse-dial-sweep-rotor" style={{ color: accent }}>
           <path d={sweepPath} fill="none" stroke={accent} strokeWidth={sw * 0.55} strokeLinecap="round" opacity={0.5} />
@@ -168,6 +219,10 @@ function PulseDial({ activeSession, nextSession, nextCountdown }: {
           <circle className="pulse-dial-breathe" cx={cx} cy={cy} r={r} fill="none" stroke={accent} strokeWidth={sw} />
         )}
       </svg>
+      <div className="pulse-vinyl-brand" aria-hidden="true">
+        <span>{studioName ?? 'OIANO STUDIO'}</span>
+        <i>OIANO · PULSE</i>
+      </div>
       <div className="pulse-dial-center">
         <span className="pulse-dial-state" style={{ color: accent }}>{stateLabel}</span>
         <span className="pulse-dial-big">{bigText}</span>
@@ -341,9 +396,66 @@ function getRoomSession(sessions: Session[], pattern: string): { active: Session
   return { active, next };
 }
 
+const OPERATING_DAY_START = 8;
+const OPERATING_DAY_END = 22;
+
+function RoomStateTimeline({ sessions, roomName }: { sessions: Session[]; roomName: string }) {
+  const dayMinutes = (OPERATING_DAY_END - OPERATING_DAY_START) * 60;
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes() - OPERATING_DAY_START * 60;
+  const nowPct = Math.max(0, Math.min(100, (nowMinutes / dayMinutes) * 100));
+  const valid = sessions.filter(session =>
+    session.starts_at && session.ends_at && !['CANCELLED', 'NO_SHOW'].includes(session.status ?? '')
+  );
+
+  return (
+    <div className="room-state-timeline" role="img" aria-label={`${roomName} booking timeline from 8 AM to 10 PM, ${valid.length} booked period${valid.length === 1 ? '' : 's'}`}>
+      <div className="rst-track">
+        {valid.map(session => {
+          const start = new Date(session.starts_at!);
+          const end = new Date(session.ends_at!);
+          const startMinutes = start.getHours() * 60 + start.getMinutes() - OPERATING_DAY_START * 60;
+          const endMinutes = end.getHours() * 60 + end.getMinutes() - OPERATING_DAY_START * 60;
+          const left = Math.max(0, Math.min(100, (startMinutes / dayMinutes) * 100));
+          const right = Math.max(0, Math.min(100, (endMinutes / dayMinutes) * 100));
+          const isActive = start <= now && now < end;
+          const isComplete = end <= now || session.status === 'COMPLETED';
+          return (
+            <span
+              key={session.id}
+              className={`rst-block${isActive ? ' active' : isComplete ? ' complete' : ' upcoming'}`}
+              style={{ left: `${left}%`, width: `${Math.max(1.5, right - left)}%` }}
+              title={`${fmtTime(session.starts_at)}–${fmtTime(session.ends_at)} · ${sessionArtist(session)}`}
+            />
+          );
+        })}
+        {nowMinutes >= 0 && nowMinutes <= dayMinutes && <i className="rst-now" style={{ left: `${nowPct}%` }} />}
+      </div>
+      <div className="rst-axis"><span>08</span><span>15</span><span>22</span></div>
+    </div>
+  );
+}
+
+function DynamicRoomCard({ room, sessions }: { room: { id: string; name: string }; sessions: Session[] }) {
+  const now = Date.now();
+  const roomSessions = sessions.filter(session => session.room?.id === room.id);
+  const active = roomSessions.find(session => session.starts_at && session.ends_at && new Date(session.starts_at).getTime() <= now && now < new Date(session.ends_at).getTime());
+  const next = roomSessions.filter(session => session.starts_at && new Date(session.starts_at).getTime() > now).sort((a, b) => new Date(a.starts_at!).getTime() - new Date(b.starts_at!).getTime())[0];
+  const accent = active ? '#5A9BCB' : '#1D9E75';
+  return (
+    <div className={`rcm${active ? ' rcm-live' : ''}`} style={{ borderLeftColor: accent }}>
+      <div className="rcm-header"><span className="rcm-name">{room.name}</span><span className="rcm-pill" style={{ color: accent, background: `${accent}10`, border: `1px solid ${accent}30` }}>{active ? '● LIVE' : 'READY'}</span></div>
+      <RoomWave color={accent} active={!!active}/>
+      <RoomStateTimeline sessions={roomSessions} roomName={room.name} />
+      <p className="rcm-artist">{active ? sessionArtist(active) : next ? `Next · ${sessionArtist(next)}` : 'Available'}</p>
+      <p className="rcm-sub">{active ? `${fmtTime(active.starts_at)}–${fmtTime(active.ends_at)}` : next ? fmtTime(next.starts_at) : 'No session queued'}</p>
+    </div>
+  );
+}
+
 // ── Main Studio card — gold, wave, left-border architectural ──────────────────
 
-function MainStudioCard({ sessions }: { sessions: Session[] }) {
+export function MainStudioCard({ sessions }: { sessions: Session[] }) {
   const { active, next } = getRoomSession(sessions, 'main');
   const isLive = !!active;
   const LIVE = '#5A9BCB';
@@ -386,7 +498,7 @@ function MainStudioCard({ sessions }: { sessions: Session[] }) {
         <p className="rcm-artist" style={{ color: '#1e1e1e' }}>Open</p>
       )}
       {active?.engineer?.name && (
-        <p className="rcm-engineer">Engineer: {active.engineer.name}</p>
+        <p className="rcm-engineer">Producer: {active.engineer.name}</p>
       )}
       {isLive && (
         <div className="rcm-progress"><div style={{ width: `${pct}%`, background: accent }} /></div>
@@ -399,7 +511,7 @@ function MainStudioCard({ sessions }: { sessions: Session[] }) {
 
 const SB_HEIGHTS = [70, 40, 90, 55, 75, 35, 85, 50, 65];
 
-function StudioBCard({ sessions }: { sessions: Session[] }) {
+export function StudioBCard({ sessions }: { sessions: Session[] }) {
   const { active, next } = getRoomSession(sessions, 'studio b');
   const isLive = !!active;
   const BLUE = '#3B8BFF';
@@ -432,7 +544,7 @@ function StudioBCard({ sessions }: { sessions: Session[] }) {
         </span>
       </div>
       {active?.engineer?.name && (
-        <p className="rcb-engineer">Engineer: {active.engineer.name}</p>
+        <p className="rcb-engineer">Producer: {active.engineer.name}</p>
       )}
       {isLive && (
         <div className="rcb-progress"><div style={{ width: `${pct}%`, background: BLUE }} /></div>
@@ -579,13 +691,19 @@ function CommandHubPanel({ todaySessions, utilizationPct, studioOnline }: {
 
 export default function PulseDashboard() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [artists, setArtists]     = useState<Artist[]>([]);
   const [sessions, setSessions]   = useState<Session[]>([]);
   const [pulseData, setPulseData] = useState<PulseData | null>(null);
+  const [circleData, setCircleData] = useState<CircleData | null>(null);
+  const [currentWork, setCurrentWork] = useState<CurrentWorkData | null>(null);
+  const [requestingCircleId, setRequestingCircleId] = useState<string | null>(null);
   const [loading, setLoading]     = useState(true);
   const [pulseLoading, setPulseLoading] = useState(true);
   const [error, setError]         = useState('');
   const [tick, setTick]           = useState(0);
+  const [updatingBooking, setUpdatingBooking] = useState<string | null>(null);
+  const [assigningBooking, setAssigningBooking] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true); setError('');
@@ -609,7 +727,55 @@ export default function PulseDashboard() {
     } catch { /* non-fatal */ } finally { setPulseLoading(false); }
   }, []);
 
-  useEffect(() => { loadData(); loadPulse(); }, [loadData, loadPulse]);
+  const loadCircle = useCallback(async () => {
+    try {
+      const { data } = await api.get('/studio-circle/studio');
+      setCircleData(data);
+    } catch { /* Non-blocking while Circle data initializes. */ }
+  }, []);
+
+  const loadCurrentWork = useCallback(async () => {
+    try {
+      const { data } = await api.get('/studio-circle/current-work');
+      setCurrentWork(data);
+    } catch { /* Non-blocking operational enhancement. */ }
+  }, []);
+
+  const requestCircleConsent = useCallback(async (member: CircleMember) => {
+    setRequestingCircleId(member.id);
+    try {
+      await api.post(`/studio-circle/${member.id}/request`);
+      await loadCircle();
+      toast.success(`Circle invitation sent to ${member.artist.alias ?? member.artist.name}`);
+    } catch { toast.error('Could not send the Circle invitation'); }
+    finally { setRequestingCircleId(null); }
+  }, [loadCircle, toast]);
+
+  const changeBookingStatus = useCallback(async (booking: Session, status: 'CONFIRMED' | 'IN_PROGRESS' | 'COMPLETED') => {
+    setUpdatingBooking(booking.id);
+    try {
+      await api.patch(`/bookings/${booking.id}/status`, { status });
+      await Promise.all([loadData(), loadPulse(), loadCurrentWork()]);
+      toast.success(status === 'CONFIRMED' ? 'Booking confirmed' : status === 'IN_PROGRESS' ? 'Session started' : 'Session completed');
+    } catch {
+      toast.error('Could not update the session');
+    } finally {
+      setUpdatingBooking(null);
+    }
+  }, [loadData, loadPulse, loadCurrentWork, toast]);
+
+  const assignProducer = useCallback(async (booking: Session, producerId: string) => {
+    setUpdatingBooking(booking.id);
+    try {
+      await api.patch(`/bookings/${booking.id}/producer`, { producer_id: producerId || null });
+      await loadData();
+      toast.success(producerId ? 'Producer assigned' : 'Producer assignment cleared');
+      setAssigningBooking(null);
+    } catch { toast.error('Could not assign the producer'); }
+    finally { setUpdatingBooking(null); }
+  }, [loadData, toast]);
+
+  useEffect(() => { loadData(); loadPulse(); loadCircle(); loadCurrentWork(); }, [loadData, loadPulse, loadCircle, loadCurrentWork]);
   useEffect(() => {
     const id = setInterval(() => setTick(t => t + 1), 60_000);
     return () => clearInterval(id);
@@ -705,9 +871,9 @@ export default function PulseDashboard() {
     ).sort((a, b) => new Date(a.starts_at!).getTime() - new Date(b.starts_at!).getTime())[0] ?? null;
   }, [sorted, tick]);
 
-  const revenuePaid        = sessions.filter(s => s.payment_status === 'PAID').reduce((sum, b) => sum + paymentAmount(b), 0);
-  const revenueOutstanding = sessions.filter(s => s.payment_status !== 'PAID').reduce((sum, s) => sum + paymentAmount(s), 0);
-  const todayRevenue       = todaySessions.reduce((sum, s) => sum + paymentAmount(s), 0);
+  const revenuePaid        = pulseData?.finance?.collected_usd ?? sessions.filter(s => paymentStatus(s) === 'PAID').reduce((sum, b) => sum + paymentAmount(b), 0);
+  const revenueOutstanding = pulseData?.finance?.outstanding_usd ?? sessions.filter(s => paymentStatus(s) !== 'PAID').reduce((sum, s) => sum + paymentAmount(s), 0);
+  const todayRevenue       = pulseData?.finance?.today_booked_usd ?? todaySessions.reduce((sum, s) => sum + paymentAmount(s), 0);
 
   const thisWeekSessions = useMemo(() => {
     const weekStart = new Date();
@@ -716,10 +882,10 @@ export default function PulseDashboard() {
     return sorted.filter(s => s.starts_at && new Date(s.starts_at) >= weekStart &&
       !['CANCELLED','NO_SHOW'].includes(s.status ?? ''));
   }, [sorted]);
-  const weekRevenue = thisWeekSessions.reduce((sum, s) => sum + paymentAmount(s), 0);
+  const weekRevenue = pulseData?.finance?.week_collected_usd ?? thisWeekSessions.reduce((sum, s) => sum + paymentAmount(s), 0);
 
   const utilizationPct = pulseData?.utilization.today_pct  ?? 0;
-  const cArtists       = useCounter(artists.length);
+  const cArtists       = useCounter(pulseData?.coverage?.artist_count ?? artists.length);
 
   // Live countdown state (ticks every second for hero)
   const [nowMs, setNowMs] = useState(Date.now());
@@ -745,7 +911,7 @@ export default function PulseDashboard() {
   // actually-actionable list rather than a wall of facts.
   const insights = useMemo((): Insight[] => {
     const out: Insight[] = [];
-    const ROOM_NAMES = ['Studio A', 'Studio B', 'Vocal Booth'];
+    const roomNames = pulseData?.rooms?.map(room => room.name) ?? [];
     const DAY_HOURS = 14; // 8am–10pm per room
 
     // Booking risk — soonest still-unconfirmed session
@@ -765,7 +931,7 @@ export default function PulseDashboard() {
 
     // Payment follow-up — largest outstanding balance on a confirmed/completed session
     const outstanding = sessions
-      .filter(s => s.payment_status !== 'PAID' && ['CONFIRMED', 'COMPLETED'].includes(s.status ?? ''))
+      .filter(s => paymentStatus(s) !== 'PAID' && ['CONFIRMED', 'COMPLETED'].includes(s.status ?? ''))
       .sort((a, b) => paymentAmount(b) - paymentAmount(a))[0];
     if (outstanding && paymentAmount(outstanding) > 0) {
       out.push({
@@ -787,7 +953,7 @@ export default function PulseDashboard() {
       }, 0);
       return total / priced.length;
     })();
-    const roomGaps = ROOM_NAMES.map(name => {
+    const roomGaps = roomNames.map(name => {
       const bookedHrs = todaySessions
         .filter(s => s.room?.name === name)
         .reduce((sum, s) => sum + (new Date(s.ends_at!).getTime() - new Date(s.starts_at!).getTime()) / 3_600_000, 0);
@@ -800,7 +966,7 @@ export default function PulseDashboard() {
         headline: `${topGap.name} has ${topGap.unused.toFixed(1)}h unused today`,
         detail: `Potential revenue: ${fmtCurrency(topGap.unused * avgRate)}`,
         cta: 'Open availability →',
-        onClick: () => navigate('/book'),
+        onClick: () => navigate('/calendar'),
       });
     }
 
@@ -836,15 +1002,16 @@ export default function PulseDashboard() {
         {/* ── Sidebar ─────────────────────────────────────────────────── */}
         <aside className="cmd-sidebar">
           <div className="cmd-brand">
-            <SunMark size={26} />
+            <OianoBrand variant="compact" size={21} />
             <div>
-              <strong>Command Centre</strong>
+              <strong>{pulseData?.studio?.name ?? 'Command Centre'}</strong>
+              <span style={{display:'block',fontSize:8,color:'#3f3f46',textTransform:'uppercase',letterSpacing:'.14em',marginTop:2}}>Pulse · Operator live</span>
             </div>
           </div>
 
           <div className="cmd-vu-block">
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
-              <span className="cmd-section-label">{activeSession ? 'Recording' : 'Studio online'}</span>
+              <span className="cmd-section-label">Studio state</span>
               <span style={{
                 width:6, height:6, borderRadius:'50%', flexShrink:0,
                 background: activeSession ? '#5A9BCB' : '#22c55e',
@@ -854,22 +1021,27 @@ export default function PulseDashboard() {
               }} />
             </div>
             <VUMeter active={!!activeSession} bars={18} height={22} />
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:7, gap:8 }}>
+              <strong style={{ fontSize:8, letterSpacing:'.12em', color: activeSession ? '#8fc5ec' : '#46a987', fontFamily:"'JetBrains Mono',monospace" }}>
+                {activeSession ? 'IN USE · SESSION LIVE' : 'READY · NO ACTIVE SESSION'}
+              </strong>
+              <span style={{ fontSize:7, color:'#343a40', letterSpacing:'.08em', whiteSpace:'nowrap' }}>ACTIVITY MODE</span>
+            </div>
           </div>
 
           <nav className="cmd-nav">
             {[
               { label: 'Pulse',       to: null,          icon: Activity },
-              { label: 'Admin',       to: '/admin',       icon: LayoutDashboard },
+              { label: 'Operator',    to: '/admin',       icon: LayoutDashboard },
               { label: 'Calendar',    to: '/calendar',    icon: Calendar },
-              { label: 'Book studio', to: '/book',        icon: CalendarPlus },
-              { label: 'Artist view', to: '/dashboard',   icon: Eye },
+              { label: 'Runsheet',    to: '/runsheet',    icon: ClipboardList },
             ].map(n => (
               <button key={n.label}
                 className={n.to === null ? 'cmd-nav-btn active' : 'cmd-nav-btn'}
                 aria-label={n.label}
                 onClick={() => n.to && navigate(n.to)}>
                 <n.icon size={14} strokeWidth={1.75} />
-                <span className="cmd-nav-tip">{n.label}</span>
+                <span className="cmd-nav-label">{n.label}</span>
               </button>
             ))}
           </nav>
@@ -877,8 +1049,8 @@ export default function PulseDashboard() {
           {/* ── Room status widgets ── */}
           <div className="cmd-rooms">
             <p className="cmd-section-label" style={{ marginBottom:8 }}>Studios</p>
-            <MainStudioCard sessions={todaySessions} />
-            <StudioBCard sessions={todaySessions} />
+            {(pulseData?.rooms ?? []).map(room => <DynamicRoomCard key={room.id} room={room} sessions={todaySessions}/>) }
+            {!pulseLoading && !(pulseData?.rooms?.length) && <p style={{fontSize:10,color:'#3f3f46'}}>No rooms configured</p>}
           </div>
 
           {/* Pulse summary */}
@@ -913,19 +1085,19 @@ export default function PulseDashboard() {
                 {new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' })}
               </p>
               <div className="cmd-topbar-divider" />
-              <LiveClock />
-              <div className={`cmd-badge ${activeSession ? 'badge-live' : 'badge-open'}`}>
+              <LiveClock timeZone={pulseData?.studio?.timezone} />
+              <div role="status" aria-live="polite" className={`cmd-badge ${activeSession ? 'badge-live' : 'badge-open'}`}>
                 {activeSession ? '● SESSION LIVE' : '◎ STUDIO ONLINE'}
               </div>
             </div>
             <div className="cmd-topbar-right">
-              <button className="cmd-btn" onClick={() => { loadData(); loadPulse(); }}>↻ Refresh</button>
-              <button className="cmd-btn primary" onClick={() => navigate('/book')}>+ New booking</button>
+              <button className="cmd-btn" onClick={() => { loadData(); loadPulse(); loadCircle(); loadCurrentWork(); }}>↻ Refresh</button>
+              <button className="cmd-btn primary" onClick={() => navigate('/admin')}>Operator desk</button>
             </div>
           </header>
 
           {error && (
-            <div className="cmd-error">{error}</div>
+            <div className="cmd-error" role="alert">{error}</div>
           )}
 
           {/* Hero band — a big circular pulse dial as the centrepiece instead
@@ -933,8 +1105,12 @@ export default function PulseDashboard() {
               ring otherwise; the countdown/state text lives inside it. */}
           <div className={`cmd-hero${activeSession ? ' hero-live' : ' hero-idle'}`}>
             {activeSession ? <div className="hero-glow" /> : null}
-            <PulseDial activeSession={activeSession} nextSession={nextSession} nextCountdown={nextCountdown} />
             <div className="hero-left">
+              <div className="hero-identity">
+                <span className="hero-identity-overline">OIANO CONTROL INSTRUMENT</span>
+                <strong>STUDIO <i>PULSE</i></strong>
+                <span className="hero-identity-rule"/>
+              </div>
               {activeSession ? (
                 <>
                   <span className="hero-live-pill">● IN SESSION</span>
@@ -958,10 +1134,11 @@ export default function PulseDashboard() {
                 <>
                   <span className="hero-idle-pill">◎ STUDIO OPEN</span>
                   <p className="hero-empty-msg">No sessions scheduled today — the studio is ready.</p>
-                  <button className="cmd-btn primary" style={{ marginTop:8, alignSelf:'flex-start' }} onClick={() => navigate('/book')}>Book a session →</button>
+                  <button className="cmd-btn primary" style={{ marginTop:8, alignSelf:'flex-start' }} onClick={() => navigate('/admin')}>Open operator desk →</button>
                 </>
               )}
             </div>
+            <PulseDial activeSession={activeSession} nextSession={nextSession} nextCountdown={nextCountdown} studioName={pulseData?.studio?.name} />
           </div>
 
           {/* TODAY strip — one glanceable line instead of hunting the same
@@ -1020,6 +1197,50 @@ export default function PulseDashboard() {
 
             {/* Center: schedule */}
             <div className="cmd-schedule-col">
+              <section className="work-faces" aria-labelledby="current-work-title">
+                <div className="work-faces-head">
+                  <div><span className="cmd-section-label">Private workspace</span><strong id="current-work-title">Current Work · Project Faces</strong></div>
+                  <span>Operational access only</span>
+                </div>
+                {(currentWork?.projects.length || currentWork?.sessions.length) ? (
+                  <div className="work-faces-rail">
+                    {currentWork?.projects.map(project => {
+                      const latest = project.bookings[0];
+                      const primary = project.artist;
+                      const primaryName = primary ? (primary.alias ?? primary.name) : project.title;
+                      const producerName = project.producer.alias ?? project.producer.name;
+                      return (
+                        <button key={project.id} className="work-face-card" onClick={() => latest && navigate(`/bookings/${latest.id}`)} disabled={!latest}>
+                          <div className="work-face-stack">
+                            <ArtistAvatar src={primary?.avatar_url} name={primaryName} size={45} />
+                            <ArtistAvatar src={project.producer.avatar_url} name={producerName} size={24} />
+                          </div>
+                          <div className="work-face-copy">
+                            <span className="work-face-kind">Project · {project.phase.replaceAll('_', ' ')}</span>
+                            <strong>{project.title}</strong>
+                            <span>{primaryName} · Producer {producerName}</span>
+                            <em>{latest ? `${latest.room.name} · ${fmtTime(latest.starts_at)}` : 'No linked session'}</em>
+                          </div>
+                        </button>
+                      );
+                    })}
+                    {currentWork?.sessions.map(session => {
+                      const artistName = session.artist.alias ?? session.artist.name;
+                      return (
+                        <button key={session.id} className="work-face-card" onClick={() => navigate(`/bookings/${session.id}`)}>
+                          <div className="work-face-stack"><ArtistAvatar src={session.artist.avatar_url} name={artistName} size={45} /></div>
+                          <div className="work-face-copy">
+                            <span className="work-face-kind">Booked artist · {session.status.replaceAll('_', ' ')}</span>
+                            <strong>{artistName}</strong>
+                            <span>{session.service.name} · {session.room.name}</span>
+                            <em>{fmtTime(session.starts_at)} · Project not linked</em>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : <p className="work-faces-empty">Upcoming bookings and active projects will appear here with their working team.</p>}
+              </section>
               <div className="cmd-schedule-head">
                 <span className="cmd-section-label">Today's schedule</span>
                 <div style={{ display:'flex', gap:12, alignItems:'center' }}>
@@ -1032,13 +1253,13 @@ export default function PulseDashboard() {
                   <span className="cmd-kpi-inline">
                     <strong>{cArtists}</strong> artists
                   </span>
-                  <button className="cmd-btn-sm" onClick={() => navigate('/book')}>+ Book</button>
+                  <button className="cmd-btn-sm" onClick={() => navigate('/admin')}>Manage</button>
                 </div>
               </div>
 
               <TimelineStrip sessions={todaySessions} />
 
-              <div className="cmd-session-list">
+              <div className="cmd-session-list" aria-label="Today's studio sessions">
                 {loading ? (
                   <div className="cmd-empty">Loading…</div>
                 ) : todaySessions.length === 0 ? (
@@ -1049,8 +1270,8 @@ export default function PulseDashboard() {
                     <p style={{ fontSize:12, color:'#1e1e1e', marginBottom:14 }}>
                       No sessions booked today.
                     </p>
-                    <button className="cmd-btn primary" onClick={() => navigate('/book')}>
-                      Book a session →
+                    <button className="cmd-btn primary" onClick={() => navigate('/admin')}>
+                      Open operator desk →
                     </button>
                   </div>
                 ) : (
@@ -1061,9 +1282,10 @@ export default function PulseDashboard() {
                       COMPLETED:'#3f3f46', CANCELLED:'#7f1d1d', NO_SHOW:'#7f1d1d',
                     };
                     return (
-                      <button key={s.id}
+                      <div key={s.id} role="button" tabIndex={0}
                         className={`cmd-session-row${isActive ? ' row-active' : ''}`}
-                        onClick={() => navigate(`/bookings/${s.id}`)}>
+                        onClick={() => navigate(`/bookings/${s.id}`)}
+                        onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') navigate(`/bookings/${s.id}`); }}>
                         <div className="csr-time">
                           <span>{fmtTime(s.starts_at)}</span>
                           <span className="csr-end">{fmtTime(s.ends_at)}</span>
@@ -1081,11 +1303,16 @@ export default function PulseDashboard() {
                         </div>
                         <div className="csr-right">
                           <span className="csr-amount">${Number(s.total_usd ?? 0).toFixed(0)}</span>
+                          <button className="pulse-producer-trigger" onClick={event => { event.stopPropagation(); setAssigningBooking(assigningBooking === s.id ? null : s.id); }}>{s.engineer?.name ?? 'Assign producer'}</button>
+                          {assigningBooking === s.id && <div className="pulse-producer-menu" onClick={event => event.stopPropagation()}><button onClick={()=>assignProducer(s,'')}>Unassigned</button>{(pulseData?.producers ?? []).map(producer=><button key={producer.id} onClick={()=>assignProducer(s,producer.id)}>{producer.name}</button>)}</div>}
+                          {s.status === 'PENDING' && <button disabled={updatingBooking === s.id} className="pulse-row-action confirm" onClick={event => { event.stopPropagation(); changeBookingStatus(s, 'CONFIRMED'); }}>{updatingBooking === s.id ? 'Saving…' : 'Confirm'}</button>}
+                          {s.status === 'CONFIRMED' && !isActive && <button disabled={updatingBooking === s.id} className="pulse-row-action start" onClick={event => { event.stopPropagation(); changeBookingStatus(s, 'IN_PROGRESS'); }}>{updatingBooking === s.id ? 'Starting…' : 'Start'}</button>}
+                          {(s.status === 'IN_PROGRESS' || isActive) && <button disabled={updatingBooking === s.id} className="pulse-row-action complete" onClick={event => { event.stopPropagation(); changeBookingStatus(s, 'COMPLETED'); }}>{updatingBooking === s.id ? 'Saving…' : 'Complete'}</button>}
                           <span className={`csr-pill ${isActive ? 'pill-live' : s.status === 'CONFIRMED' ? 'pill-green' : s.status === 'PENDING' ? 'pill-gold' : 'pill-grey'}`}>
                             {isActive ? '● LIVE' : s.status?.toLowerCase()}
                           </span>
                         </div>
-                      </button>
+                      </div>
                     );
                   })
                 )}
@@ -1094,6 +1321,46 @@ export default function PulseDashboard() {
 
             {/* Right: revenue + intelligence */}
             <div className="cmd-intel-col">
+
+              <section className="circle-panel" aria-labelledby="studio-circle-title">
+                <div className="circle-head">
+                  <div>
+                    <p id="studio-circle-title" className="cmd-section-label">Studio Circle</p>
+                    <strong>{circleData?.total_verified ?? 0} verified creator{circleData?.total_verified === 1 ? '' : 's'}</strong>
+                  </div>
+                  {!!circleData?.pending_consent && <span>{circleData.pending_consent} private</span>}
+                </div>
+                {circleData?.members.length ? (
+                  <div className="circle-rail">
+                    {circleData.members.slice(0, 8).map(member => {
+                      const artistName = member.artist.alias ?? member.artist.name;
+                      const genre = member.artist.passport?.creative_dna?.genres?.[0] ?? 'Creator';
+                      const accepted = member.consent_status === 'ACCEPTED';
+                      return (
+                        <article key={member.id} className="circle-person">
+                          <div className="circle-avatar-wrap">
+                            <ArtistAvatar src={member.artist.avatar_url} name={artistName} size={38} />
+                            <i className={accepted ? 'circle-verified' : 'circle-private'}>{accepted ? '✓' : '○'}</i>
+                          </div>
+                          <div className="circle-person-copy">
+                            <strong>{artistName}</strong>
+                            <span>{genre} · {member.session_count} session{member.session_count === 1 ? '' : 's'}</span>
+                          </div>
+                          {member.consent_status === 'ELIGIBLE' && (
+                            <button disabled={requestingCircleId === member.id} onClick={() => requestCircleConsent(member)}>
+                              {requestingCircleId === member.id ? 'Sending…' : 'Invite'}
+                            </button>
+                          )}
+                          {member.consent_status === 'REQUESTED' && <em>Consent requested</em>}
+                          {accepted && <em className="accepted">Visible by consent</em>}
+                        </article>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="circle-empty">Completed sessions will form the studio’s verified creative network.</p>
+                )}
+              </section>
 
               {/* Revenue block — "Outstanding" used to be duplicated here and
                   in the TODAY strip above with the identical number. Kept it
@@ -1118,7 +1385,7 @@ export default function PulseDashboard() {
               </div>
 
               {/* Intelligence panel */}
-              <div className="cmd-intel-panel" ref={intelPanelRef}>
+              <div className="cmd-intel-panel">
                 <StudioIntelligencePanel pulseData={pulseData} loading={pulseLoading} insights={insights} />
               </div>
 
@@ -1145,10 +1412,20 @@ const CSS = `
     display: grid;
     grid-template-columns: 152px minmax(0,1fr);
     height: 100vh; overflow: hidden;
-    background: #070707;
+    background:
+      radial-gradient(circle at 76% 18%,rgba(90,155,203,.075),transparent 26%),
+      radial-gradient(circle at 18% 90%,rgba(201,168,76,.04),transparent 30%),
+      linear-gradient(145deg,#060708 0%,#080a0c 54%,#060708 100%);
     color: #f0ede8;
     font-family: 'DM Sans','Inter',Arial,sans-serif;
     position: relative;
+  }
+  .cmd-main::before {
+    content:''; position:fixed; pointer-events:none; z-index:-1;
+    width:min(62vw,780px); aspect-ratio:1; right:-18vw; top:-32vw;
+    border:1px solid rgba(90,155,203,.09); border-radius:50%;
+    box-shadow:0 0 0 70px rgba(90,155,203,.018),0 0 0 150px rgba(201,168,76,.012);
+    transform:rotate(-18deg);
   }
   .cmd::before {
     content:'';
@@ -1177,13 +1454,14 @@ const CSS = `
 
   /* ── Sidebar ── */
   .cmd-sidebar {
+    min-width:0;
     z-index:1; height:100vh; overflow-y:auto; overflow-x:hidden;
-    background:#080808; border-right:1px solid #111;
+    background:linear-gradient(180deg,rgba(10,12,15,.98),rgba(6,7,8,.98)); border-right:1px solid rgba(255,255,255,.07);
     display:flex; flex-direction:column;
   }
   .cmd-brand {
     display:flex; align-items:center; gap:8px;
-    padding:14px 12px; border-bottom:1px solid #111; flex-shrink:0;
+    padding:16px 12px; border-bottom:1px solid rgba(255,255,255,.06); flex-shrink:0;
   }
   .cmd-brand strong { display:block; font-size:11px; color:#d4d4d8; letter-spacing:.02em; }
   .cmd-vu-block { padding:12px; border-bottom:1px solid #111; flex-shrink:0; }
@@ -1192,16 +1470,17 @@ const CSS = `
     text-transform:uppercase; font-family:'JetBrains Mono',monospace;
     display:block;
   }
-  .cmd-nav { display:flex; align-items:center; justify-content:space-between; gap:2px; padding:10px 8px; flex-shrink:0; }
+  .cmd-nav { display:flex; flex-direction:column; align-items:stretch; gap:3px; padding:12px 8px; flex-shrink:0; }
   .cmd-nav-btn {
     position:relative;
-    flex:1; display:flex; align-items:center; justify-content:center;
-    height:28px; background:none; border:none; cursor:pointer;
+    flex:1; display:flex; align-items:center; justify-content:flex-start; gap:9px;
+    height:34px; padding:0 10px; background:none; border:none; cursor:pointer;
     color:#52525b; border-radius:5px;
     font-family:inherit; transition:background .12s, color .12s;
   }
-  .cmd-nav-btn:hover { background:#111; color:#a1a1aa; }
-  .cmd-nav-btn.active { background:#1a1a1a; color:#5A9BCB; }
+  .cmd-nav-label { display:inline; font-size:9px; letter-spacing:.06em; white-space:nowrap; }
+  .cmd-nav-btn:hover { background:rgba(255,255,255,.045); color:#d4d4d8; }
+  .cmd-nav-btn.active { background:linear-gradient(90deg,rgba(90,155,203,.15),rgba(90,155,203,.025)); color:#8fc5ec; box-shadow:inset 2px 0 #5A9BCB; }
   .cmd-nav-tip {
     position:absolute; top:calc(100% + 6px); left:50%; transform:translateX(-50%);
     white-space:nowrap; background:#111; border:1px solid #1e1e1e; border-radius:5px;
@@ -1213,20 +1492,20 @@ const CSS = `
   .cmd-sidebar-pulse { padding:12px; margin-top:auto; border-top:1px solid #111; flex-shrink:0; }
 
   /* ── Main ── */
-  .cmd-main { display:flex; flex-direction:column; height:100vh; overflow:hidden; z-index:1; }
+  .cmd-main { min-width:0; display:flex; flex-direction:column; height:100vh; overflow:hidden; z-index:1; }
 
   /* Topbar */
   .cmd-topbar {
     display:flex; align-items:center; justify-content:space-between;
     padding:10px 18px; border-bottom:1px solid #111;
-    flex-shrink:0; height:48px; background:#070707;
+    flex-shrink:0; height:56px; background:rgba(6,8,10,.76); backdrop-filter:blur(18px);
   }
   .cmd-topbar-left  { display:flex; align-items:center; gap:14px; }
   .cmd-topbar-right { display:flex; align-items:center; gap:8px; }
   .cmd-topbar-date  { font-size:11px; color:#3a3a3a; font-family:'JetBrains Mono',monospace; letter-spacing:.04em; }
   .cmd-topbar-divider { width:1px; height:16px; background:#1e1e1e; }
   .cmd-clock {
-    font-family:'JetBrains Mono',monospace; font-size:13px; color:#5A9BCB; letter-spacing:.1em;
+    font-family:'JetBrains Mono',monospace; font-size:13px; color:#8fc5ec; letter-spacing:.1em;
   }
   .cmd-clock-sec { font-size:11px; color:#555; }
   .cmd-badge {
@@ -1242,8 +1521,8 @@ const CSS = `
     transition: border-color .15s, color .15s;
   }
   .cmd-btn:hover { color:#a1a1aa; border-color:#333; }
-  .cmd-btn.primary { background:#5A9BCB; color:#000; border-color:transparent; font-weight:700; }
-  .cmd-btn.primary:hover { background:#d9bb62; }
+  .cmd-btn.primary { background:linear-gradient(135deg,#77add4,#C9A84C); color:#070809; border-color:transparent; font-weight:750; box-shadow:0 8px 24px rgba(90,155,203,.12); }
+  .cmd-btn.primary:hover { filter:brightness(1.12); }
   .cmd-btn-sm {
     font-size:10px; color:#3a3a3a; background:none; border:1px solid #1a1a1a;
     padding:3px 10px; border-radius:5px; cursor:pointer; font-family:inherit;
@@ -1254,26 +1533,38 @@ const CSS = `
 
   /* Hero band */
   .cmd-hero {
-    display:flex; align-items:center; justify-content:flex-start;
-    padding:16px 20px; border-bottom:1px solid #111;
-    flex-shrink:0; min-height:150px; position:relative; overflow:hidden;
-    gap:26px;
+    display:grid; grid-template-columns:minmax(0,1fr) 180px; align-items:center;
+    padding:22px 34px; border-bottom:1px solid #111;
+    flex-shrink:0; min-height:190px; position:relative; overflow:hidden;
+    gap:38px; isolation:isolate;
   }
   .hero-live { background:linear-gradient(90deg,#0f0d07 0%,#0a0a0a 100%); border-bottom-color:#5A9BCB22; }
-  .hero-idle { background:#090909; }
+  .hero-idle { background:linear-gradient(115deg,rgba(10,13,17,.96),rgba(8,9,11,.92)); }
+  .cmd-hero::after { content:''; position:absolute; width:340px; height:96px; left:32px; bottom:-82px; border:1px solid rgba(90,155,203,.13); border-radius:50%; transform:rotate(-7deg); box-shadow:0 0 35px rgba(90,155,203,.04); z-index:-1; }
   .hero-glow {
     position:absolute; top:-40px; left:-40px;
     width:200px; height:200px; border-radius:50%;
     background:radial-gradient(circle,#5A9BCB0c 0%,transparent 70%);
     pointer-events:none;
   }
-  .hero-left  { display:flex; flex-direction:column; gap:5px; position:relative; flex:1; min-width:0; justify-content:center; }
+  .hero-left  { display:flex; flex-direction:column; gap:5px; position:relative; min-width:0; justify-content:center; }
   .hero-right { display:flex; flex-direction:column; align-items:flex-end; flex-shrink:0; }
+  .hero-identity { margin-bottom:17px; display:flex; flex-direction:column; align-items:flex-start; }
+  .hero-identity-overline { color:#5A9BCB88; font:600 7px 'JetBrains Mono',monospace; letter-spacing:.26em; }
+  .hero-identity strong { margin-top:5px; color:#f0ede8; font:700 clamp(27px,3vw,42px) 'DM Sans','Inter',sans-serif; letter-spacing:-.055em; line-height:.95; }
+  .hero-identity strong i { color:#8fc5ec; font-style:normal; font-weight:300; text-shadow:0 0 28px rgba(90,155,203,.2); }
+  .hero-identity-rule { margin-top:11px; width:clamp(120px,21vw,240px); height:1px; background:linear-gradient(90deg,#C9A84Caa,#5A9BCB55,transparent); }
 
   /* Pulse dial — hero centrepiece */
-  .pulse-dial { position:relative; width:148px; height:148px; flex-shrink:0; z-index:1; }
+  .pulse-dial { position:relative; width:148px; height:148px; justify-self:center; flex-shrink:0; z-index:1; transform:scale(1.08); }
   .pulse-dial svg { display:block; overflow:visible; }
   .pulse-dial svg path { transition: stroke 0.6s ease; }
+  .pulse-vinyl-rotor { transform-origin:74px 74px; animation:vinyl-spin 18s linear infinite; }
+  .pulse-dial-live .pulse-vinyl-rotor { animation-duration:7s; }
+  @keyframes vinyl-spin { to { transform:rotate(360deg); } }
+  .pulse-vinyl-brand { position:absolute; inset:0; z-index:3; pointer-events:none; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; transform:translateY(-1px); }
+  .pulse-vinyl-brand span { width:38px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#17130a; font:800 5px 'JetBrains Mono',monospace; letter-spacing:.02em; text-transform:uppercase; }
+  .pulse-vinyl-brand i { margin-top:2px; color:#3a2d13; font:600 3.5px 'JetBrains Mono',monospace; letter-spacing:.08em; font-style:normal; }
   .pulse-dial-breathe { animation: pulse-dial-breathe 3.2s ease-in-out infinite; transform-origin:center; }
   .pulse-dial-sweep-rotor {
     transform-origin: 74px 74px;
@@ -1288,12 +1579,11 @@ const CSS = `
   .pulse-dial-center {
     position:absolute; inset:0; display:flex; flex-direction:column;
     align-items:center; justify-content:center; text-align:center; gap:3px;
-    padding:0 16px;
+    padding:0 16px; pointer-events:none; z-index:4;
   }
-  .pulse-dial-state { font-size:8px; letter-spacing:.14em; text-transform:uppercase; font-family:'JetBrains Mono',monospace; font-weight:700; }
-  .pulse-dial-big { font-family:'JetBrains Mono',monospace; font-size:19px; font-weight:700; color:#f0ede8; line-height:1.1; }
-  .pulse-dial-sub { font-size:9px; color:#3a3a3a; letter-spacing:.05em; }
-  .pulse-dial-room { font-size:9px; color:#5A9BCB88; letter-spacing:.08em; text-transform:uppercase; margin-top:2px; }
+  .pulse-dial-state { position:absolute; top:9px; padding:2px 6px; border-radius:99px; background:#060708d9; backdrop-filter:blur(5px); font-size:6px; letter-spacing:.14em; text-transform:uppercase; font-family:'JetBrains Mono',monospace; font-weight:700; }
+  .pulse-dial-big { position:absolute; bottom:12px; padding:2px 7px; border-radius:99px; background:#060708e8; font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700; color:#f0ede8; line-height:1.2; box-shadow:0 4px 16px #0009; }
+  .pulse-dial-sub,.pulse-dial-room { display:none; }
   .hero-live-pill {
     font-size:9px; font-weight:700; letter-spacing:.16em;
     color:#5A9BCB; font-family:'JetBrains Mono',monospace;
@@ -1482,6 +1772,23 @@ const CSS = `
   .tl-labels { display:flex; justify-content:space-between; font-size:9px; color:#2a2a2a; font-family:'JetBrains Mono',monospace; }
 
   /* Schedule */
+  .work-faces { flex-shrink:0; padding:11px 14px; border-bottom:1px solid #111; background:linear-gradient(115deg,rgba(201,168,76,.04),rgba(90,155,203,.025) 55%,transparent); }
+  .work-faces-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:9px; }
+  .work-faces-head strong { display:block; margin-top:3px; color:#d4d4d8; font:12px 'DM Sans',sans-serif; }
+  .work-faces-head > span { color:#504a3d; border:1px solid #2b261c; border-radius:9px; padding:2px 7px; font:7px 'JetBrains Mono',monospace; text-transform:uppercase; letter-spacing:.08em; }
+  .work-faces-rail { display:flex; gap:8px; overflow-x:auto; padding-bottom:3px; scrollbar-width:thin; scrollbar-color:#262626 transparent; }
+  .work-face-card { min-width:225px; display:flex; align-items:center; gap:10px; padding:9px; border:1px solid #1a1a1a; border-radius:9px; background:rgba(8,9,11,.84); color:inherit; text-align:left; cursor:pointer; transition:border-color .15s,background .15s,transform .15s; }
+  .work-face-card:hover { border-color:#5A9BCB38; background:#0d1013; transform:translateY(-1px); }
+  .work-face-card:disabled { cursor:default; opacity:.7; }
+  .work-face-stack { position:relative; width:54px; flex:0 0 54px; }
+  .work-face-stack > :nth-child(2) { position:absolute !important; right:0; bottom:-3px; border:2px solid #090a0c !important; }
+  .work-face-copy { min-width:0; }
+  .work-face-copy > * { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .work-face-kind { color:#5A9BCB80; font:7px 'JetBrains Mono',monospace; letter-spacing:.08em; text-transform:uppercase; }
+  .work-face-copy strong { margin-top:3px; color:#d4d4d8; font-size:11px; }
+  .work-face-copy span:not(.work-face-kind) { margin-top:2px; color:#52525b; font-size:8px; }
+  .work-face-copy em { margin-top:3px; color:#34343a; font:italic 7px 'JetBrains Mono',monospace; }
+  .work-faces-empty { color:#34343a; font-size:10px; line-height:1.5; }
   .cmd-schedule-head {
     display:flex; align-items:center; justify-content:space-between;
     padding:12px 16px 8px; border-bottom:1px solid #0f0f0f; flex-shrink:0;
@@ -1506,6 +1813,16 @@ const CSS = `
   .csr-name { font-size:13px; font-weight:600; color:#d4d4d8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .csr-sub  { font-size:11px; color:#3f3f46; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
   .csr-right { display:flex; flex-direction:column; align-items:flex-end; flex-shrink:0; gap:3px; }
+  .pulse-row-action { border-radius:5px; padding:3px 7px; font:600 8px 'JetBrains Mono',monospace; text-transform:uppercase; letter-spacing:.06em; cursor:pointer; transition:.15s; }
+  .pulse-row-action:disabled { opacity:.45; cursor:wait; }
+  .pulse-row-action.confirm { color:#C9A84C; border:1px solid #C9A84C35; background:#C9A84C0b; }
+  .pulse-row-action.start { color:#5A9BCB; border:1px solid #5A9BCB35; background:#5A9BCB0b; }
+  .pulse-row-action.complete { color:#1D9E75; border:1px solid #1D9E7535; background:#1D9E750b; }
+  .pulse-row-action:hover { filter:brightness(1.35); }
+  .pulse-producer-trigger { max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; border:0; background:transparent; color:#71717a; font-size:9px; cursor:pointer; text-decoration:underline; text-decoration-color:#27272a; text-underline-offset:3px; }
+  .pulse-producer-menu { position:absolute; right:8px; top:calc(100% - 4px); z-index:50; min-width:150px; overflow:hidden; border:1px solid #27272a; border-radius:7px; background:#101010; box-shadow:0 14px 30px #000a; }
+  .pulse-producer-menu button { display:block; width:100%; border:0; border-bottom:1px solid #1b1b1b; padding:8px 10px; background:transparent; color:#a1a1aa; text-align:left; font-size:10px; cursor:pointer; }
+  .pulse-producer-menu button:hover { background:#181818; color:#fff; }
   .csr-amount { font-size:12px; color:#555; font-family:'JetBrains Mono',monospace; }
   .csr-pill { font-size:9px; font-family:'JetBrains Mono',monospace; letter-spacing:.04em; padding:2px 7px; border-radius:4px; }
   .pill-live  { color:#5A9BCB; background:#5A9BCB10; border:1px solid #5A9BCB30; animation:breath 2s ease-in-out infinite; }
@@ -1525,6 +1842,24 @@ const CSS = `
 
   /* Intelligence */
   .cmd-intel-panel { flex:1; overflow:auto; min-height:0; }
+  .circle-panel { padding:12px 14px; border-bottom:1px solid #111; background:linear-gradient(135deg,rgba(90,155,203,.045),transparent 62%); }
+  .circle-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:10px; }
+  .circle-head strong { display:block; margin-top:4px; color:#d4d4d8; font:12px 'DM Sans',sans-serif; }
+  .circle-head > span { color:#57534e; border:1px solid #27272a; border-radius:10px; padding:2px 7px; font:7px 'JetBrains Mono',monospace; letter-spacing:.08em; text-transform:uppercase; }
+  .circle-rail { display:flex; gap:8px; overflow-x:auto; padding-bottom:3px; scrollbar-width:thin; scrollbar-color:#262626 transparent; }
+  .circle-person { min-width:176px; display:grid; grid-template-columns:38px minmax(0,1fr); align-items:center; column-gap:8px; row-gap:5px; padding:8px; border:1px solid #171717; border-radius:8px; background:rgba(9,10,12,.82); }
+  .circle-avatar-wrap { position:relative; grid-row:1/3; }
+  .circle-avatar-wrap i { position:absolute; right:-2px; bottom:-2px; width:14px; height:14px; display:grid; place-items:center; border-radius:50%; border:2px solid #090a0c; font:8px monospace; }
+  .circle-verified { color:#07110e; background:#46a987; }
+  .circle-private { color:#71717a; background:#202124; }
+  .circle-person-copy { min-width:0; }
+  .circle-person-copy strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#b8b8bd; font-size:10px; }
+  .circle-person-copy span { display:block; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#3f3f46; font:7px 'JetBrains Mono',monospace; }
+  .circle-person button { grid-column:2; justify-self:start; border:1px solid #5A9BCB35; border-radius:5px; padding:3px 7px; background:#5A9BCB0d; color:#78b4df; cursor:pointer; font:7px 'JetBrains Mono',monospace; text-transform:uppercase; letter-spacing:.08em; }
+  .circle-person button:disabled { opacity:.45; cursor:wait; }
+  .circle-person em { grid-column:2; color:#57534e; font:italic 7px 'JetBrains Mono',monospace; }
+  .circle-person em.accepted { color:#3d806c; }
+  .circle-empty { color:#34343a; font-size:10px; line-height:1.5; }
 
   /* session-live global class integration */
   body.session-live .cmd-hero.hero-live { background:linear-gradient(90deg,#100e06 0%,#0a0a0a 100%); }
@@ -1550,6 +1885,18 @@ const CSS = `
   .rcm-engineer { font-size:9px; color:#3a3a3a; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .rcm-progress { height:2px; background:#141414; border-radius:2px; overflow:hidden; margin-top:6px; }
   .rcm-progress div { height:100%; transition:width 10s linear; }
+  .room-state-timeline { margin-top:7px; }
+  .rst-track {
+    position:relative; height:6px; overflow:hidden; border-radius:2px;
+    background:linear-gradient(90deg,#111 0%,#161616 50%,#111 100%);
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.025);
+  }
+  .rst-block { position:absolute; top:1px; bottom:1px; min-width:2px; border-radius:1px; }
+  .rst-block.complete { background:#1D9E7560; }
+  .rst-block.upcoming { background:#C9A84C90; box-shadow:0 0 5px #C9A84C25; }
+  .rst-block.active { background:#5A9BCB; box-shadow:0 0 7px #5A9BCB70; }
+  .rst-now { position:absolute; z-index:2; top:-1px; bottom:-1px; width:1px; background:#f4f4f5; box-shadow:0 0 5px #fff; }
+  .rst-axis { display:flex; justify-content:space-between; margin-top:3px; color:#292929; font:6px 'JetBrains Mono',monospace; letter-spacing:.08em; }
 
   /* Studio B */
   .rcb {
@@ -1587,4 +1934,55 @@ const CSS = `
   .rcb-progress { height:2px; background:#0f1018; border-radius:2px; overflow:hidden; margin-top:6px; }
   .rcb-progress div { height:100%; transition:width 10s linear; }
   body.session-live .cmd-topbar  { border-bottom-color:#5A9BCB14; }
+
+  @media (max-width:1100px) {
+    .cmd { grid-template-columns:1fr; height:auto; min-height:100dvh; overflow-x:clip; overflow-y:visible; }
+    .cmd-sidebar { width:100%; height:auto; position:sticky; top:0; z-index:40; overflow:visible; flex-direction:row; align-items:center; border-right:0; border-bottom:1px solid #151515; }
+    .cmd-brand { width:auto; min-width:180px; border-bottom:0; border-right:1px solid #151515; }
+    .cmd-vu-block,.cmd-rooms,.cmd-sidebar-pulse { display:none; }
+    .cmd-nav { flex:1; justify-content:flex-end; gap:5px; }
+    .cmd-nav-btn { flex:0 1 auto; width:auto; padding:0 10px; gap:7px; }
+    .cmd-nav-label { display:inline; }
+    .cmd-nav-tip { display:none; }
+    .cmd-main { width:100%; height:auto; min-height:calc(100dvh - 57px); overflow:visible; }
+    .cmd-body { grid-template-columns:230px minmax(0,1fr); overflow:visible; }
+    .cmd-hub-col,.cmd-schedule-col,.cmd-intel-col { min-height:520px; }
+    .cmd-intel-col { grid-column:1/-1; border-top:1px solid #111; min-height:0; }
+    .cmd-intel-panel { max-height:none; overflow:visible; }
+  }
+
+  @media (max-width:720px) {
+    .cmd::before, .cmd-main::before { display:none; }
+    .cmd-sidebar { position:static; flex-wrap:wrap; }
+    .cmd-brand { width:100%; border-right:0; padding:11px 14px; }
+    .cmd-nav { width:100%; overflow-x:auto; justify-content:flex-start; border-top:1px solid #111; padding:7px 8px; }
+    .cmd-nav-btn { min-width:max-content; }
+    .cmd-topbar { height:auto; min-height:48px; padding:9px 12px; }
+    .cmd-topbar-date,.cmd-topbar-divider,.cmd-clock-sec,.cmd-topbar-right .cmd-btn:first-child { display:none; }
+    .cmd-hero { grid-template-columns:minmax(0,1fr) 104px; min-height:0; padding:18px 15px; gap:10px; }
+    .hero-identity { margin-bottom:12px; }
+    .hero-identity strong { font-size:22px; }
+    .hero-identity-overline { font-size:5px; letter-spacing:.16em; }
+    .pulse-dial { transform:scale(.68); margin:-24px; }
+    .hero-artist-name { font-size:18px; white-space:normal; }
+    .hero-detail { line-height:1.45; }
+    .cmd-today-strip { overflow-x:auto; gap:14px; padding:10px 13px; }
+    .cts-item { min-width:max-content; }
+    .cmd-body { display:flex; flex-direction:column; }
+    .cmd-hub-col { display:none; }
+    .cmd-schedule-col { border-right:0; min-height:460px; }
+    .cmd-schedule-head { align-items:flex-start; gap:10px; }
+    .cmd-schedule-head > div .cmd-kpi-inline:nth-child(n+2) { display:none; }
+    .cmd-session-row { padding:10px; gap:8px; }
+    .csr-time { width:47px; }
+    .csr-sub { max-width:150px; }
+    .csr-amount { display:none; }
+    .cmd-intel-col { min-height:0; }
+  }
+
+  @media (prefers-reduced-motion:reduce) {
+    .cmd *, .cmd::before, .cmd::after { animation-duration:.001ms !important; animation-iteration-count:1 !important; scroll-behavior:auto !important; }
+    .pulse-dial-sweep-rotor { display:none; }
+    .pulse-vinyl-rotor { animation:none !important; }
+  }
 `;

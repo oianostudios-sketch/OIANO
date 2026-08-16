@@ -10,8 +10,11 @@
     "dev:api": "npm run dev --workspace=apps/api",
     "dev:web": "npm run dev --workspace=apps/web",
     "build": "npm run build --workspace=apps/api && npm run build --workspace=apps/web",
+    "test": "npm run test:security --workspace=apps/api && npm run test:payments --workspace=apps/api",
+    "verify": "npx prisma validate && npm run db:verify-baseline && npm test && npm run build",
     "db:push": "npm run db:push --workspace=apps/api",
     "db:migrate": "npm run db:migrate --workspace=apps/api",
+    "db:verify-baseline": "node scripts/verify-database-baseline.js",
     "db:seed": "npm run db:seed --workspace=apps/api",
     "db:studio": "npm run db:studio --workspace=apps/api"
   },

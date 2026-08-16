@@ -21,11 +21,28 @@ export function useSSE() {
 
   useEffect(() => {
     if (!token) return;
+    let disposed = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
-    function connect() {
+    async function connect() {
       if (esRef.current) esRef.current.close();
 
-      const es = new EventSource(`${API}/api/notifications/stream?token=${token}`);
+      let ticket: string;
+      try {
+        const response = await fetch(`${API}/api/notifications/stream-ticket`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok) throw new Error('Unable to authorize notification stream');
+        ({ ticket } = await response.json());
+      } catch {
+        if (!disposed) retryTimer = setTimeout(connect, Math.min(retryRef.current, 30_000));
+        retryRef.current = Math.min(retryRef.current * 2, 30_000);
+        return;
+      }
+      if (disposed) return;
+
+      const es = new EventSource(`${API}/api/notifications/stream?ticket=${encodeURIComponent(ticket)}`);
       esRef.current = es;
 
       es.onopen = () => {
@@ -98,6 +115,12 @@ export function useSSE() {
           // ── notification (persisted to DB) ────────────────────────────────
           if (event.type === 'notification') {
             qc.invalidateQueries({ queryKey: ['notifications'] });
+            const priority=event.notif?.payload?.priority;
+            const message=event.notif?.title;
+            if(message){
+              if(priority==='CRITICAL'||priority==='HIGH')toast.error(message);
+              else toast.info(message);
+            }
           }
 
           // ── studio_announcement ────────────────────────────────────────────
@@ -120,13 +143,15 @@ export function useSSE() {
         // Exponential backoff: 1s -> 2s -> 4s -> 8s, cap 30s
         const delay = Math.min(retryRef.current, 30_000);
         retryRef.current = delay * 2;
-        setTimeout(connect, delay);
+        if (!disposed) retryTimer = setTimeout(connect, delay);
       };
     }
 
     connect();
 
     return () => {
+      disposed = true;
+      if (retryTimer) clearTimeout(retryTimer);
       esRef.current?.close();
       esRef.current = null;
     };

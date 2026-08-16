@@ -4,6 +4,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
 import { fmtTime } from '../lib/fmt';
+import OianoBrand from '../components/OianoBrand';
 
 interface RunsheetBooking {
   id: string;
@@ -265,7 +266,7 @@ export default function RunsheetPage() {
     <div className="rs-page">
       {/* ── Screen-only header ── */}
       <div className="rs-screen-header no-print">
-        <Link to={isAdmin ? '/admin' : '/engineer'} className="rs-back">← {isAdmin ? 'Admin' : 'Engineer'}</Link>
+        <Link to={isAdmin ? '/admin' : '/dashboard'} className="rs-back">← {isAdmin ? 'Studio Operator' : 'Studio Team'}</Link>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {/* View toggle */}
@@ -311,7 +312,7 @@ export default function RunsheetPage() {
         <div className="rs-header">
           <div>
             <div className="rs-studio-name">DREAMZ MUSIC LAB</div>
-            <div className="rs-sheet-title">DAILY RUNSHEET{isEngineer ? ' — ENGINEER VIEW' : ''}</div>
+            <div className="rs-sheet-title">DAILY RUNSHEET{isEngineer ? ' — STUDIO TEAM VIEW' : ''}</div>
           </div>
           <div className="rs-header-right" style={{ textAlign: 'right' }}>
             <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 15, color: '#111' }}>
@@ -448,7 +449,7 @@ export default function RunsheetPage() {
 
         {/* Footer */}
         <div className="rs-footer" style={{ marginTop: 32 }}>
-          <span>OIANO StudioOS</span>
+          <OianoBrand variant="mono" size={11} subtitle="StudioOS" />
           <span className="rs-footer-sep">·</span>
           <span>Dreamz Music Lab</span>
           <span className="rs-footer-sep">·</span>

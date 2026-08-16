@@ -4,6 +4,9 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
+import ArtistAvatar from '../components/ArtistAvatar';
+import ArtistEmptyState from '../components/ArtistEmptyState';
+import { BellRing, MessagesSquare } from 'lucide-react';
 
 interface Notif {
   id: string;
@@ -69,20 +72,12 @@ function ago(dateStr: string): string {
 
 function notifLink(notif: Notif): string | null {
   const p = notif.payload as any;
+  if (p?.action_url && typeof p.action_url === 'string' && p.action_url.startsWith('/')) return p.action_url;
   if (p?.booking_id) return `/bookings/${p.booking_id}`;
   return null;
 }
 
-function Avatar({ src, name, size = 38 }: { src?: string | null; name: string; size?: number }) {
-  if (src) return (
-    <img src={src} alt="" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', border: '1px solid #1e1e1e', flexShrink: 0 }} />
-  );
-  return (
-    <div style={{ width: size, height: size, borderRadius: '50%', background: '#1e1e1e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.37, color: '#555', fontWeight: 600, flexShrink: 0 }}>
-      {name.charAt(0).toUpperCase()}
-    </div>
-  );
-}
+const Avatar = ArtistAvatar;
 
 export default function NotificationsPage() {
   const { user } = useAuthStore();
@@ -107,6 +102,7 @@ export default function NotificationsPage() {
     mutationFn: () => api.patch('/notifications/read'),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
   });
+  const dismiss=useMutation({mutationFn:(id:string)=>api.delete(`/notifications/${id}`),onSuccess:()=>qc.invalidateQueries({queryKey:['notifications']})});
 
   useEffect(() => { markRead.mutate(); }, []);
 
@@ -121,9 +117,9 @@ export default function NotificationsPage() {
   const pendingConns = connections.filter(c => c.status === 'PENDING' && c.initiator.user_id !== user?.id);
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#f5f5f5', fontFamily: 'DM Sans, sans-serif' }}>
+    <div className="artist-premium-page" style={{ minHeight: '100vh', background: '#0a0a0a', color: '#f5f5f5', fontFamily: 'DM Sans, sans-serif' }}>
       {/* Header */}
-      <header style={{ borderBottom: '1px solid #1e1e1e', padding: '16px 24px', display: 'flex', alignItems: 'center', gap: 16, position: 'sticky', top: 0, background: '#0a0a0a', zIndex: 10 }}>
+      <header className="artist-premium-header" style={{ borderBottom: '1px solid #1e1e1e', padding: '16px 24px', display: 'flex', alignItems: 'center', gap: 16, position: 'sticky', top: 0, background: '#0a0a0a', zIndex: 10 }}>
         <button onClick={() => navigate(backTo)}
           style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: 14, padding: 0 }}>
           ← Back
@@ -131,6 +127,7 @@ export default function NotificationsPage() {
         <h1 style={{ margin: 0, fontFamily: 'Playfair Display, serif', fontSize: 20, color: '#5A9BCB', fontWeight: 600 }}>
           Inbox
         </h1>
+        <Link to="/workrooms" style={{ marginLeft: unread > 0 && tab === 'notifications' ? 0 : 'auto', border: '1px solid rgba(90,155,203,.2)', borderRadius: 8, padding: '7px 10px', color: '#5A9BCB', fontSize: 11, textDecoration: 'none' }}>Workrooms →</Link>
         {unread > 0 && tab === 'notifications' && (
           <span style={{ fontSize: 11, color: '#555', marginLeft: 'auto', fontFamily: 'JetBrains Mono, monospace' }}>
             {unread} unread
@@ -140,10 +137,11 @@ export default function NotificationsPage() {
 
       {/* Tabs — only show for artists */}
       {isArtist && (
-        <div style={{ display: 'flex', borderBottom: '1px solid #1a1a1a', background: '#0a0a0a', position: 'sticky', top: 57, zIndex: 9 }}>
+        <div className="artist-premium-tabs" style={{ display: 'flex', borderBottom: '1px solid #1a1a1a', background: '#0a0a0a', position: 'sticky', top: 66, zIndex: 9 }}>
           {(['notifications', 'messages'] as const).map(t => (
             <button
               key={t}
+              className={`artist-premium-tab ${tab === t ? 'active' : ''}`}
               onClick={() => setTab(t)}
               style={{
                 flex: 1, background: 'none', border: 'none', padding: '12px 16px',
@@ -166,7 +164,7 @@ export default function NotificationsPage() {
         </div>
       )}
 
-      <main style={{ maxWidth: 640, margin: '0 auto', padding: '16px 16px 100px' }}>
+      <main className="artist-premium-content" style={{ maxWidth: 640, margin: '0 auto', padding: '16px 16px 100px' }}>
 
         {/* ── Notifications tab ── */}
         {tab === 'notifications' && (
@@ -179,16 +177,7 @@ export default function NotificationsPage() {
               </div>
             )}
             {!nLoading && notifs.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '60px 24px' }}>
-                <div style={{ fontSize: 40, marginBottom: 16 }}>🔔</div>
-                <p style={{ color: '#555', fontSize: 15, margin: '0 0 8px' }}>No notifications yet.</p>
-                <p style={{ color: '#333', fontSize: 13 }}>Book a session and you'll hear from us here.</p>
-                {isArtist && (
-                  <Link to="/book" style={{ display: 'inline-block', marginTop: 20, padding: '10px 24px', background: '#5A9BCB', color: '#000', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
-                    Book a session →
-                  </Link>
-                )}
-              </div>
+              <ArtistEmptyState icon={BellRing} title="You’re all caught up" description="Session confirmations, project milestones, and studio updates will arrive here." actionLabel={isArtist ? 'Plan a studio session' : undefined} to={isArtist ? '/book' : undefined} />
             )}
             {!nLoading && notifs.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -198,7 +187,7 @@ export default function NotificationsPage() {
                   const color = TYPE_COLOR[notif.type] ?? '#666';
                   const icon = TYPE_ICON[notif.type] ?? '●';
                   const inner = (
-                    <div style={{
+                    <div className="artist-premium-row" style={{
                       display: 'flex', alignItems: 'flex-start', gap: 14, padding: '16px 18px',
                       background: isUnread ? 'rgba(90,155,203,0.03)' : 'transparent',
                       borderRadius: 12, border: `1px solid ${isUnread ? 'rgba(90,155,203,0.08)' : '#141414'}`,
@@ -214,9 +203,10 @@ export default function NotificationsPage() {
                           <span style={{ fontSize: 10, color: '#444', fontFamily: 'JetBrains Mono, monospace', flexShrink: 0, paddingTop: 2 }}>{ago(notif.created_at)}</span>
                         </div>
                         <p style={{ margin: '4px 0 0', fontSize: 13, color: '#666', lineHeight: 1.5 }}>{notif.body}</p>
-                        {link && <p style={{ margin: '6px 0 0', fontSize: 11, color, fontFamily: 'JetBrains Mono, monospace' }}>View →</p>}
+                        {link && <p style={{ margin: '6px 0 0', fontSize: 11, color, fontFamily: 'JetBrains Mono, monospace' }}>Open update →</p>}
                       </div>
-                      {isUnread && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#5A9BCB', flexShrink: 0, marginTop: 6 }} />}
+                      <button aria-label="Dismiss notification" onClick={e=>{e.preventDefault();e.stopPropagation();dismiss.mutate(notif.id)}} style={{border:0,background:'transparent',color:'#333',cursor:'pointer',fontSize:15,padding:'0 2px'}}>×</button>
+                      {isUnread && <div style={{ width: 6, height: 6, borderRadius: '50%', background: (notif.payload as any)?.priority==='CRITICAL'?'#ef4444':'#5A9BCB', flexShrink: 0, marginTop: 6 }} />}
                     </div>
                   );
                   return link ? (
@@ -241,14 +231,7 @@ export default function NotificationsPage() {
               </div>
             )}
             {!cLoading && connections.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '60px 24px' }}>
-                <div style={{ fontSize: 40, marginBottom: 16 }}>💬</div>
-                <p style={{ color: '#555', fontSize: 15, margin: '0 0 8px' }}>No messages yet.</p>
-                <p style={{ color: '#333', fontSize: 13 }}>Discover artists and start connecting.</p>
-                <Link to="/discover" style={{ display: 'inline-block', marginTop: 20, padding: '10px 24px', background: '#5A9BCB', color: '#000', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
-                  Discover artists →
-                </Link>
-              </div>
+              <ArtistEmptyState icon={MessagesSquare} title="Start the right conversation" description="Connect with artists whose sound and energy complement your own." actionLabel="Discover collaborators" to="/discover" />
             )}
             {!cLoading && connections.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -261,7 +244,7 @@ export default function NotificationsPage() {
 
                   return (
                     <Link key={conn.id} to={`/connect/${other.id}`} style={{ textDecoration: 'none' }}>
-                      <div style={{
+                      <div className="artist-premium-row" style={{
                         display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px',
                         background: isIncoming ? 'rgba(139,92,246,0.04)' : 'transparent',
                         borderRadius: 12,

@@ -5,12 +5,15 @@ import { useAuthStore } from '../store/auth.store';
 import { api } from '../lib/api';
 import ProfileEditDrawer from '../components/ProfileEditDrawer';
 import NotificationBell from '../components/NotificationBell';
-import ArtistPassportCard from '../components/ArtistPassportCard';
 import { useToast } from '../components/Toast';
 import { useStudioState } from '../context/StudioState';
 import SessionStats from '../components/SessionStats';
-import SunMark from '../components/SunMark';
+import OianoBrand from '../components/OianoBrand';
+import ArtistStatusToggle from '../components/ArtistStatusToggle';
 import { fmtTime as _fmtTime, fmtDateShort as _fmtDateShort } from '../lib/fmt';
+import { CalendarDays, Compass, FolderKanban, IdCard, Mic2, Pencil } from 'lucide-react';
+import ArtistAvatar from '../components/ArtistAvatar';
+import NetworkExchangePanel from '../components/NetworkExchangePanel';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -160,43 +163,40 @@ function DNATags({ tags, color = '#C9A84C' }: { tags: string[]; color?: string }
 
 // ── Studio state bar (inline, not the floating widget) ────────────────────────
 
+// ── Main DashboardPage ────────────────────────────────────────────────────────
+
 function StudioBar() {
   const { isLive, activeSession, todaySessions } = useStudioState();
-  const next = !isLive
-    ? todaySessions.filter(s => s.starts_at && new Date(s.starts_at).getTime() > Date.now())
-        .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())[0]
-    : null;
+  const navigate = useNavigate();
+  const [messageIndex, setMessageIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const { data: tickerNotifications = [] } = useQuery<any[]>({
+    queryKey: ['notifications'],
+    queryFn: async () => (await api.get('/notifications')).data,
+    staleTime: 30_000,
+  });
+  const next = !isLive ? todaySessions.filter(s => s.starts_at && new Date(s.starts_at).getTime() > Date.now()).sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())[0] : null;
+  const studioMessage = isLive
+    ? { label: `Studio live · ${(activeSession as any)?.artist?.name ?? 'Session in progress'}`, color: '#E8823A', href: (activeSession as any)?.id ? `/bookings/${(activeSession as any).id}` : '/calendar' }
+    : next
+      ? { label: `Next session ${minsUntil(next.starts_at)} · ${fmtTime(next.starts_at)}`, color: '#6aa9d2', href: (next as any).id ? `/bookings/${(next as any).id}` : '/calendar' }
+      : { label: 'Studio ready', color: '#4fa98a', href: '/calendar' };
+  const messages = [studioMessage, ...tickerNotifications.filter((notification: any) => !notification.read_at).slice(0, 4).map((notification: any) => ({ label: notification.title, color: '#d3b35c', href: notification.payload?.booking_id ? `/bookings/${notification.payload.booking_id}` : '/notifications' }))];
+  const current = messages[messageIndex % messages.length] ?? studioMessage;
 
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 10,
-      padding: '8px 14px', borderRadius: 8,
-      background: isLive ? '#120d08' : '#0f0f0f',
-      border: `1px solid ${isLive ? '#5A9BCB22' : '#1a1a1a'}`,
-      fontSize: 11, fontFamily: 'monospace',
-    }}>
-      <span style={{
-        width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
-        background: isLive ? '#E8823A' : '#22c55e',
-        boxShadow: `0 0 5px ${isLive ? '#E8823A' : '#22c55e'}`,
-        animation: isLive ? 'db-pulse 1s ease-in-out infinite' : 'none',
-      }} />
-      {isLive ? (
-        <span style={{ color: '#5A9BCB' }}>
-          Studio live · {(activeSession as any)?.artist?.name ?? 'Session in progress'}
-        </span>
-      ) : next ? (
-        <span style={{ color: '#555' }}>
-          Next session {minsUntil(next.starts_at)} · {fmtTime(next.starts_at)}
-        </span>
-      ) : (
-        <span style={{ color: '#3a3a3a' }}>Studio ready</span>
-      )}
-    </div>
-  );
+  useEffect(() => {
+    if (paused || messages.length < 2) return;
+    const timer = window.setInterval(() => setMessageIndex((value) => (value + 1) % messages.length), 5_000);
+    return () => window.clearInterval(timer);
+  }, [paused, messages.length]);
+  useEffect(() => { setMessageIndex((value) => value % messages.length); }, [messages.length]);
+
+  return <button type="button" onClick={() => navigate(current.href)} onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocus={() => setPaused(true)} onBlur={() => setPaused(false)} aria-label={`${current.label}${messages.length > 1 ? `. Message ${(messageIndex % messages.length) + 1} of ${messages.length}` : ''}`} style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 210, maxWidth: 320, padding: '8px 14px', borderRadius: 8, background: isLive ? '#120d08' : '#0f0f0f', border: `1px solid ${isLive ? '#5A9BCB22' : '#1a1a1a'}`, color: current.color, fontSize: 11, fontFamily: 'monospace', cursor: 'pointer', textAlign: 'left' }}>
+    <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: current.color, boxShadow: `0 0 6px ${current.color}`, animation: isLive ? 'db-pulse 1s ease-in-out infinite' : 'none' }} />
+    <span key={`${messageIndex}-${current.label}`} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', animation: 'db-ticker-in .35s ease both' }}>{current.label}</span>
+    {messages.length > 1 && <span aria-hidden="true" style={{ marginLeft: 'auto', color: '#3d4347', fontSize: 8, whiteSpace: 'nowrap' }}>{(messageIndex % messages.length) + 1}/{messages.length}</span>}
+  </button>;
 }
-
-// ── Main DashboardPage ────────────────────────────────────────────────────────
 
 const TOP_UP_PRESETS = [25, 50, 100, 200];
 const TOP_UP_MIN = 10;
@@ -216,6 +216,11 @@ export default function DashboardPage() {
   const [topUpAmount, setTopUpAmount] = useState<number | ''>(100);
   const [topUpCustom, setTopUpCustom] = useState(false);
   const [topUpLoading, setTopUpLoading] = useState(false);
+
+  useEffect(() => {
+    document.body.classList.add('artist-dashboard');
+    return () => document.body.classList.remove('artist-dashboard');
+  }, []);
 
   // Show toast if returning from Stripe top-up
   useEffect(() => {
@@ -240,9 +245,21 @@ export default function DashboardPage() {
     staleTime: 60_000,
   });
 
-  const { data: bookings = [], isLoading: loadingBookings } = useQuery({
+  const { data: bookings = [], isLoading: loadingBookings, isError: bookingsError, refetch: refetchBookings } = useQuery({
     queryKey: ['bookings'],
     queryFn: async () => (await api.get('/bookings')).data,
+  });
+
+  const { data: portfolioData } = useQuery({
+    queryKey: ['passport', 'portfolio'],
+    queryFn: async () => (await api.get('/passport/portfolio')).data,
+    enabled: user?.role === 'ARTIST',
+  });
+
+  const { data: careerActivity = [], isLoading: loadingActivity } = useQuery<any[]>({
+    queryKey: ['artist-activity'],
+    queryFn: async () => (await api.get('/artist-activity')).data,
+    enabled: user?.role === 'ARTIST',
   });
 
   const { data: studio } = useQuery({
@@ -267,21 +284,16 @@ export default function DashboardPage() {
     }
   }
 
-  const artist   = user?.artist;
+  // Prefer the live artist record returned with the Passport portfolio. The
+  // persisted login snapshot can be stale after profile or avatar changes.
+  const artist   = portfolioData?.artist ?? user?.artist;
   const passport = artist?.passport;
   const balance  = Number(artist?.wallet?.balance_usd ?? 0);
 
-  // Profile completion score
-  const profileFields = [
-    { label: 'Avatar', done: !!(artist as any)?.avatar_url },
-    { label: 'Bio', done: !!(artist as any)?.bio },
-    { label: 'Alias', done: !!artist?.alias },
-    { label: 'Genres', done: ((passport as any)?.creative_dna?.genres?.length ?? 0) > 0 },
-    { label: 'Vocal type', done: !!(passport as any)?.creative_dna?.vocal_type },
-    { label: 'Energy', done: !!(passport as any)?.creative_dna?.energy_profile },
-  ];
-  const profileScore = Math.round((profileFields.filter(f => f.done).length / profileFields.length) * 100);
-  const missingFields = profileFields.filter(f => !f.done);
+  const profileScore = portfolioData?.score ?? (passport as any)?.profile_strength ?? 0;
+  const missingFields = (portfolioData?.score_breakdown ?? [])
+    .filter((item: any) => item.earned < item.max)
+    .map((item: any) => ({ label: item.label, done: false }));
 
   const allBookings = Array.isArray(bookings) ? bookings : (bookings as any)?.data ?? [];
 
@@ -297,6 +309,14 @@ export default function DashboardPage() {
     .slice(0, 5);
 
   const nextSession = upcoming[0] ?? null;
+  const activeProjects = (portfolioData?.project_options ?? [])
+    .filter((project: any) => project.is_active && project.phase !== 'DELIVERED');
+  const nextProject = activeProjects[0] ?? null;
+  const primaryAction = nextSession
+    ? { to: `/bookings/${nextSession.id}`, eyebrow: 'Your next move', label: 'Prepare for your session', detail: `${fmtDateShort(nextSession.starts_at)} at ${fmtTime(nextSession.starts_at)}`, cta: 'Prepare for session' }
+    : activeProjects.length > 0
+      ? { to: '/projects', eyebrow: 'Keep the momentum', label: 'Review your active work', detail: `${activeProjects.length} project${activeProjects.length === 1 ? '' : 's'} currently moving`, cta: 'Review project' }
+      : { to: '/book', eyebrow: 'Your next move', label: 'Start your next studio session', detail: 'Choose the room, people, and time for your next record', cta: 'Explore studio dates' };
 
   // Animated stats
   const cSessions  = useCounter(allBookings.length);
@@ -315,14 +335,25 @@ export default function DashboardPage() {
   return (
     <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#f5f5f5' }}>
       <style>{`
+        body.artist-dashboard { padding-top: 0; }
         @keyframes db-pulse { 0%,100%{opacity:1}50%{opacity:0.4} }
         @keyframes db-fade-in { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes db-ticker-in { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
         .db-fade { animation: db-fade-in 0.4s ease both; }
         .db-fade-1 { animation-delay: 0.05s; }
         .db-fade-2 { animation-delay: 0.12s; }
         .db-fade-3 { animation-delay: 0.2s; }
         .db-fade-4 { animation-delay: 0.28s; }
         .db-session-row:hover { background: #141414 !important; }
+        .db-primary-action:hover { background: #74add4 !important; color: #000 !important; }
+        .db-focus-card:hover { border-color: rgba(106,169,210,.34) !important; transform: translateY(-2px); }
+        .db-signal-card:hover { border-color: rgba(255,255,255,.13) !important; transform: translateY(-1px); }
+        .db-action-tile:hover { color: #f3f1eb !important; background: rgba(106,169,210,.08) !important; border-color: rgba(106,169,210,.2) !important; }
+        .db-legacy-actions, .db-legacy-profile, .db-legacy-wallet, .db-legacy-session, .db-legacy-presence, .db-legacy-discover, .db-legacy-profile-nudge, .db-legacy-session-history { display: none !important; }
+        .db-two-col { grid-template-columns: 1fr !important; }
+        .db-col-left { min-height: 0; }
+        .db-insights summary::-webkit-details-marker { display: none; }
+        .db-mobile-status { display: none; }
         @media (max-width: 768px) {
           .db-header { display: none; }
           .db-main { padding: 20px 16px 100px !important; }
@@ -335,19 +366,30 @@ export default function DashboardPage() {
           .db-inner-grid { grid-template-columns: 1fr 1fr !important; }
           .db-topup-grid { grid-template-columns: 1fr 1fr !important; }
           .db-welcome h1 { font-size: 24px !important; }
+          .db-mobile-status { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+          .db-briefing { grid-template-columns: 1fr 1fr !important; }
+          .db-focus-card { grid-column: 1 / -1; min-height: 210px !important; }
+          .db-action-dock { grid-template-columns: repeat(3, 1fr) !important; }
+        }
+        @media (max-width: 520px) {
+          .db-briefing { grid-template-columns: 1fr !important; }
+          .db-focus-card { grid-column: auto; }
+          .db-hero-stats { width: 100%; justify-content: space-between; }
+          .db-action-dock { grid-template-columns: repeat(3, 1fr) !important; }
         }
       `}</style>
 
       {/* Nav */}
       <header className="db-header" style={{ borderBottom: '1px solid #141414', padding: '14px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <SunMark size={24} />
+          <OianoBrand variant="compact" size={20} />
           <span style={{ color: '#2a2a2a', fontSize: 11, fontFamily: 'monospace' }}>StudioOS</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <StudioBar />
+          <ArtistStatusToggle inline />
           <NotificationBell />
-          <button onClick={handleLogout} style={{ fontSize: 11, color: '#3a3a3a', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+          <button type="button" onClick={handleLogout} style={{ fontSize: 12, color: '#888', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
             sign out
           </button>
         </div>
@@ -368,23 +410,36 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {bookingsError && (
+        <div role="alert" style={{ maxWidth: 1100, margin: '16px auto 0', padding: '12px 16px', background: '#1a0d0d', border: '1px solid #5f2828', borderRadius: 10, color: '#fca5a5', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <span style={{ fontSize: 13 }}>We couldn't load your sessions. Your profile and wallet are still available.</span>
+          <button type="button" onClick={() => refetchBookings()} style={{ color: '#fff', background: '#7f1d1d', border: 'none', borderRadius: 6, padding: '7px 12px', cursor: 'pointer' }}>Try again</button>
+        </div>
+      )}
+
       <main className="db-main" style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 24px', display: 'flex', flexDirection: 'column', gap: 28, paddingBottom: 'calc(32px + 68px)' }}>
+        <div className="db-mobile-status">
+          <StudioBar />
+          <ArtistStatusToggle inline />
+        </div>
 
         {/* ── Welcome hero ── */}
         <div className="db-fade db-hero" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-          <div>
-            <p style={{ fontSize: 11, color: '#3a3a3a', fontFamily: 'monospace', letterSpacing: '0.1em', marginBottom: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <ArtistAvatar src={(artist as any)?.avatar_url} name={artist?.alias ?? artist?.name ?? 'Artist'} size={58} shape="portrait" />
+            <div>
+            <p style={{ fontSize: 10, color: '#6a6a6a', fontFamily: 'monospace', letterSpacing: '0.14em', marginBottom: 9, textTransform: 'uppercase' }}>
               {fmtDate()}
             </p>
-            <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 32, color: '#e4e4e7', fontWeight: 600, lineHeight: 1.2 }}>
-              {greeting()},<br />
-              <span style={{ color: '#5A9BCB' }}>{artist?.alias ?? artist?.name ?? user?.email?.split('@')[0]}</span>
+            <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 38, color: '#f2f0eb', fontWeight: 500, lineHeight: 1.08, letterSpacing: '-0.025em' }}>
+              {greeting()}, <span style={{ color: '#6aa9d2' }}>{artist?.alias ?? artist?.name ?? user?.email?.split('@')[0]}</span>
             </h1>
             {(passport as any)?.bio && (
-              <p style={{ marginTop: 10, fontSize: 13, color: '#555', maxWidth: 480, lineHeight: 1.6 }}>
+              <p style={{ marginTop: 10, fontSize: 13, color: '#999', maxWidth: 480, lineHeight: 1.6 }}>
                 {(passport as any).bio.slice(0, 120)}{(passport as any).bio.length > 120 ? '…' : ''}
               </p>
             )}
+            </div>
           </div>
 
           {/* Micro stats */}
@@ -398,54 +453,86 @@ export default function DashboardPage() {
                 <p style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, color: '#5A9BCB', fontWeight: 700, lineHeight: 1 }}>
                   {loadingBookings ? '—' : s.value}
                 </p>
-                <p style={{ fontSize: 10, color: '#3a3a3a', fontFamily: 'monospace', marginTop: 3 }}>{s.label}</p>
+                <p style={{ fontSize: 11, color: '#777', fontFamily: 'monospace', marginTop: 3 }}>{s.label}</p>
               </div>
             ))}
           </div>
         </div>
 
+        <NetworkExchangePanel compact />
+
         {/* ── Two-column grid ── */}
+        <section className="db-fade db-fade-1" aria-labelledby="today-heading">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+            <p id="today-heading" style={{ fontSize: 10, color: '#777', fontFamily: 'monospace', letterSpacing: '0.14em', textTransform: 'uppercase' }}>Today at OIANO</p>
+            <span style={{ fontSize: 10, color: '#3f454a', fontFamily: 'monospace' }}>{studio?.name ?? 'Dreamz Music Lab'}</span>
+          </div>
+          <div className="db-briefing" style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 1.65fr) repeat(4, minmax(0, 1fr))', gap: 12 }}>
+            <Link className="db-focus-card" to={primaryAction.to} style={{ minHeight: 180, position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: 22, borderRadius: 16, textDecoration: 'none', background: '#0a0f13', border: '1px solid rgba(106,169,210,.2)', boxShadow: '0 24px 70px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.04)' }}>
+              <img src="/images/mock/oiano-studio-editorial-v1.png" alt="" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: '62% center', opacity: .78 }} />
+              <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(5,8,11,.98) 0%, rgba(5,9,12,.9) 43%, rgba(5,9,12,.25) 100%), linear-gradient(0deg, rgba(4,7,9,.65), transparent 70%)' }} />
+              <div style={{ position: 'relative' }}>
+                <p style={{ margin: 0, fontSize: 9, color: '#83b8d8', fontFamily: 'monospace', letterSpacing: '0.16em', textTransform: 'uppercase' }}>{primaryAction.eyebrow}</p>
+                <h2 style={{ margin: '12px 0 7px', maxWidth: 340, color: '#f4f2ed', fontFamily: "'Playfair Display', serif", fontSize: 25, lineHeight: 1.15, fontWeight: 500 }}>{primaryAction.label}</h2>
+                <p style={{ margin: 0, color: '#7f8990', fontSize: 11 }}>{primaryAction.detail}</p>
+              </div>
+              <span style={{ position: 'relative', alignSelf: 'flex-start', color: '#0a0d0f', background: '#6aa9d2', padding: '8px 13px', borderRadius: 8, fontSize: 11, fontWeight: 700 }}>{primaryAction.cta} →</span>
+            </Link>
+
+            <Link className="db-signal-card" to={nextSession ? `/bookings/${nextSession.id}` : '/book'} style={{ minHeight: 180, display: 'flex', flexDirection: 'column', padding: 17, borderRadius: 16, textDecoration: 'none', background: 'linear-gradient(145deg, rgba(18,21,24,.94), rgba(10,12,14,.92))', border: '1px solid rgba(255,255,255,.075)' }}>
+              <span style={{ fontSize: 9, color: '#596168', fontFamily: 'monospace', letterSpacing: '0.12em' }}>NEXT SESSION</span>
+              <strong style={{ marginTop: 'auto', color: nextSession ? '#f1efe9' : '#8a8a86', fontFamily: "'Playfair Display', serif", fontWeight: 500, fontSize: 21 }}>{nextSession ? fmtDateShort(nextSession.starts_at) : 'Not booked'}</strong>
+              <span style={{ marginTop: 5, color: '#6aa9d2', fontFamily: 'monospace', fontSize: 10 }}>{nextSession ? `${fmtTime(nextSession.starts_at)} · ${nextSession.room?.name ?? 'Room TBA'}` : 'Find a studio time →'}</span>
+            </Link>
+
+            <Link className="db-signal-card" to="/projects" style={{ minHeight: 180, display: 'flex', flexDirection: 'column', padding: 17, borderRadius: 16, textDecoration: 'none', background: 'linear-gradient(145deg, rgba(18,21,24,.94), rgba(10,12,14,.92))', border: '1px solid rgba(255,255,255,.075)' }}>
+              <span style={{ fontSize: 9, color: '#596168', fontFamily: 'monospace', letterSpacing: '0.12em' }}>ACTIVE WORK</span>
+              <strong style={{ marginTop: 'auto', color: '#d3b35c', fontFamily: "'Playfair Display', serif", fontWeight: 500, fontSize: 25 }}>{activeProjects.length}</strong>
+              <span style={{ marginTop: 4, color: '#7d7a72', fontSize: 10, lineHeight: 1.4 }}>{nextProject?.title ?? 'Start building your catalogue'}</span>
+            </Link>
+
+            <Link className="db-signal-card" to="/artist/passport" style={{ minHeight: 180, display: 'flex', flexDirection: 'column', padding: 17, borderRadius: 16, textDecoration: 'none', background: 'linear-gradient(145deg, rgba(18,21,24,.94), rgba(10,12,14,.92))', border: '1px solid rgba(255,255,255,.075)' }}>
+              <span style={{ fontSize: 9, color: '#596168', fontFamily: 'monospace', letterSpacing: '0.12em' }}>PASSPORT</span>
+              <strong style={{ marginTop: 'auto', color: profileScore >= 80 ? '#7dc99a' : '#d3b35c', fontFamily: "'Playfair Display', serif", fontWeight: 500, fontSize: 25 }}>{profileScore}%</strong>
+              <span style={{ marginTop: 4, color: '#7d7a72', fontSize: 10 }}>{profileScore < 100 ? 'Strength · keep building →' : 'Portfolio complete'}</span>
+            </Link>
+
+            <button className="db-signal-card" type="button" onClick={() => setTopUpOpen(true)} style={{ minHeight: 180, display: 'flex', flexDirection: 'column', textAlign: 'left', padding: 17, borderRadius: 16, cursor: 'pointer', background: 'linear-gradient(145deg, rgba(18,21,24,.94), rgba(10,12,14,.92))', border: '1px solid rgba(255,255,255,.075)' }}>
+              <span style={{ fontSize: 9, color: '#596168', fontFamily: 'monospace', letterSpacing: '0.12em' }}>STUDIO CREDIT</span>
+              <strong style={{ marginTop: 'auto', color: '#f1efe9', fontFamily: "'Playfair Display', serif", fontWeight: 500, fontSize: 23 }}>${balance.toFixed(2)}</strong>
+              <span style={{ marginTop: 4, color: '#6aa9d2', fontSize: 10 }}>{balance > 0 ? 'Ready to invest in studio time' : 'Add credits →'}</span>
+            </button>
+          </div>
+        </section>
+
+        <nav className="db-action-dock db-fade db-fade-1" aria-label="Artist shortcuts" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 8, padding: 8, borderRadius: 16, background: 'rgba(14,17,19,.72)', border: '1px solid rgba(255,255,255,.07)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.025)' }}>
+          {[
+            { label: 'Book studio', to: '/book', Icon: Mic2 },
+            { label: 'My schedule', to: '/calendar', Icon: CalendarDays },
+            { label: 'Artist Passport', to: '/artist/passport', Icon: IdCard },
+            { label: 'Projects', to: '/projects', Icon: FolderKanban },
+            { label: 'Producers', to: '/producers', Icon: Compass },
+          ].map(({ label, to, Icon }) => (
+            <Link key={label} className="db-action-tile" to={to} style={{ minHeight: 66, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 7, color: '#898d90', textDecoration: 'none', border: '1px solid transparent', borderRadius: 11, fontSize: 10 }}>
+              <Icon size={18} strokeWidth={1.65} aria-hidden="true" />
+              <span>{label}</span>
+            </Link>
+          ))}
+          <button className="db-action-tile" type="button" onClick={() => setEditOpen(true)} style={{ minHeight: 66, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 7, color: '#898d90', background: 'transparent', border: '1px solid transparent', borderRadius: 11, fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>
+            <Pencil size={18} strokeWidth={1.65} aria-hidden="true" />
+            <span>Edit profile</span>
+          </button>
+        </nav>
+
         <div className="db-fade db-fade-1 db-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
 
-          {/* LEFT: Passport card + actions */}
+          {/* LEFT: Account actions */}
           <div className="db-col-left" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {passport && artist ? (
-              <>
-                <ArtistPassportCard
-                  artist={{
-                    id: artist.id,
-                    name: artist.name,
-                    alias: artist.alias,
-                    avatar_url: (artist as any).avatar_url,
-                    bio: (artist as any).bio,
-                    passport: {
-                      passport_code: (passport as any).passport_code,
-                      profile_strength: (passport as any).profile_strength,
-                      creative_dna: (passport as any).creative_dna,
-                    },
-                  }}
-                  editable
-                  size="md"
-                />
-                <p style={{ fontSize: 10, color: '#2a2a2a', fontFamily: 'monospace', textAlign: 'center' }}>Click card to flip</p>
-              </>
-            ) : (
-              <div style={{ background: '#111', border: '1px solid #1a1a1a', borderRadius: 12, padding: 24, textAlign: 'center' }}>
-                <p style={{ color: '#444', fontSize: 12 }}>Complete your profile to unlock your passport</p>
-                <button onClick={() => setEditOpen(true)} style={{ marginTop: 12, fontSize: 11, color: '#5A9BCB', background: 'none', border: '1px solid #5A9BCB30', padding: '6px 14px', borderRadius: 6, cursor: 'pointer' }}>
-                  Set up profile →
-                </button>
-              </div>
-            )}
-
             {/* Quick actions */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <Link to="/book" style={{ display: 'block', textAlign: 'center', background: '#5A9BCB', color: '#000', fontSize: 13, fontWeight: 700, padding: '11px 0', borderRadius: 8, textDecoration: 'none' }}>
-                Book a session →
-              </Link>
+            <div className="db-legacy-actions" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div className="db-inner-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <Link to="/passport" style={{ display: 'block', textAlign: 'center', fontSize: 11, color: '#888', border: '1px solid #1e1e1e', padding: '9px 0', borderRadius: 7, textDecoration: 'none' }}>
-                  Share passport
+                <Link to="/artist/passport" style={{ display: 'block', textAlign: 'center', fontSize: 11, color: '#5A9BCB', border: '1px solid rgba(90,155,203,0.3)', background: 'rgba(90,155,203,0.06)', padding: '9px 0', borderRadius: 7, textDecoration: 'none' }}>
+                  Open my passport
                 </Link>
                 <button onClick={() => setEditOpen(true)} style={{ fontSize: 11, color: '#888', border: '1px solid #1e1e1e', padding: '9px 0', borderRadius: 7, background: 'none', cursor: 'pointer' }}>
                   Edit profile
@@ -459,7 +546,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Profile completion nudge */}
-            <div style={{ background: '#0f0f0f', border: '1px solid #1a1200', borderRadius: 10, padding: '14px 16px' }}>
+            <div className="db-legacy-profile" style={{ background: '#0f0f0f', border: '1px solid #1a1200', borderRadius: 10, padding: '14px 16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <p style={{ fontSize: 10, color: '#5A9BCB', fontFamily: 'monospace', letterSpacing: '0.1em', margin: 0 }}>PASSPORT STRENGTH</p>
                 <span style={{ fontSize: 12, fontWeight: 700, color: profileScore >= 80 ? '#4ade80' : '#C9A84C' }}>{profileScore}%</span>
@@ -469,7 +556,7 @@ export default function DashboardPage() {
               </div>
               {profileScore < 100 && missingFields.length > 0 && (
                 <p style={{ fontSize: 11, color: '#555', margin: '0 0 8px' }}>
-                  Missing: {missingFields.map(f => f.label).join(', ')}
+                  Missing: {missingFields.map((f: { label: string }) => f.label).join(', ')}
                 </p>
               )}
               {/* Profile view count — shows when someone has looked */}
@@ -484,9 +571,9 @@ export default function DashboardPage() {
             </div>
 
             {/* Wallet — framed as studio investment, not a gate */}
-            <div style={{ background: '#111', border: `1px solid ${balance > 0 ? '#1e1e0a' : '#1a1a1a'}`, borderRadius: 10, padding: '14px 16px' }}>
+            <div className="db-legacy-wallet" style={{ background: '#111', border: `1px solid ${balance > 0 ? '#1e1e0a' : '#1a1a1a'}`, borderRadius: 10, padding: '14px 16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <p style={{ fontSize: 10, color: '#3a3a3a', fontFamily: 'monospace', letterSpacing: '0.1em', margin: 0 }}>STUDIO WALLET</p>
+                <p style={{ fontSize: 10, color: '#3a3a3a', fontFamily: 'monospace', letterSpacing: '0.1em', margin: 0 }}>STUDIO CREDIT</p>
                 {balance > 0 && (
                   <span style={{ fontSize: 9, color: '#2a4a2a', fontFamily: 'monospace', background: '#1a2a1a', padding: '2px 7px', borderRadius: 99 }}>
                     ~{Math.floor(balance / 50)} session{Math.floor(balance / 50) !== 1 ? 's' : ''} available
@@ -530,8 +617,8 @@ export default function DashboardPage() {
                 onClick={() => setTopUpOpen(false)}>
                 <div style={{ background: '#111', border: '1px solid #222', borderRadius: 16, padding: 28, width: '100%', maxWidth: 380 }}
                   onClick={e => e.stopPropagation()}>
-                  <p style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, color: '#fff', margin: '0 0 4px' }}>Add Studio Credits</p>
-                  <p style={{ fontSize: 12, color: '#555', margin: '0 0 20px' }}>Credits are used to book sessions instantly. Minimum $10.</p>
+                  <p style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, color: '#fff', margin: '0 0 4px' }}>Add Studio Credit</p>
+                  <p style={{ fontSize: 12, color: '#555', margin: '0 0 20px' }}>Use Studio Credit to request sessions. Minimum $10.</p>
                   {/* Preset quick-picks */}
                   <div className="db-topup-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
                     {TOP_UP_PRESETS.map(amt => (
@@ -580,7 +667,7 @@ export default function DashboardPage() {
           <div className="db-col-right" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
             {/* Next session countdown */}
-            {nextSession ? (
+            <div className="db-legacy-session">{nextSession ? (
               <SessionCountdown session={nextSession} />
             ) : (
               <div style={{ background: '#0f0f0f', border: '1px solid #141414', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
@@ -591,7 +678,7 @@ export default function DashboardPage() {
                   Book now →
                 </Link>
               </div>
-            )}
+            )}</div>
 
             {/* Creative identity */}
             <div style={{ background: '#111', border: '1px solid #1a1a1a', borderRadius: 12, padding: '16px 20px' }}>
@@ -637,13 +724,13 @@ export default function DashboardPage() {
             </div>
 
             {/* Studio presence */}
-            <div style={{ background: '#111', border: '1px solid #1a1a1a', borderRadius: 12, padding: '14px 16px' }}>
+            <div className="db-legacy-presence" style={{ background: '#111', border: '1px solid #1a1a1a', borderRadius: 12, padding: '14px 16px' }}>
               <p style={{ fontSize: 10, color: '#3a3a3a', fontFamily: 'monospace', letterSpacing: '0.1em', marginBottom: 12 }}>YOUR OIANO PRESENCE</p>
               <div className="db-inner-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 {[
                   { label: 'Fav room', value: favRoom ?? '—' },
                   { label: 'Studio', value: studio?.name ?? 'Dreamz Music Lab' },
-                  { label: 'Profile', value: passport ? `${(passport as any).profile_strength ?? 0}%` : '—' },
+                  { label: 'Profile', value: passport ? `${profileScore}%` : '—' },
                   { label: 'Code', value: (passport as any)?.passport_code ?? '—' },
                 ].map(item => (
                   <div key={item.label}>
@@ -657,12 +744,26 @@ export default function DashboardPage() {
         </div>
 
         {/* ── E: Session stats ── */}
-        <div className="db-fade db-fade-2" style={{ marginTop: 20 }}>
-          <SessionStats />
+        <details className="db-insights db-fade db-fade-2" style={{ border: '1px solid rgba(255,255,255,.07)', borderRadius: 14, background: 'rgba(14,17,19,.6)', overflow: 'hidden' }}>
+          <summary style={{ listStyle: 'none', cursor: 'pointer', padding: '15px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#92979a', fontSize: 11 }}>
+            <span>Studio insights</span><span style={{ color: '#596168', fontFamily: 'monospace' }}>SESSION ANALYTICS +</span>
+          </summary>
+          <div style={{ padding: '0 14px 14px' }}><SessionStats /></div>
+        </details>
+
+        <div className="db-fade db-fade-2" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '15px 18px', borderRadius: 14, background: 'linear-gradient(100deg, rgba(211,179,92,.055), rgba(106,169,210,.055))', border: '1px solid rgba(255,255,255,.07)' }}>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ margin: 0, color: '#d7d4ce', fontSize: 12, fontWeight: 600 }}>Discover collaborators</p>
+            <p style={{ margin: '3px 0 0', color: '#62676a', fontSize: 10 }}>Find artists by creative DNA or preview producer catalogues.</p>
+          </div>
+          <div style={{ display: 'flex', gap: 7, flexShrink: 0 }}>
+            <Link to="/discover" style={{ color: '#d3b35c', border: '1px solid rgba(211,179,92,.22)', padding: '7px 11px', borderRadius: 8, textDecoration: 'none', fontSize: 10 }}>Artists</Link>
+            <Link to="/producers" style={{ color: '#6aa9d2', border: '1px solid rgba(106,169,210,.22)', padding: '7px 11px', borderRadius: 8, textDecoration: 'none', fontSize: 10 }}>Producers</Link>
+          </div>
         </div>
 
         {/* ── D: Discover CTA ── */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#111', border: '1px solid #1a1a1a', borderRadius: 10, padding: '14px 18px', marginTop: 8 }}>
+        <div className="db-legacy-discover" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#111', border: '1px solid #1a1a1a', borderRadius: 10, padding: '14px 18px', marginTop: 8 }}>
           <div>
             <p style={{ fontSize: 11, color: '#888', fontWeight: 500 }}>Find artists to collaborate with</p>
             <p style={{ fontSize: 10, color: '#3a3a3a', marginTop: 2 }}>Browse the Dreamz Music Lab roster by creative DNA match</p>
@@ -673,7 +774,7 @@ export default function DashboardPage() {
         </div>
 
         {/* ── D2: Browse producers CTA ── */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#111', border: '1px solid #1a1a1a', borderRadius: 10, padding: '14px 18px', marginTop: 8 }}>
+        <div className="db-legacy-discover" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#111', border: '1px solid #1a1a1a', borderRadius: 10, padding: '14px 18px', marginTop: 8 }}>
           <div>
             <p style={{ fontSize: 11, color: '#888', fontWeight: 500 }}>Find a producer for your next session</p>
             <p style={{ fontSize: 10, color: '#3a3a3a', marginTop: 2 }}>Browse profiles and preview their beat catalogue</p>
@@ -684,7 +785,25 @@ export default function DashboardPage() {
         </div>
 
         {/* ── Session history timeline ── */}
-        <div className="db-fade db-fade-2">
+        <section className="db-fade db-fade-2" aria-labelledby="career-activity-heading">
+          <div style={{ display: 'flex', alignItems: 'end', justifyContent: 'space-between', gap: 14, marginBottom: 12 }}>
+            <div><p id="career-activity-heading" style={{ margin: 0, fontSize: 10, color: '#8a8f92', fontFamily: 'monospace', letterSpacing: '.14em' }}>CAREER ACTIVITY</p><p style={{ margin: '4px 0 0', fontSize: 11, color: '#50565a' }}>The work, proof, and connections building your artist story.</p></div>
+            <Link to="/artist/passport" style={{ fontSize: 10, color: '#d3b35c', textDecoration: 'none' }}>Open professional identity →</Link>
+          </div>
+          <div style={{ overflow: 'hidden', borderRadius: 14, border: '1px solid rgba(255,255,255,.07)', background: 'rgba(12,15,17,.7)' }}>
+            {loadingActivity ? <p style={{ padding: 18, margin: 0, fontSize: 10, color: '#555b5f', fontFamily: 'monospace' }}>BUILDING YOUR TIMELINE…</p> : careerActivity.length ? careerActivity.slice(0, 6).map((item: any, index: number) => {
+              const colors: Record<string, string> = { blue: '#6aa9d2', gold: '#d3b35c', green: '#4fa98a', violet: '#9878c7' };
+              const color = colors[item.tone] ?? '#7d8589';
+              return <Link key={item.id} to={item.href} style={{ display: 'grid', gridTemplateColumns: '10px minmax(0,1fr) auto', alignItems: 'center', gap: 13, padding: '13px 16px', borderBottom: index < Math.min(careerActivity.length, 6) - 1 ? '1px solid rgba(255,255,255,.05)' : 'none', textDecoration: 'none' }}>
+                <span aria-hidden="true" style={{ width: 7, height: 7, borderRadius: '50%', background: color, boxShadow: `0 0 12px ${color}55` }} />
+                <span style={{ minWidth: 0 }}><strong style={{ display: 'block', color: '#d9d7d1', fontSize: 12, fontWeight: 600 }}>{item.title}</strong><span style={{ display: 'block', marginTop: 2, color: '#5e6468', fontSize: 10, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{item.detail}</span></span>
+                <time style={{ color: '#4d5357', fontSize: 9, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{new Date(item.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</time>
+              </Link>;
+            }) : <div style={{ padding: '26px 18px', textAlign: 'center' }}><p style={{ margin: 0, color: '#777d80', fontSize: 12 }}>Your career timeline starts with real activity.</p><Link to="/book" style={{ display: 'inline-block', marginTop: 8, color: '#6aa9d2', fontSize: 10, textDecoration: 'none' }}>Plan your first studio session →</Link></div>}
+          </div>
+        </section>
+
+        <div className="db-legacy-session-history db-fade db-fade-2">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
             <p style={{ fontSize: 11, color: '#3a3a3a', fontFamily: 'monospace', letterSpacing: '0.1em' }}>SESSION HISTORY</p>
             <Link to="/book" style={{ fontSize: 11, color: '#5A9BCB', textDecoration: 'none' }}>+ Book</Link>
@@ -772,12 +891,12 @@ export default function DashboardPage() {
         </div>
 
         {/* Profile strength nudge */}
-        {passport && (passport as any).profile_strength < 60 && (
-          <div className="db-fade db-fade-3" style={{ background: '#0f0f0f', border: '1px solid #1e1e1e', borderRadius: 10, padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        {passport && profileScore < 60 && (
+          <div className="db-legacy-profile-nudge db-fade db-fade-3" style={{ background: '#0f0f0f', border: '1px solid #1e1e1e', borderRadius: 10, padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <div>
               <p style={{ fontSize: 13, color: '#e4e4e7', fontWeight: 500, marginBottom: 2 }}>Complete your creative profile</p>
               <p style={{ fontSize: 11, color: '#444' }}>
-                {(passport as any).profile_strength}% strength — add bio, genres & vocal type to reach 100%
+                {profileScore}% Passport score — complete your portfolio to increase it
               </p>
             </div>
             <button onClick={() => setEditOpen(true)} style={{
@@ -805,6 +924,7 @@ export default function DashboardPage() {
           vocal_type:    creativeDNA.vocal_type ?? '',
           energy_profile: creativeDNA.energy_profile ?? '',
           key_themes:    creativeDNA.key_themes ?? [],
+          profile_strength: profileScore,
         }}
       />
     </div>

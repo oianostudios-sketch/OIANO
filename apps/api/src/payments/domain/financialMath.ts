@@ -1,0 +1,3 @@
+import { AppError } from '../../lib/errors';
+export function calculateFee(amount:bigint,basisPoints:bigint,fixedMinor=0n){if(amount<=0n||basisPoints<0n||basisPoints>10000n||fixedMinor<0n)throw new AppError('AMOUNT_MISMATCH',400);const fee=(amount*basisPoints+9999n)/10000n+fixedMinor;if(fee>amount)throw new AppError('AMOUNT_MISMATCH',400);return {fee,net:amount-fee};}
+export function assertBalanced(postings:Array<{direction:'DEBIT'|'CREDIT';amountMinor:bigint}>){const d=postings.filter(p=>p.direction==='DEBIT').reduce((n,p)=>n+p.amountMinor,0n),c=postings.filter(p=>p.direction==='CREDIT').reduce((n,p)=>n+p.amountMinor,0n);if(d!==c||d<=0n)throw new AppError('LEDGER_OUT_OF_BALANCE',500);return true;}

@@ -1,14 +1,16 @@
 import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { Filter, Megaphone, Wallet, Zap, Activity, Calendar, ClipboardList, CalendarPlus, Eye, LogOut } from 'lucide-react';
+import { Filter, Megaphone, Wallet, Zap, Activity, Calendar, ClipboardList, LogOut, Radio, Command, Plus, ArrowRight } from 'lucide-react';
 import { useAuthStore } from '../store/auth.store';
 import { api } from '../lib/api';
 import { useToast } from '../components/Toast';
-import SunMark from '../components/SunMark';
+import OianoBrand from '../components/OianoBrand';
 import { useStudioState } from '../context/StudioState';
 import { SkeletonKPI, SkeletonRow, SkeletonArtistCard } from '../components/Skeleton';
 import { fmtTime, fmtDate } from '../lib/fmt';
+import NetworkExchangePanel from '../components/NetworkExchangePanel';
+import NotificationBell from '../components/NotificationBell';
 
 // ── Mini sparkline ────────────────────────────────────────────────────────────
 function MiniSparkline({ values, color = '#C9A84C' }: { values: number[]; color?: string }) {
@@ -273,6 +275,10 @@ export default function AdminDashboardPage() {
     { label: 'Revenue',         value: analytics ? `$${Number(analytics.total_revenue_usd).toFixed(0)}` : '—', spark: sparkRevenue, delta: revDelta },
     { label: 'Awaiting review', value: pending.length,                       spark: null,         delta: null },
   ];
+  const liveRooms = roomStatus.filter((room) => room.busy).length;
+  const nextSession = today
+    .filter((booking: any) => new Date(booking.ends_at).getTime() > Date.now() && !['CANCELLED', 'NO_SHOW'].includes(booking.status))
+    .sort((a: any, b: any) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())[0];
 
   return (
     <div className="min-h-screen bg-studio-bg text-white">
@@ -280,9 +286,9 @@ export default function AdminDashboardPage() {
       {/* ── Header ─────────────────────────────────────────────────────────────── */}
       <header className="border-b border-studio-border px-6 py-3 flex items-center justify-between sticky top-0 bg-studio-bg/95 backdrop-blur-sm z-10">
         <div className="flex items-center gap-4">
-          <SunMark size={26} />
+          <OianoBrand variant="compact" size={21} />
           <span className="text-[10px] font-mono text-zinc-600 tracking-widest uppercase">
-            Dreamz Music Lab · Admin
+            {studio?.name ?? 'Studio workspace'} · Studio Operator
           </span>
         </div>
 
@@ -307,26 +313,23 @@ export default function AdminDashboardPage() {
           ))}
         </div>
 
-        <nav className="flex gap-5 items-center">
+        <nav className="flex items-center gap-1 overflow-x-auto">
           {[
-            { to: '/pulse',     label: 'Studio Pulse', icon: Activity },
+            { to: '/pulse',     label: 'Pulse', icon: Activity },
             { to: '/calendar',  label: 'Calendar',     icon: Calendar },
             { to: '/runsheet',  label: 'Runsheet',      icon: ClipboardList },
-            { to: '/book',      label: 'Book',          icon: CalendarPlus },
-            { to: '/dashboard', label: 'Artist view',   icon: Eye },
           ].map(({ to, label, icon: Icon }) => (
             <Link
               key={to}
               to={to}
               aria-label={label}
-              className="group relative flex items-center justify-center w-8 h-8 rounded-lg text-zinc-500 hover:text-white hover:bg-studio-surface transition-colors"
+              className="flex h-9 shrink-0 items-center gap-2 rounded-lg px-2.5 text-[10px] font-medium text-zinc-500 hover:bg-studio-surface hover:text-white md:px-3"
             >
               <Icon size={16} strokeWidth={1.75} />
-              <span className="pointer-events-none absolute top-full mt-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md border border-studio-border bg-studio-surface px-2 py-1 text-[10px] font-mono uppercase tracking-widest text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity z-20">
-                {label}
-              </span>
+              <span className="hidden lg:inline">{label}</span>
             </Link>
           ))}
+          <NotificationBell />
           <button
             onClick={() => { logout(); navigate('/enter'); }}
             aria-label="Sign out"
@@ -340,13 +343,53 @@ export default function AdminDashboardPage() {
         </nav>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
+      <main className="mx-auto max-w-[1380px] space-y-7 px-4 py-7 md:px-8 md:py-10">
+
+        <section className="flex flex-wrap items-end justify-between gap-5">
+          <div>
+            <p className="mb-3 flex items-center gap-2 text-[9px] font-mono uppercase tracking-[.28em] text-dome"><Command size={11}/> Studio command centre</p>
+            <h1 className="font-display text-3xl text-white md:text-5xl">Run today with clarity.</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-500">The floor, people and decisions that need your attention—before the reporting.</p>
+          </div>
+          <div className="flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/[.055] px-3 py-1.5 text-[9px] font-mono uppercase tracking-wider text-emerald-400">
+            <Radio size={10}/>{liveRooms ? `${liveRooms} room${liveRooms === 1 ? '' : 's'} live` : 'Studio ready'}
+          </div>
+        </section>
+
+        <section aria-label="Operator shortcuts" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          <button onClick={()=>setShowWalkIn(true)} className="group flex items-center gap-3 rounded-xl border border-dome/20 bg-dome/[.055] p-4 text-left hover:bg-dome/[.09]"><span className="grid h-9 w-9 place-items-center rounded-lg bg-dome/10 text-dome"><Plus size={16}/></span><span><b className="block text-xs">Add walk-in</b><small className="text-[9px] text-zinc-600">Fast booking</small></span><ArrowRight size={13} className="ml-auto text-zinc-700 group-hover:text-dome"/></button>
+          <Link to="/calendar" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-[#0b0d0f] p-4 hover:border-white/[.12]"><Calendar size={16} className="text-blue-400"/><span><b className="block text-xs">Calendar</b><small className="text-[9px] text-zinc-600">Capacity & conflicts</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
+          <Link to="/runsheet" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-[#0b0d0f] p-4 hover:border-white/[.12]"><ClipboardList size={16} className="text-violet-400"/><span><b className="block text-xs">Runsheet</b><small className="text-[9px] text-zinc-600">Session execution</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
+          <Link to="/pulse" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-[#0b0d0f] p-4 hover:border-white/[.12]"><Activity size={16} className="text-emerald-400"/><span><b className="block text-xs">Studio Pulse</b><small className="text-[9px] text-zinc-600">Live intelligence</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
+          <button onClick={()=>setShowAnnounce(true)} className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-[#0b0d0f] p-4 text-left hover:border-white/[.12]"><Megaphone size={16} className="text-amber-400"/><span><b className="block text-xs">Broadcast</b><small className="text-[9px] text-zinc-600">Message artists</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></button>
+        </section>
+
+        {(pending.length>0||(creditRequests as any[]).length>0)&&<section className="rounded-2xl border border-amber-500/15 bg-[linear-gradient(120deg,rgba(245,158,11,.07),rgba(255,255,255,.015))] p-5"><div className="flex flex-wrap items-center gap-4"><div className="grid h-10 w-10 place-items-center rounded-xl bg-amber-500/10 text-amber-400"><Zap size={17}/></div><div><p className="text-[9px] font-mono uppercase tracking-[.2em] text-amber-400">Needs attention</p><h2 className="mt-1 text-sm font-semibold">{pending.length} booking request{pending.length===1?'':'s'} · {(creditRequests as any[]).length} credit request{(creditRequests as any[]).length===1?'':'s'}</h2></div><button onClick={()=>setBookingTab('Pending')} className="ml-auto rounded-lg border border-amber-500/20 bg-amber-500/[.07] px-4 py-2 text-[10px] text-amber-300">Open queue</button></div></section>}
+
+        <NetworkExchangePanel />
+
+        <section className="relative overflow-hidden rounded-2xl border border-dome/[.15] bg-[radial-gradient(circle_at_80%_30%,rgba(201,168,76,.12),transparent_34%),linear-gradient(135deg,#0d0e10,#090a0b)] p-6 md:p-8">
+          <div className="absolute -right-12 -top-20 h-64 w-64 rounded-full border border-dome/10"/>
+          <div className="absolute right-6 top-0 h-36 w-36 rounded-full border border-dome/[.08]"/>
+          <div className="relative grid gap-7 lg:grid-cols-[1.4fr_1fr] lg:items-center">
+            <div>
+              <div className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${liveRooms ? 'animate-pulse bg-orange-400' : 'bg-emerald-400'}`}/><p className="text-[9px] font-mono uppercase tracking-[.2em] text-zinc-500">{liveRooms ? 'Sessions in progress' : 'Floor status'}</p></div>
+              <h2 className="mt-5 font-display text-2xl text-zinc-100">{nextSession ? `${nextSession.artist?.name ?? 'Walk-in'} · ${nextSession.room?.name ?? 'Room pending'}` : 'The floor is clear and ready.'}</h2>
+              <p className="mt-2 text-xs text-zinc-600">{nextSession ? `${fmt2(nextSession.starts_at)}–${fmt2(nextSession.ends_at)} · ${nextSession.service?.name ?? 'Studio session'}` : 'No active or upcoming sessions remain today.'}</p>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-xl border border-white/[.06] bg-black/20 p-4"><Calendar size={14} className="text-dome"/><b className="mt-4 block text-xl">{today.length}</b><span className="text-[8px] font-mono uppercase tracking-wider text-zinc-700">Today</span></div>
+              <button onClick={()=>setBookingTab('Pending')} className="rounded-xl border border-white/[.06] bg-black/20 p-4 text-left hover:border-amber-500/20"><Zap size={14} className="text-amber-400"/><b className="mt-4 block text-xl">{pending.length}</b><span className="text-[8px] font-mono uppercase tracking-wider text-zinc-700">To review</span></button>
+              <button onClick={()=>setShowWalkIn(true)} className="rounded-xl border border-dome/15 bg-dome/[.035] p-4 text-left hover:bg-dome/[.07]"><Plus size={14} className="text-dome"/><b className="mt-4 block text-sm">Walk-in</b><span className="text-[8px] font-mono uppercase tracking-wider text-zinc-700">Fast book</span></button>
+            </div>
+          </div>
+        </section>
 
         {/* ── KPI strip ─────────────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-4 gap-px bg-studio-border rounded-xl overflow-hidden border border-studio-border">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
           {loadingAnalytics
             ? Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="bg-studio-surface p-6">
+                <div key={i} className="rounded-xl border border-white/[.06] bg-[#0b0d0f] p-5">
                   <SkeletonKPI />
                 </div>
               ))
@@ -355,7 +398,7 @@ export default function AdminDashboardPage() {
                 return (
                 <div
                   key={kpi.label}
-                  className={`bg-studio-surface p-6 flex flex-col justify-between ${SURFACE_ANIMS[i] ?? 'animate-surface-4'}${isPendingCard ? ' kpi-pending-pulse' : ''}`}
+                  className={`min-h-32 rounded-xl border border-white/[.06] bg-[#0b0d0f] p-5 flex flex-col justify-between transition hover:border-white/[.1] ${SURFACE_ANIMS[i] ?? 'animate-surface-4'}${isPendingCard ? ' kpi-pending-pulse' : ''}`}
                 >
                   <div>
                     <p className="label-mono mb-3">{kpi.label}</p>
@@ -378,10 +421,10 @@ export default function AdminDashboardPage() {
         </div>
 
         {/* ── Two-column: Today's schedule + Sidebar ─────────────────────────── */}
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid gap-6 lg:grid-cols-3">
 
           {/* Today's schedule — takes 2 cols */}
-          <div className="col-span-2 space-y-4">
+          <div className="space-y-4 lg:col-span-2">
             <div className="flex items-center justify-between">
               <div>
                 <p className="label-mono mb-1">
@@ -429,7 +472,7 @@ export default function AdminDashboardPage() {
                   return (
                     <div
                       key={b.id}
-                      className={`bg-studio-surface border border-studio-border rounded-xl px-5 py-4 flex items-center justify-between ${animClass}`}
+                      className={`bg-studio-surface border border-studio-border rounded-xl px-4 py-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between md:px-5 ${animClass}`}
                     >
                       {/* Time + artist */}
                       <div className="flex items-center gap-5">
@@ -452,7 +495,7 @@ export default function AdminDashboardPage() {
                       </div>
 
                       {/* Actions */}
-                      <div className="flex items-center gap-2">
+                      <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
                         <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono ${STATUS_COLORS[b.status] ?? 'text-zinc-500'}`}>
                           {b.status}
                         </span>
@@ -658,9 +701,9 @@ export default function AdminDashboardPage() {
               {filteredBookings.map((b: any) => (
                 <div
                   key={b.id}
-                  className="bg-studio-surface border border-studio-border rounded-xl px-5 py-3 flex items-center gap-4 hover:border-zinc-700 transition-colors"
+                  className="grid gap-3 rounded-xl border border-studio-border bg-studio-surface px-4 py-4 transition-colors hover:border-zinc-700 sm:grid-cols-[8rem_1fr_auto] sm:items-center lg:grid-cols-[8rem_1fr_4rem_6rem_auto] lg:px-5"
                 >
-                  <div className="w-32 flex-shrink-0">
+                  <div className="sm:w-32">
                     <p className="text-zinc-400 text-xs">{fmt(b.starts_at)}</p>
                   </div>
                   <div className="flex-1 min-w-0">
@@ -669,15 +712,15 @@ export default function AdminDashboardPage() {
                       {b.service?.name ?? 'Session'} · {b.room?.name ?? 'No room'}
                     </p>
                   </div>
-                  <div className="w-16 text-right flex-shrink-0">
+                  <div className="text-left sm:text-right">
                     <p className="metric-number text-zinc-300 text-sm">${Number(b.total_usd ?? 0).toFixed(0)}</p>
                   </div>
-                  <div className="w-24 flex-shrink-0">
+                  <div>
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono ${STATUS_COLORS[b.status] ?? 'text-zinc-500'}`}>
                       {b.status}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <div className="flex flex-wrap items-center gap-1.5 sm:col-span-3 sm:justify-end lg:col-span-1">
                     {pendingAction === b.id ? (
                       <span className="text-xs text-zinc-500 font-mono animate-pulse px-2">saving…</span>
                     ) : (
@@ -714,7 +757,7 @@ export default function AdminDashboardPage() {
       </main>
 
       <footer className="text-center py-6">
-        <span className="brand-wordmark text-xs opacity-30" style={{ animationDelay: '0.5s' }}>OIANO</span>
+        <span className="opacity-30"><OianoBrand variant="mono" size={14}/></span>
       </footer>
 
       {/* ── Walk-in modal ──────────────────────────────────────────────────────── */}
