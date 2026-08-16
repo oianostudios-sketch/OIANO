@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { isR2Configured } from './r2';
 
-export function getImageUpload() {
+export function getImageUpload(folder = 'avatars') {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const multer = require('multer');
@@ -20,7 +20,7 @@ export function getImageUpload() {
     }
 
     // Local disk fallback
-    const uploadDir = path.join(process.cwd(), 'uploads', 'avatars');
+    const uploadDir = path.join(process.cwd(), 'uploads', folder);
     if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
     const storage = multer.diskStorage({
       destination: (_req: any, _file: any, cb: any) => cb(null, uploadDir),

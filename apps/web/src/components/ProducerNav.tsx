@@ -2,7 +2,7 @@
 // Shared top navigation for the producer portal
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/auth.store';
-import SunMark from './SunMark';
+import OianoBrand from './OianoBrand';
 
 export function ProducerNav({ passportCode }: { passportCode?: string | null }) {
   const navigate = useNavigate();
@@ -64,7 +64,7 @@ export function ProducerNav({ passportCode }: { passportCode?: string | null }) 
       {/* Left — wordmark */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexShrink: 0 }}>
         <span style={{ cursor: 'pointer' }} onClick={() => navigate('/producer')}>
-          <SunMark size={22} />
+          <OianoBrand variant="compact" size={20} />
         </span>
         <div className="producer-nav-subtitle" style={{ width: 1, height: 16, background: 'rgba(255,255,255,0.08)' }} />
         <span className="producer-nav-subtitle" style={{

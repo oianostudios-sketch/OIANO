@@ -2,24 +2,27 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { AppError } from '../lib/errors';
 import { prisma } from '../lib/prisma';
-import { DEFAULT_STUDIO_SLUG } from '@oiano/shared/constants';
+import { attachStudioScope } from '../middleware/studioScope.middleware';
 
 export const pulseRouter = Router();
 
 // 60-second in-memory cache — pulse data changes at most every few minutes
 // and each load fires 8 DB queries, so caching is a significant win.
 interface PulseCache { data: unknown; expiresAt: number }
-let pulseCache: PulseCache | null = null;
+const pulseCache = new Map<string, PulseCache>();
 const PULSE_CACHE_TTL = 60_000; // 60 s
 
 pulseRouter.get(
   '/',
   authenticate,
   requireRole('STUDIO_ADMIN'),
-  async (_req: Request, res: Response, next: NextFunction) => {
+  attachStudioScope,
+  async (req: Request, res: Response, next: NextFunction) => {
     try {
-      if (pulseCache && Date.now() < pulseCache.expiresAt) {
-        return res.json(pulseCache.data);
+      const studioId = (req as any).studioId as string;
+      const cached = pulseCache.get(studioId);
+      if (cached && Date.now() < cached.expiresAt) {
+        return res.json(cached.data);
       }
 
       const now = new Date();
@@ -44,11 +47,18 @@ pulseRouter.get(
         overduePayments,
         sessionMilestones,
         recentArtistIds,
+        rooms,
+        paidRevenue,
+        outstandingRevenue,
+        weekRevenue,
+        todayRevenue,
+        totalBookingCount,
+        producers,
       ] = await Promise.all([
         // Today's sessions for utilization calc
         prisma.booking.findMany({
           where: {
-            studio: { slug: DEFAULT_STUDIO_SLUG },
+            studio_id: studioId,
             starts_at: { gte: todayStart, lt: todayEnd },
             status: { notIn: ['CANCELLED', 'NO_SHOW'] },
           },
@@ -58,7 +68,7 @@ pulseRouter.get(
         // Last 30 days for genre trending
         prisma.booking.findMany({
           where: {
-            studio: { slug: DEFAULT_STUDIO_SLUG },
+            studio_id: studioId,
             starts_at: { gte: thirtyDaysAgo },
             status: { notIn: ['CANCELLED', 'NO_SHOW'] },
           },
@@ -75,20 +85,21 @@ pulseRouter.get(
         // This week for productivity comparison
         prisma.booking.count({
           where: {
-            studio: { slug: DEFAULT_STUDIO_SLUG },
+            studio_id: studioId,
             starts_at: { gte: weekStart },
             status: { notIn: ['CANCELLED', 'NO_SHOW'] },
           },
         }),
 
         prisma.artist.findMany({
+          where: { bookings: { some: { studio_id: studioId } } },
           select: { id: true, name: true, alias: true },
         }),
 
         // Unconfirmed upcoming bookings
         prisma.booking.count({
           where: {
-            studio: { slug: DEFAULT_STUDIO_SLUG },
+            studio_id: studioId,
             status: 'PENDING',
             starts_at: { gte: now },
           },
@@ -99,7 +110,7 @@ pulseRouter.get(
           where: {
             status: { in: ['UNPAID', 'FAILED'] },
             booking: {
-              studio: { slug: DEFAULT_STUDIO_SLUG },
+              studio_id: studioId,
               status: { in: ['COMPLETED', 'CONFIRMED'] },
             },
           },
@@ -109,7 +120,7 @@ pulseRouter.get(
         prisma.booking.groupBy({
           by: ['artist_id'],
           where: {
-            studio: { slug: DEFAULT_STUDIO_SLUG },
+            studio_id: studioId,
             status: { in: ['CONFIRMED', 'COMPLETED', 'IN_PROGRESS'] },
           },
           _count: { _all: true },
@@ -118,20 +129,44 @@ pulseRouter.get(
         // Artists active in last 30 days (IDs only)
         prisma.booking.findMany({
           where: {
-            studio: { slug: DEFAULT_STUDIO_SLUG },
+            studio_id: studioId,
             starts_at: { gte: thirtyDaysAgo },
           },
           select: { artist_id: true },
           distinct: ['artist_id'],
         }),
+        prisma.room.findMany({
+          where: { studio_id: studioId },
+          select: { id: true, name: true, capacity: true, hourly_rate: true },
+          orderBy: { name: 'asc' },
+        }),
+        prisma.payment.aggregate({
+          where: { status: 'PAID', booking: { studio_id: studioId } },
+          _sum: { amount_usd: true },
+        }),
+        prisma.payment.aggregate({
+          where: { status: { in: ['UNPAID', 'FAILED'] }, booking: { studio_id: studioId, status: { in: ['CONFIRMED', 'COMPLETED', 'IN_PROGRESS'] } } },
+          _sum: { amount_usd: true },
+        }),
+        prisma.payment.aggregate({
+          where: { status: 'PAID', booking: { studio_id: studioId, starts_at: { gte: weekStart } } },
+          _sum: { amount_usd: true },
+        }),
+        prisma.booking.aggregate({
+          where: { studio_id: studioId, starts_at: { gte: todayStart, lt: todayEnd }, status: { notIn: ['CANCELLED', 'NO_SHOW'] } },
+          _sum: { total_usd: true },
+        }),
+        prisma.booking.count({ where: { studio_id: studioId } }),
+        prisma.engineer.findMany({ where: { studio_id: studioId }, select: { id: true, name: true, specialties: true }, orderBy: { name: 'asc' } }),
       ]);
 
       // ── Utilization ────────────────────────────────────────────────────────
       const bookedMins = todayBookings.reduce((sum, b) => {
         return sum + (new Date(b.ends_at).getTime() - new Date(b.starts_at).getTime()) / 60_000;
       }, 0);
-      const AVAILABLE_MINS = 3 * 14 * 60; // 3 rooms × 14h (8am–10pm)
-      const today_pct = Math.min(100, Math.round((bookedMins / AVAILABLE_MINS) * 100));
+      const operatingHours = (req as any).studio.operating_close_hour - (req as any).studio.operating_open_hour;
+      const availableMins = rooms.length * operatingHours * 60;
+      const today_pct = availableMins > 0 ? Math.min(100, Math.round((bookedMins / availableMins) * 100)) : 0;
 
       // ── Trending genre ─────────────────────────────────────────────────────
       const genreCounts: Record<string, number> = {};
@@ -221,15 +256,32 @@ pulseRouter.get(
         utilization: {
           today_pct,
           today_booked_hours: parseFloat((bookedMins / 60).toFixed(1)),
-          today_available_hours: AVAILABLE_MINS / 60,
+          today_available_hours: availableMins / 60,
           week_sessions: weekBookings,
         },
+        studio: {
+          id: studioId,
+          name: (req as any).studio.name,
+          timezone: (req as any).studio.timezone,
+          currency: (req as any).studio.currency,
+          operating_open_hour: (req as any).studio.operating_open_hour,
+          operating_close_hour: (req as any).studio.operating_close_hour,
+        },
+        rooms: rooms.map((room) => ({ ...room, hourly_rate: room.hourly_rate == null ? null : Number(room.hourly_rate) })),
+        producers,
+        finance: {
+          collected_usd: Number(paidRevenue._sum.amount_usd ?? 0),
+          outstanding_usd: Number(outstandingRevenue._sum.amount_usd ?? 0),
+          week_collected_usd: Number(weekRevenue._sum.amount_usd ?? 0),
+          today_booked_usd: Number(todayRevenue._sum.total_usd ?? 0),
+        },
+        coverage: { artist_count: allArtists.length, booking_count: totalBookingCount, room_count: rooms.length, generated_at: new Date().toISOString() },
         trending_genre,
         wins: wins.slice(0, 3),
         next_moves: next_moves.slice(0, 4),
       };
 
-      pulseCache = { data: responseData, expiresAt: Date.now() + PULSE_CACHE_TTL };
+      pulseCache.set(studioId, { data: responseData, expiresAt: Date.now() + PULSE_CACHE_TTL });
       res.json(responseData);
     } catch (err) {
       next(err);

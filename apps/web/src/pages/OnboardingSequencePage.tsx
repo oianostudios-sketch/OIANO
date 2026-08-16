@@ -6,7 +6,7 @@
  * brand-new signup.
  */
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
 
@@ -324,6 +324,9 @@ function ConfirmationStep({ state, onDone }: { state: SharedState; onDone: () =>
 // ── Orchestrator ──────────────────────────────────────────────────────────────
 export default function OnboardingSequencePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedNext = searchParams.get('next');
+  const safeNext = requestedNext?.startsWith('/') && !requestedNext.startsWith('//') ? requestedNext : '/calendar';
   const user = useAuthStore((s) => s.user);
   const [step, setStep] = useState<Step>('identity');
   const [state, setState] = useState<SharedState>({
@@ -342,7 +345,7 @@ export default function OnboardingSequencePage() {
         <CalendarStep onAdvance={(slot) => { setState((prev) => ({ ...prev, bookingSlot: slot })); setStep('confirmation'); }} />
       )}
       {step === 'confirmation' && (
-        <ConfirmationStep state={state} onDone={() => navigate('/calendar')} />
+        <ConfirmationStep state={state} onDone={() => navigate(safeNext)} />
       )}
     </div>
   );

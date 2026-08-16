@@ -17,6 +17,7 @@ enum UserRole {
   PRODUCER
   STUDIO_ADMIN
   ENGINEER
+  OIANO_ADMIN
 }
 
 enum BookingStatus {
@@ -45,6 +46,46 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum OianoPaymentStatus {
+  CREATED
+  REQUIRES_ACTION
+  PROCESSING
+  AUTHORIZED
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  PARTIALLY_REFUNDED
+  REFUNDED
+  DISPUTED
+}
+
+enum PaymentPurpose {
+  STUDIO_BOOKING
+  BOOKING_DEPOSIT
+  SESSION_PAYMENT
+  MIXING
+  MASTERING
+  BEAT_PURCHASE
+  VIDEO_PRODUCTION
+  PHOTOGRAPHY
+  SUBSCRIPTION
+  INVOICE
+  PROJECT_PAYMENT
+  OTHER
+}
+
+enum UniversalPaymentMethod {
+  CARD
+  BANK_TRANSFER
+  APPLE_PAY
+  GOOGLE_PAY
+  MOBILE_MONEY
+  WALLET
+  LOCAL_PAYMENT_METHOD
+  CASH
+  OTHER
+}
+
 enum ServiceCategory {
   RECORDING
   FULL_DAY
@@ -54,72 +95,113 @@ enum ServiceCategory {
   MEMBERSHIP
 }
 
+enum CircleConsentStatus {
+  ELIGIBLE
+  REQUESTED
+  ACCEPTED
+  DECLINED
+  WITHDRAWN
+}
+
+enum CircleVisibility {
+  HIDDEN
+  INITIALS
+  STAGE_NAME
+  FULL_PROFILE
+}
+
 // ─── Core Auth ────────────────────────────────────────────────────────────────
 
 model User {
-  id            String    @id @default(uuid())
-  email         String    @unique
-  password_hash String?
-  role          UserRole  @default(ARTIST)
-  artist        Artist?
-  studio_staff  StudioStaff?
-  notifications    Notification[]
-  booking_messages BookingMessage[]
-  producer         Producer?
-  engineer         Engineer?
-  locale           String?   @default("en-US")
-  created_at    DateTime  @default(now())
-  updated_at    DateTime  @updatedAt
+  id                   String           @id @default(uuid())
+  email                String           @unique
+  password_hash        String?
+  role                 UserRole         @default(ARTIST)
+  artist               Artist?
+  studio_staff         StudioStaff?
+  notifications        Notification[]
+  booking_messages     BookingMessage[]
+  project_messages     ProjectMessage[]
+  producer             Producer?
+  engineer             Engineer?
+  locale               String?          @default("en-US")
+  mfa_secret_encrypted String?
+  mfa_enabled          Boolean          @default(false)
+  created_at           DateTime         @default(now())
+  updated_at           DateTime         @updatedAt
+  admin_audit_logs     AdminAuditLog[]
 
   @@map("users")
+}
+
+model AdminAuditLog {
+  id          String   @id @default(uuid())
+  actor_id    String
+  actor       User     @relation(fields: [actor_id], references: [id])
+  action      String
+  target_type String?
+  target_id   String?
+  method      String?
+  path        String?
+  ip_hash     String?
+  user_agent  String?
+  metadata    Json     @default("{}")
+  created_at  DateTime @default(now())
+
+  @@index([actor_id, created_at])
+  @@index([action, created_at])
+  @@map("admin_audit_logs")
 }
 
 // ─── Studio ───────────────────────────────────────────────────────────────────
 
 model Studio {
-  id                String    @id @default(uuid())
-  slug              String    @unique
-  name              String
-  timezone          String    @default("America/New_York")
-  currency          String    @default("USD")
-  stripe_account_id String?
-  address           String?
-  phone             String?
-  email             String?
-  logo_url          String?
-  mint_letter       String    @default("Z")  // passport code mint letter for this studio, e.g. OIA-Z0001
-  passport_seq      Int       @default(0)    // atomically incremented on each passport mint
-  rooms             Room[]
-  engineers         Engineer[]
-  services          ServiceOffering[]
-  bookings          Booking[]
-  availability      AvailabilitySlot[]
-  staff             StudioStaff[]
-  announcements     StudioAnnouncement[]
-  created_at        DateTime  @default(now())
+  id                   String               @id @default(uuid())
+  slug                 String               @unique
+  name                 String
+  timezone             String               @default("America/New_York")
+  currency             String               @default("USD")
+  operating_open_hour  Int                  @default(8)
+  operating_close_hour Int                  @default(22)
+  stripe_account_id    String?
+  address              String?
+  phone                String?
+  email                String?
+  logo_url             String?
+  mint_letter          String               @default("Z") // passport code mint letter for this studio, e.g. OIA-Z0001
+  passport_seq         Int                  @default(0) // atomically incremented on each passport mint
+  rooms                Room[]
+  engineers            Engineer[]
+  services             ServiceOffering[]
+  bookings             Booking[]
+  availability         AvailabilitySlot[]
+  staff                StudioStaff[]
+  announcements        StudioAnnouncement[]
+  circle_members       StudioCircleMember[]
+  created_at           DateTime             @default(now())
 
   @@map("studios")
 }
 
 model StudioStaff {
-  id         String   @id @default(uuid())
-  user_id    String   @unique
-  user       User     @relation(fields: [user_id], references: [id])
-  studio_id  String
-  studio     Studio   @relation(fields: [studio_id], references: [id])
-  role       UserRole @default(STUDIO_ADMIN)
+  id        String   @id @default(uuid())
+  user_id   String   @unique
+  user      User     @relation(fields: [user_id], references: [id])
+  studio_id String
+  studio    Studio   @relation(fields: [studio_id], references: [id])
+  role      UserRole @default(STUDIO_ADMIN)
 
   @@map("studio_staff")
 }
 
 model Room {
-  id           String   @id @default(uuid())
+  id           String             @id @default(uuid())
   studio_id    String
-  studio       Studio   @relation(fields: [studio_id], references: [id])
+  studio       Studio             @relation(fields: [studio_id], references: [id])
   name         String
   capacity     Int?
   description  String?
-  hourly_rate  Decimal? @db.Decimal(10, 2)
+  hourly_rate  Decimal?           @db.Decimal(10, 2)
   bookings     Booking[]
   availability AvailabilitySlot[]
 
@@ -127,25 +209,25 @@ model Room {
 }
 
 model Engineer {
-  id              String    @id @default(uuid())
-  studio_id       String
-  studio          Studio    @relation(fields: [studio_id], references: [id])
+  id                 String             @id @default(uuid())
+  studio_id          String
+  studio             Studio             @relation(fields: [studio_id], references: [id])
   // Links this bookable-resource record to a real login (User role=ENGINEER).
   // Previously unset for every Engineer -- the logged-in "engineer" and the
   // Engineer assigned to a booking were two disconnected records with no way
   // to tell they're the same person. Nullable: a studio can have Engineers
   // (e.g. freelancers) with no login of their own.
-  user_id         String?   @unique
-  user            User?     @relation(fields: [user_id], references: [id])
-  name            String
-  specialties     String[]
-  hourly_rate_usd Decimal?  @db.Decimal(10, 2)
-  bio             String?
-  avatar_url      String?
-  credits              String[]  @default([])
-  bookings             Booking[] @relation("AssignedEngineer")
-  preferred_bookings   Booking[] @relation("PreferredEngineer")
-  availability         AvailabilitySlot[]
+  user_id            String?            @unique
+  user               User?              @relation(fields: [user_id], references: [id])
+  name               String
+  specialties        String[]
+  hourly_rate_usd    Decimal?           @db.Decimal(10, 2)
+  bio                String?
+  avatar_url         String?
+  credits            String[]           @default([])
+  bookings           Booking[]          @relation("AssignedEngineer")
+  preferred_bookings Booking[]          @relation("PreferredEngineer")
+  availability       AvailabilitySlot[]
 
   @@map("engineers")
 }
@@ -159,7 +241,7 @@ model ServiceOffering {
   description   String?
   min_price_usd Decimal         @db.Decimal(10, 2)
   max_price_usd Decimal         @db.Decimal(10, 2)
-  unit          String          // "hour" | "session" | "track" | "month"
+  unit          String // "hour" | "session" | "track" | "month"
   bookings      Booking[]
 
   @@map("service_offerings")
@@ -184,56 +266,117 @@ model AvailabilitySlot {
 // ─── Artist ───────────────────────────────────────────────────────────────────
 
 model Artist {
-  id           String         @id @default(uuid())
-  user_id      String         @unique
-  user         User           @relation(fields: [user_id], references: [id])
-  name         String
-  alias        String?
-  bio          String?
-  avatar_url   String?
-  status       ArtistAvailability @default(AVAILABLE_FOR_BOOKING)
-  passport     ArtistPassport?
-  wallet       Wallet?
-  bookings     Booking[]
-  session_logs SessionLog[]
-  files        ArtistFile[]
+  id                   String               @id @default(uuid())
+  user_id              String               @unique
+  user                 User                 @relation(fields: [user_id], references: [id])
+  name                 String
+  alias                String?
+  bio                  String?
+  avatar_url           String?
+  status               ArtistAvailability   @default(AVAILABLE_FOR_BOOKING)
+  passport             ArtistPassport?
+  wallet               Wallet?
+  bookings             Booking[]
+  session_logs         SessionLog[]
+  files                ArtistFile[]
   projects             Project[]
-  connections_sent     PassportConnection[]  @relation("ConnectInitiator")
-  connections_received PassportConnection[]  @relation("ConnectRecipient")
-  connect_messages     ConnectMessage[]      @relation("ConnectMessages")
+  releases             ArtistRelease[]
+  connections_sent     PassportConnection[] @relation("ConnectInitiator")
+  connections_received PassportConnection[] @relation("ConnectRecipient")
+  connect_messages     ConnectMessage[]     @relation("ConnectMessages")
   activity_events      ActivityEvent[]
-  created_at   DateTime       @default(now())
+  studio_circles       StudioCircleMember[]
+  created_at           DateTime             @default(now())
 
   @@map("artists")
 }
 
+model StudioCircleMember {
+  id                 String              @id @default(uuid())
+  studio_id          String
+  studio             Studio              @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  artist_id          String
+  artist             Artist              @relation(fields: [artist_id], references: [id], onDelete: Cascade)
+  consent_status     CircleConsentStatus @default(ELIGIBLE)
+  visibility         CircleVisibility    @default(HIDDEN)
+  show_session_count Boolean             @default(false)
+  show_projects      Boolean             @default(false)
+  session_count      Int                 @default(1)
+  first_session_at   DateTime
+  last_session_at    DateTime
+  consented_at       DateTime?
+  withdrawn_at       DateTime?
+  created_at         DateTime            @default(now())
+  updated_at         DateTime            @updatedAt
+
+  @@unique([studio_id, artist_id])
+  @@index([studio_id, consent_status, last_session_at])
+  @@index([artist_id, consent_status])
+  @@map("studio_circle_members")
+}
+
 model ArtistPassport {
-  id                      String    @id @default(uuid())
-  artist_id               String    @unique
-  artist                  Artist    @relation(fields: [artist_id], references: [id])
-  passport_code           String    @unique     // e.g. OIANO-A1B2
-  creative_dna            Json      @default("{}")  // genres, influences, vocal, energy
-  profile_strength        Int       @default(0)     // 0–100
-  profile_image_url       String?                   // avatar / press photo
-  bio                     String?                   // short artist bio
-  ai_summary              String?                   // cached AI brief
-  ai_summary_updated_at   DateTime?                 // for cache invalidation
-  ai_summary_edited       Boolean   @default(false) // true if artist manually edited
-  ai_summary_public       Boolean   @default(true)  // false = hidden from engineers
-  profile_views           Int       @default(0)     // incremented on non-owner views
-  issued_at               DateTime  @default(now())
-  updated_at              DateTime  @updatedAt
+  id                      String         @id @default(uuid())
+  artist_id               String         @unique
+  artist                  Artist         @relation(fields: [artist_id], references: [id])
+  passport_code           String         @unique // e.g. OIANO-A1B2
+  creative_dna            Json           @default("{}") // genres, influences, vocal, energy
+  profile_strength        Int            @default(0) // 0–100
+  profile_image_url       String? // avatar / press photo
+  bio                     String? // short artist bio
+  ai_summary              String? // cached AI brief
+  ai_summary_updated_at   DateTime? // for cache invalidation
+  ai_summary_edited       Boolean        @default(false) // true if artist manually edited
+  ai_summary_public       Boolean        @default(true) // false = hidden from engineers
+  profile_views           Int            @default(0) // incremented on non-owner views
+  location                String?
+  social_links            Json           @default("{}")
+  collaboration_interests String[]       @default([])
+  issued_at               DateTime       @default(now())
+  updated_at              DateTime       @updatedAt
+  views                   PassportView[]
 
   @@map("artist_passports")
 }
 
+model PassportView {
+  id          String         @id @default(uuid())
+  passport_id String
+  passport    ArtistPassport @relation(fields: [passport_id], references: [id], onDelete: Cascade)
+  viewer_hash String
+  viewed_on   DateTime       @db.Date
+  created_at  DateTime       @default(now())
+
+  @@unique([passport_id, viewer_hash, viewed_on])
+  @@index([passport_id, viewed_on])
+  @@map("passport_views")
+}
+
+model ArtistRelease {
+  id            String    @id @default(uuid())
+  artist_id     String
+  artist        Artist    @relation(fields: [artist_id], references: [id], onDelete: Cascade)
+  title         String
+  release_type  String
+  release_date  DateTime?
+  artwork_url   String?
+  external_url  String?
+  collaborators String[]  @default([])
+  is_featured   Boolean   @default(false)
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  @@index([artist_id, release_date])
+  @@map("artist_releases")
+}
+
 model Wallet {
-  id              String               @id @default(uuid())
-  artist_id       String               @unique
-  artist          Artist               @relation(fields: [artist_id], references: [id])
-  balance_usd     Decimal              @default(0) @db.Decimal(10, 2)
-  transactions    WalletTransaction[]
-  top_ups         WalletTopUp[]
+  id           String              @id @default(uuid())
+  artist_id    String              @unique
+  artist       Artist              @relation(fields: [artist_id], references: [id])
+  balance_usd  Decimal             @default(0) @db.Decimal(10, 2)
+  transactions WalletTransaction[]
+  top_ups      WalletTopUp[]
 
   @@map("wallets")
 }
@@ -243,7 +386,7 @@ model WalletTransaction {
   wallet_id   String
   wallet      Wallet   @relation(fields: [wallet_id], references: [id])
   amount_usd  Decimal  @db.Decimal(10, 2)
-  type        String   // "credit" | "debit"
+  type        String // "credit" | "debit"
   description String?
   created_at  DateTime @default(now())
 
@@ -258,8 +401,8 @@ model ArtistFile {
   url         String
   mime_type   String?
   size_bytes  Int?
-  folder      String?  // relative folder path, e.g. "Projects/MyAlbum" or "Bounces"
-  source      String?  // "daw_watcher" | "manual"
+  folder      String? // relative folder path, e.g. "Projects/MyAlbum" or "Bounces"
+  source      String? // "daw_watcher" | "manual"
   uploaded_at DateTime @default(now())
 
   @@map("artist_files")
@@ -268,42 +411,90 @@ model ArtistFile {
 // ─── Booking & Sessions ───────────────────────────────────────────────────────
 
 model Booking {
-  id          String        @id @default(uuid())
-  studio_id   String
-  studio      Studio        @relation(fields: [studio_id], references: [id])
-  artist_id   String
-  artist      Artist        @relation(fields: [artist_id], references: [id])
-  room_id     String
-  room        Room          @relation(fields: [room_id], references: [id])
+  id                    String           @id @default(uuid())
+  studio_id             String
+  studio                Studio           @relation(fields: [studio_id], references: [id])
+  artist_id             String
+  artist                Artist           @relation(fields: [artist_id], references: [id])
+  room_id               String
+  room                  Room             @relation(fields: [room_id], references: [id])
   engineer_id           String?
-  engineer              Engineer?     @relation("AssignedEngineer", fields: [engineer_id], references: [id])
+  engineer              Engineer?        @relation("AssignedEngineer", fields: [engineer_id], references: [id])
   preferred_engineer_id String?
-  preferred_engineer    Engineer?     @relation("PreferredEngineer", fields: [preferred_engineer_id], references: [id])
-  service_id  String
-  service     ServiceOffering @relation(fields: [service_id], references: [id])
-  starts_at   DateTime
-  ends_at     DateTime
-  status      BookingStatus @default(PENDING)
-  total_usd   Decimal       @db.Decimal(10, 2)
-  notes       String?
-  payment     Payment?
-  session_log SessionLog?
-  messages    BookingMessage[]
-  project_id  String?
-  project     Project?      @relation(fields: [project_id], references: [id])
-  created_at  DateTime      @default(now())
-  updated_at  DateTime      @updatedAt
+  preferred_engineer    Engineer?        @relation("PreferredEngineer", fields: [preferred_engineer_id], references: [id])
+  service_id            String
+  service               ServiceOffering  @relation(fields: [service_id], references: [id])
+  starts_at             DateTime
+  ends_at               DateTime
+  status                BookingStatus    @default(PENDING)
+  total_usd             Decimal          @db.Decimal(10, 2)
+  notes                 String?
+  payment               Payment?
+  session_log           SessionLog?
+  messages              BookingMessage[]
+  project_id            String?
+  project               Project?         @relation(fields: [project_id], references: [id])
+  deliverables          Deliverable[]
+  created_at            DateTime         @default(now())
+  updated_at            DateTime         @updatedAt
 
   @@map("bookings")
+}
+
+model Deliverable {
+  id              String               @id @default(uuid())
+  booking_id      String
+  booking         Booking              @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+  title           String
+  status          String               @default("PENDING_REVIEW")
+  current_version Int                  @default(1)
+  created_by      String
+  reviewed_at     DateTime?
+  review_due_at   DateTime?
+  created_at      DateTime             @default(now())
+  updated_at      DateTime             @updatedAt
+  versions        DeliverableVersion[]
+  reviews         DeliverableReview[]
+
+  @@index([booking_id, status])
+  @@map("deliverables")
+}
+
+model DeliverableVersion {
+  id             String      @id @default(uuid())
+  deliverable_id String
+  deliverable    Deliverable @relation(fields: [deliverable_id], references: [id], onDelete: Cascade)
+  version_number Int
+  file_urls      String[]
+  notes          String?
+  created_by     String
+  created_at     DateTime    @default(now())
+
+  @@unique([deliverable_id, version_number])
+  @@map("deliverable_versions")
+}
+
+model DeliverableReview {
+  id             String      @id @default(uuid())
+  deliverable_id String
+  deliverable    Deliverable @relation(fields: [deliverable_id], references: [id], onDelete: Cascade)
+  version_number Int
+  decision       String
+  note           String?
+  reviewed_by    String
+  created_at     DateTime    @default(now())
+
+  @@index([deliverable_id, created_at])
+  @@map("deliverable_reviews")
 }
 
 model Payment {
   id                String        @id @default(uuid())
   booking_id        String        @unique
   booking           Booking       @relation(fields: [booking_id], references: [id])
-  provider          String        // "stripe" | "wallet" | "cash"
-  provider_ref      String?       // Stripe checkout session ID
-  payment_intent_id String?       // Stripe payment_intent ID — used for refund/failure matching
+  provider          String // "stripe" | "wallet" | "cash"
+  provider_ref      String?       @unique // Stripe checkout session ID
+  payment_intent_id String? // Stripe payment_intent ID — used for refund/failure matching
   amount_usd        Decimal       @db.Decimal(10, 2)
   status            PaymentStatus @default(UNPAID)
   paid_at           DateTime?
@@ -312,12 +503,220 @@ model Payment {
   @@map("payments")
 }
 
+// Provider-neutral OIANO Payments domain. The legacy Payment model above is
+// retained while existing Stripe booking flows migrate onto this foundation.
+model OianoPayment {
+  id                   String                 @id @default(uuid())
+  reference            String                 @unique
+  idempotency_key      String?                @unique
+  payer_id             String
+  merchant_id          String
+  studio_id            String?
+  booking_id           String?
+  project_id           String?
+  service_id           String?
+  amount_minor         BigInt
+  pricing_currency     String
+  transaction_currency String
+  ledger_currency      String
+  settlement_currency  String
+  country              String
+  purpose              PaymentPurpose
+  payment_method       UniversalPaymentMethod
+  provider             String
+  provider_payment_id  String?
+  status               OianoPaymentStatus     @default(CREATED)
+  platform_fee_minor   BigInt
+  merchant_net_minor   BigInt
+  authorized_at        DateTime?
+  paid_at              DateTime?
+  failed_at            DateTime?
+  cancelled_at         DateTime?
+  refunded_at          DateTime?
+  metadata             Json                   @default("{}")
+  created_at           DateTime               @default(now())
+  updated_at           DateTime               @updatedAt
+  gateway_events       PaymentGatewayEvent[]
+  allocations          PaymentAllocation[]
+  refunds              OianoRefund[]
+  ledger_transactions  LedgerTransaction[]
+
+  @@index([payer_id, created_at])
+  @@index([merchant_id, created_at])
+  @@index([studio_id, created_at])
+  @@index([booking_id])
+  @@index([status, created_at])
+  @@map("oiano_payments")
+}
+
+model FinancialAccount {
+  id           String        @id @default(uuid())
+  owner_type   String
+  owner_id     String
+  currency     String
+  account_type String
+  status       String        @default("ACTIVE")
+  created_at   DateTime      @default(now())
+  entries      LedgerEntry[]
+  payouts      OianoPayout[]
+
+  @@unique([owner_type, owner_id, currency, account_type])
+  @@map("financial_accounts")
+}
+
+model LedgerTransaction {
+  id         String        @id @default(uuid())
+  reference  String        @unique
+  payment_id String?
+  payment    OianoPayment? @relation(fields: [payment_id], references: [id])
+  refund_id  String?
+  event_type String
+  currency   String
+  created_at DateTime      @default(now())
+  entries    LedgerEntry[]
+
+  @@index([payment_id])
+  @@map("ledger_transactions")
+}
+
+model LedgerEntry {
+  id             String            @id @default(uuid())
+  transaction_id String
+  transaction    LedgerTransaction @relation(fields: [transaction_id], references: [id])
+  account_id     String
+  account        FinancialAccount  @relation(fields: [account_id], references: [id])
+  direction      String
+  amount_minor   BigInt
+  currency       String
+  created_at     DateTime          @default(now())
+
+  @@index([account_id, created_at])
+  @@map("ledger_entries")
+}
+
+model PaymentAllocation {
+  id               String       @id @default(uuid())
+  payment_id       String
+  payment          OianoPayment @relation(fields: [payment_id], references: [id])
+  beneficiary_type String
+  beneficiary_id   String
+  amount_minor     BigInt
+  currency         String
+  allocation_type  String
+  created_at       DateTime     @default(now())
+
+  @@index([payment_id])
+  @@map("payment_allocations")
+}
+
+model OianoRefund {
+  id                 String       @id @default(uuid())
+  reference          String       @unique
+  idempotency_key    String       @unique
+  payment_id         String
+  payment            OianoPayment @relation(fields: [payment_id], references: [id])
+  amount_minor       BigInt
+  currency           String
+  reason             String
+  provider_refund_id String?
+  status             String       @default("REQUESTED")
+  created_at         DateTime     @default(now())
+  completed_at       DateTime?
+
+  @@index([payment_id])
+  @@map("oiano_refunds")
+}
+
+model FinancialAuditEvent {
+  id          String   @id @default(uuid())
+  actor_id    String?
+  action      String
+  entity_type String
+  entity_id   String
+  metadata    Json     @default("{}")
+  created_at  DateTime @default(now())
+
+  @@index([entity_type, entity_id, created_at])
+  @@map("financial_audit_events")
+}
+
+model FinancialProfile {
+  id                  String              @id @default(uuid())
+  owner_type          String
+  owner_id            String
+  country             String
+  verification_status String              @default("NOT_STARTED")
+  created_at          DateTime            @default(now())
+  updated_at          DateTime            @updatedAt
+  destinations        PayoutDestination[]
+
+  @@unique([owner_type, owner_id])
+  @@map("financial_profiles")
+}
+
+model PayoutDestination {
+  id                      String           @id @default(uuid())
+  financial_profile_id    String
+  financial_profile       FinancialProfile @relation(fields: [financial_profile_id], references: [id])
+  type                    String
+  country                 String
+  currency                String
+  provider                String
+  provider_destination_id String
+  display_name            String
+  masked_reference        String
+  verification_status     String           @default("NOT_STARTED")
+  is_default              Boolean          @default(false)
+  created_at              DateTime         @default(now())
+  payouts                 OianoPayout[]
+
+  @@map("payout_destinations")
+}
+
+model OianoPayout {
+  id                   String            @id @default(uuid())
+  reference            String            @unique
+  idempotency_key      String            @unique
+  financial_account_id String
+  financial_account    FinancialAccount  @relation(fields: [financial_account_id], references: [id])
+  destination_id       String
+  destination          PayoutDestination @relation(fields: [destination_id], references: [id])
+  amount_minor         BigInt
+  currency             String
+  status               String            @default("REQUESTED")
+  provider             String
+  provider_payout_id   String?
+  requested_at         DateTime          @default(now())
+  processing_at        DateTime?
+  completed_at         DateTime?
+  failed_at            DateTime?
+
+  @@map("oiano_payouts")
+}
+
+model PaymentGatewayEvent {
+  id                String        @id @default(uuid())
+  provider          String
+  provider_event_id String
+  event_type        String
+  payment_id        String?
+  payment           OianoPayment? @relation(fields: [payment_id], references: [id])
+  payload_hash      String
+  status            String        @default("RECEIVED")
+  processed_at      DateTime?
+  created_at        DateTime      @default(now())
+
+  @@unique([provider, provider_event_id])
+  @@index([payment_id])
+  @@map("payment_gateway_events")
+}
+
 // Wallet top-ups via Stripe — separate from booking payments
 model WalletTopUp {
   id                String   @id @default(uuid())
   wallet_id         String
   wallet            Wallet   @relation(fields: [wallet_id], references: [id])
-  provider_ref      String?  // Stripe checkout session ID
+  provider_ref      String?  @unique // Stripe checkout session ID
   payment_intent_id String?
   amount_usd        Decimal  @db.Decimal(10, 2)
   status            String   @default("PENDING") // PENDING | PAID | FAILED
@@ -326,16 +725,28 @@ model WalletTopUp {
   @@map("wallet_topups")
 }
 
+// Stripe retries webhook delivery. Recording event IDs provides an audit trail
+// and prevents an already-completed event from being applied twice.
+model StripeWebhookEvent {
+  id           String    @id
+  type         String
+  status       String    @default("PROCESSING")
+  processed_at DateTime?
+  created_at   DateTime  @default(now())
+
+  @@map("stripe_webhook_events")
+}
+
 model SessionLog {
-  id             String    @id @default(uuid())
-  booking_id     String    @unique
-  booking        Booking   @relation(fields: [booking_id], references: [id])
-  artist_id      String
-  artist         Artist    @relation(fields: [artist_id], references: [id])
+  id                 String    @id @default(uuid())
+  booking_id         String    @unique
+  booking            Booking   @relation(fields: [booking_id], references: [id])
+  artist_id          String
+  artist             Artist    @relation(fields: [artist_id], references: [id])
   notes              String?
-  quality_rating     Int?      // 1–5 engineer rates session
-  artist_rating      Int?      // 1–5 artist rates engineer
-  artist_testimonial String?   // public text shown on engineer profile
+  quality_rating     Int? // 1–5 engineer rates session
+  artist_rating      Int? // 1–5 artist rates engineer
+  artist_testimonial String? // public text shown on engineer profile
   ai_summary         String?
   tracks_worked      String[]
   started_at         DateTime?
@@ -350,7 +761,7 @@ model Notification {
   id         String    @id @default(uuid())
   user_id    String
   user       User      @relation(fields: [user_id], references: [id])
-  type       String    // "booking_confirmed" | "session_reminder" | "payment_received" etc.
+  type       String // "booking_confirmed" | "session_reminder" | "payment_received" etc.
   title      String
   body       String
   payload    Json      @default("{}")
@@ -377,33 +788,33 @@ model BookingMessage {
 // ─── Producer ─────────────────────────────────────────────────────────────────
 
 model Producer {
-  id           String            @id @default(uuid())
-  user_id      String            @unique
-  user         User              @relation(fields: [user_id], references: [id])
-  name         String
-  alias        String?
-  bio          String?
-  avatar_url   String?
-  passport     ProducerPassport?
-  projects     Project[]
-  tracks       Track[]
-  open_to_collabs Boolean        @default(true)
-  created_at   DateTime          @default(now())
+  id              String            @id @default(uuid())
+  user_id         String            @unique
+  user            User              @relation(fields: [user_id], references: [id])
+  name            String
+  alias           String?
+  bio             String?
+  avatar_url      String?
+  passport        ProducerPassport?
+  projects        Project[]
+  tracks          Track[]
+  open_to_collabs Boolean           @default(true)
+  created_at      DateTime          @default(now())
 
   @@map("producers")
 }
 
 model ProducerPassport {
-  id                String    @id @default(uuid())
-  producer_id       String    @unique
-  producer          Producer  @relation(fields: [producer_id], references: [id])
-  passport_code     String    @unique       // e.g. PROD-X1Y2
-  genres_produced   Json      @default("[]")  // string[]
-  signature_tags    Json      @default("[]")  // string[] e.g. "trap hi-hats"
-  profile_strength  Int       @default(0)
-  profile_views     Int       @default(0)
-  issued_at         DateTime  @default(now())
-  updated_at        DateTime  @updatedAt
+  id               String   @id @default(uuid())
+  producer_id      String   @unique
+  producer         Producer @relation(fields: [producer_id], references: [id])
+  passport_code    String   @unique // e.g. PROD-X1Y2
+  genres_produced  Json     @default("[]") // string[]
+  signature_tags   Json     @default("[]") // string[] e.g. "trap hi-hats"
+  profile_strength Int      @default(0)
+  profile_views    Int      @default(0)
+  issued_at        DateTime @default(now())
+  updated_at       DateTime @updatedAt
 
   @@map("producer_passports")
 }
@@ -421,7 +832,7 @@ model Track {
   duration_sec Int?
   bpm          Int?
   genre        String?
-  tags         Json     @default("[]")  // string[]
+  tags         Json     @default("[]") // string[]
   price_usd    Int?
   license_type String?
   play_count   Int      @default(0)
@@ -434,21 +845,134 @@ model Track {
 // ─── Projects ─────────────────────────────────────────────────────────────────
 
 model Project {
-  id           String        @id @default(uuid())
-  producer_id  String
-  producer     Producer      @relation(fields: [producer_id], references: [id])
-  artist_id    String?
-  artist       Artist?       @relation(fields: [artist_id], references: [id])
-  title        String
-  phase        ProjectPhase  @default(PRE_PRODUCTION)
-  notes        String?
-  is_active    Boolean       @default(true)
+  id              String       @id @default(uuid())
+  producer_id     String
+  producer        Producer     @relation(fields: [producer_id], references: [id])
+  artist_id       String?
+  artist          Artist?      @relation(fields: [artist_id], references: [id])
+  title           String
+  phase           ProjectPhase @default(PRE_PRODUCTION)
+  notes           String?
+  is_active       Boolean      @default(true)
+  is_public       Boolean      @default(false)
   last_session_at DateTime?
   bookings        Booking[]
-  created_at   DateTime      @default(now())
-  updated_at   DateTime      @updatedAt
+  participants    ProjectParticipant[]
+  credits         ProjectCredit[]
+  promotional_consents PromotionalConsent[]
+  rights_agreements RightsAgreement[]
+  messages        ProjectMessage[]
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
 
   @@map("projects")
+}
+
+model ProjectMessage {
+  id         String   @id @default(uuid())
+  project_id String
+  project    Project  @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  sender_id  String
+  sender     User     @relation(fields: [sender_id], references: [id])
+  body       String
+  kind       String   @default("MESSAGE")
+  created_at DateTime @default(now())
+
+  @@index([project_id, created_at])
+  @@map("project_messages")
+}
+
+model RightsAgreement {
+  id            String        @id @default(uuid())
+  project_id    String
+  project       Project       @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  agreement_type String
+  title         String
+  terms_note    String?
+  status        String        @default("PROPOSED")
+  created_by    String
+  responded_by  String?
+  response_note String?
+  responded_at  DateTime?
+  effective_at  DateTime?
+  created_at    DateTime      @default(now())
+  updated_at    DateTime      @updatedAt
+  shares        RightsShare[]
+
+  @@index([project_id, agreement_type, status])
+  @@map("rights_agreements")
+}
+
+model RightsShare {
+  id             String          @id @default(uuid())
+  agreement_id   String
+  agreement      RightsAgreement @relation(fields: [agreement_id], references: [id], onDelete: Cascade)
+  holder_name    String
+  holder_type    String
+  holder_ref_id  String?
+  role           String
+  percentage     Decimal         @db.Decimal(5, 2)
+  created_at     DateTime        @default(now())
+
+  @@index([agreement_id])
+  @@map("rights_shares")
+}
+
+model PromotionalConsent {
+  id            String   @id @default(uuid())
+  project_id    String
+  project       Project  @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  subject       String
+  purpose       String
+  channels      String[]
+  assets        String[]
+  expires_at    DateTime?
+  status        String   @default("REQUESTED")
+  requested_by  String
+  responded_by  String?
+  responded_at  DateTime?
+  withdrawn_at  DateTime?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  @@index([project_id, status])
+  @@map("promotional_consents")
+}
+
+model ProjectCredit {
+  id             String   @id @default(uuid())
+  project_id     String
+  project        Project  @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  credited_name  String
+  role           String
+  scope          String?
+  participant_id String?
+  status         String   @default("DRAFT")
+  added_by       String
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  @@index([project_id, status])
+  @@map("project_credits")
+}
+
+model ProjectParticipant {
+  id                  String   @id @default(uuid())
+  project_id          String
+  project             Project  @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  display_name        String
+  email               String?
+  role                String
+  participant_type    String   @default("EXTERNAL")
+  participant_ref_id  String?
+  status              String   @default("ACTIVE")
+  added_by             String
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+
+  @@index([project_id])
+  @@index([participant_ref_id])
+  @@map("project_participants")
 }
 
 // ─── Studio Announcements ─────────────────────────────────────────────────────
@@ -458,7 +982,7 @@ model StudioAnnouncement {
   studio     Studio   @relation(fields: [studio_id], references: [id])
   title      String
   body       String
-  created_by String   // user_id of the admin who posted
+  created_by String // user_id of the admin who posted
   created_at DateTime @default(now())
 
   @@map("studio_announcements")
@@ -466,29 +990,29 @@ model StudioAnnouncement {
 
 // ─── Passport Connect (artist-to-artist DMs) ─────────────────────────────────
 model PassportConnection {
-  id           String         @id @default(uuid())
-  initiator_id String         // artist.id
-  recipient_id String         // artist.id
-  status       ConnectStatus  @default(PENDING)
-  created_at   DateTime       @default(now())
+  id           String           @id @default(uuid())
+  initiator_id String // artist.id
+  recipient_id String // artist.id
+  status       ConnectStatus    @default(PENDING)
+  created_at   DateTime         @default(now())
   messages     ConnectMessage[]
 
-  initiator    Artist @relation("ConnectInitiator", fields: [initiator_id], references: [id])
-  recipient    Artist @relation("ConnectRecipient", fields: [recipient_id], references: [id])
+  initiator Artist @relation("ConnectInitiator", fields: [initiator_id], references: [id])
+  recipient Artist @relation("ConnectRecipient", fields: [recipient_id], references: [id])
 
   @@unique([initiator_id, recipient_id])
   @@map("passport_connections")
 }
 
 model ConnectMessage {
-  id            String             @id @default(uuid())
+  id            String   @id @default(uuid())
   connection_id String
-  sender_id     String             // artist.id
+  sender_id     String // artist.id
   body          String
-  created_at    DateTime           @default(now())
+  created_at    DateTime @default(now())
 
-  connection    PassportConnection @relation(fields: [connection_id], references: [id], onDelete: Cascade)
-  sender        Artist             @relation("ConnectMessages", fields: [sender_id], references: [id])
+  connection PassportConnection @relation(fields: [connection_id], references: [id], onDelete: Cascade)
+  sender     Artist             @relation("ConnectMessages", fields: [sender_id], references: [id])
 
   @@map("connect_messages")
 }
@@ -509,7 +1033,7 @@ enum ArtistAvailability {
 
 model ActivityEvent {
   id         String   @id @default(uuid())
-  type       String   // "profile.created" | "status.changed" | "session.booked" | "session.completed"
+  type       String // "profile.created" | "status.changed" | "session.booked" | "session.completed"
   artist_id  String?
   artist     Artist?  @relation(fields: [artist_id], references: [id])
   payload    Json     @default("{}")

@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
 import { DEFAULT_STUDIO_SLUG } from '@oiano/shared';
 import { broadcastAll } from './notifications.routes';
+import { attachStudioScope } from '../middleware/studioScope.middleware';
 
 export const adminRouter = Router();
 
@@ -36,14 +37,28 @@ creditRequestRouter.post('/credit-request', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Artist-facing read endpoint. Posting announcements remains admin-only.
+creditRequestRouter.get('/announcements', async (_req, res, next) => {
+  try {
+    const db = prisma as any;
+    const studio = await prisma.studio.findUnique({ where: { slug: DEFAULT_STUDIO_SLUG } });
+    if (!studio) throw new AppError('Studio not found', 404);
+    const announcements = await db.studioAnnouncement.findMany({
+      where: { studio_id: studio.id },
+      orderBy: { created_at: 'desc' },
+      take: 10,
+    });
+    res.json(announcements);
+  } catch (err) { next(err); }
+});
+
 export { creditRequestRouter };
 
-adminRouter.use(authenticate, requireRole('STUDIO_ADMIN'));
+adminRouter.use(authenticate, requireRole('STUDIO_ADMIN'), attachStudioScope);
 
-adminRouter.get('/analytics', async (_req, res, next) => {
+adminRouter.get('/analytics', async (req, res, next) => {
   try {
-    const studio = await prisma.studio.findUnique({ where: { slug: 'dreamz-music-lab' } });
-    if (!studio) throw new AppError('Studio not found', 404);
+    const studio = (req as any).studio;
 
     // Build UTC day boundaries for the last 14 days
     const now = new Date();
@@ -51,7 +66,7 @@ adminRouter.get('/analytics', async (_req, res, next) => {
     const fourteenDaysAgo = new Date(todayUTC.getTime() - 13 * 86_400_000);
 
     const [totalArtists, totalBookings, revenue, todayBookings, recentPayments, recentBookings, funnelCounts] = await Promise.all([
-      prisma.artist.count(),
+      prisma.artist.count({ where: { bookings: { some: { studio_id: studio.id } } } }),
       prisma.booking.count({ where: { studio_id: studio.id } }),
       prisma.payment.aggregate({
         where: { status: 'PAID', booking: { studio_id: studio.id } },
@@ -155,7 +170,10 @@ adminRouter.post('/wallet/credit', async (req, res, next) => {
   try {
     const { artist_id, amount_usd, description } = WalletCreditSchema.parse(req.body);
 
-    const artist = await prisma.artist.findUnique({ where: { id: artist_id } });
+    const studioId = (req as any).studioId as string;
+    const artist = await prisma.artist.findFirst({
+      where: { id: artist_id, bookings: { some: { studio_id: studioId } } },
+    });
     if (!artist) throw new AppError('Artist not found', 404);
 
     const wallet = await prisma.wallet.upsert({
@@ -192,8 +210,7 @@ adminRouter.get('/runsheet', async (req, res, next) => {
     const dayEnd = new Date(target);
     dayEnd.setHours(23, 59, 59, 999);
 
-    const studio = await prisma.studio.findUnique({ where: { slug: 'dreamz-music-lab' } });
-    if (!studio) throw new AppError('Studio not found', 404);
+    const studio = (req as any).studio;
 
     const bookings = await prisma.booking.findMany({
       where: {
@@ -288,8 +305,7 @@ adminRouter.post('/walkin', async (req, res, next) => {
   try {
     const data = WalkInSchema.parse(req.body);
 
-    const studio = await prisma.studio.findUnique({ where: { slug: DEFAULT_STUDIO_SLUG } });
-    if (!studio) throw new AppError('Studio not found', 404);
+    const studio = (req as any).studio;
 
     const room = await prisma.room.findFirst({ where: { id: data.room_id, studio_id: studio.id } });
     if (!room) throw new AppError('Room not found', 404);
@@ -321,7 +337,7 @@ adminRouter.post('/walkin', async (req, res, next) => {
     const total = Number(service.min_price_usd) * (service.unit === 'hour' ? hours : 1);
 
     // Create a guest account for the walk-in — no password, can't log in
-    const guestEmail = `walkin-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@dreamz-music-lab.walkin`;
+    const guestEmail = `walkin-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@${studio.slug}.walkin`;
     const guestUser = await prisma.user.create({
       data: {
         email: guestEmail,
@@ -367,12 +383,15 @@ adminRouter.post('/walkin', async (req, res, next) => {
 });
 
 // ── GET /api/admin/credit-requests — pending credit requests ─────────────────
-adminRouter.get('/credit-requests', async (_req, res, next) => {
+adminRouter.get('/credit-requests', async (req, res, next) => {
   try {
     const db = prisma as any;
     // credit_request transactions with amount 0 — join wallet → artist
     const requests = await db.walletTransaction.findMany({
-      where: { type: 'credit_request' },
+      where: {
+        type: 'credit_request',
+        wallet: { artist: { bookings: { some: { studio_id: (req as any).studioId } } } },
+      },
       orderBy: { created_at: 'desc' },
       take: 50,
       include: {
@@ -405,8 +424,7 @@ adminRouter.post('/announcements', requireRole('STUDIO_ADMIN'), async (req: any,
       body:  z.string().min(1).max(500),
     }).parse(req.body);
 
-    const studio = await prisma.studio.findUnique({ where: { slug: DEFAULT_STUDIO_SLUG } });
-    if (!studio) throw new AppError('Studio not found', 404);
+    const studio = req.studio;
 
     const announcement = await db.studioAnnouncement.create({
       data: { title, body, studio_id: studio.id, created_by: req.userId },
@@ -420,11 +438,10 @@ adminRouter.post('/announcements', requireRole('STUDIO_ADMIN'), async (req: any,
 });
 
 // ── GET /api/admin/announcements — last 10 announcements ─────────────────────
-adminRouter.get('/announcements', async (_req, res, next) => {
+adminRouter.get('/announcements', async (req, res, next) => {
   try {
     const db = prisma as any;
-    const studio = await prisma.studio.findUnique({ where: { slug: DEFAULT_STUDIO_SLUG } });
-    if (!studio) throw new AppError('Studio not found', 404);
+    const studio = (req as any).studio;
 
     const announcements = await db.studioAnnouncement.findMany({
       where:   { studio_id: studio.id },

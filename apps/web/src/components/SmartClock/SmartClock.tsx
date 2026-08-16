@@ -31,12 +31,12 @@ const STATUS_COLOR: Record<SessionStatus, string> = {
 };
 
 const ROOM_COLOR: Record<string, string> = {
-  'Studio A':    '#3B8BFF',
+  'Main Studio': '#3B8BFF',
   'Studio B':    '#9B6EFF',
   'Vocal Booth': '#1D9E75',
 };
-const ROOM_NAMES = ['Studio A', 'Studio B', 'Vocal Booth'] as const;
 const ROOM_R     = [R.roomA, R.roomB, R.vocal] as const;
+const ROOM_PALETTE = ['#3B8BFF', '#9B6EFF', '#1D9E75'];
 
 const PHASE_COLOR: Record<SessionPhase, string> = {
   setup:     '#8EA0B8',
@@ -246,29 +246,31 @@ function HourTicks({ color }: { color: string }) {
 // ── Three-ring room arcs ──────────────────────────────────────────────────────
 interface RoomArcsProps {
   bookings: any[];
+  rooms: { name: string }[];
   activeSessionId?: string;
   hoveredId: string | null;
   onHover: (id: string | null, booking: any | null) => void;
 }
 
-function RoomArcs({ bookings, activeSessionId, hoveredId, onHover }: RoomArcsProps) {
+function RoomArcs({ bookings, rooms, activeSessionId, hoveredId, onHover }: RoomArcsProps) {
+  const roomNames = rooms.slice(0, ROOM_R.length).map(room => room.name);
   const byRoom = useMemo(() => {
     const map: Record<string, any[]> = {};
-    for (const name of ROOM_NAMES) map[name] = [];
+    for (const name of roomNames) map[name] = [];
     for (const b of bookings) {
-      const name = b.room?.name ?? 'Studio A';
+      const name = b.room?.name;
       if (map[name]) map[name].push(b);
     }
     return map;
-  }, [bookings]);
+  }, [bookings, roomNames.join('|')]);
 
   const now = Date.now();
 
   return (
     <>
-      {ROOM_NAMES.map((name, ri) => {
+      {roomNames.map((name, ri) => {
         const r     = ROOM_R[ri];
-        const color = ROOM_COLOR[name] ?? '#4a4a4a';
+        const color = ROOM_COLOR[name] ?? ROOM_PALETTE[ri];
         const sessions = (byRoom[name] ?? []).filter(
           b => b.starts_at && b.ends_at && !['CANCELLED', 'NO_SHOW'].includes(b.status)
         );
@@ -638,7 +640,8 @@ function FocusFace({ data, todayBookings }: FaceProps) {
 }
 
 // ── Mode 2: DAY (radial timeline) ─────────────────────────────────────────────
-function DayFace({ todayBookings }: Pick<FaceProps, 'todayBookings'>) {
+function DayFace({ todayBookings, rooms }: Pick<FaceProps, 'todayBookings'> & { rooms: { name: string }[] }) {
+  const roomNames = rooms.slice(0, ROOM_R.length).map(room => room.name);
   const [nowAng, setNowAng] = useState(nowAngle());
   useEffect(() => {
     const id = setInterval(() => setNowAng(nowAngle()), 30_000);
@@ -653,9 +656,9 @@ function DayFace({ todayBookings }: Pick<FaceProps, 'todayBookings'>) {
   return (
     <>
       {/* Track backgrounds */}
-      {ROOM_NAMES.map((name, ri) => (
+      {roomNames.map((name, ri) => (
         <circle key={name} cx={CX} cy={CY} r={ROOM_R[ri]} fill="none"
-          stroke={ROOM_COLOR[name]} strokeWidth={8} strokeOpacity={0.06} />
+          stroke={ROOM_COLOR[name] ?? ROOM_PALETTE[ri]} strokeWidth={8} strokeOpacity={0.06} />
       ))}
 
       {/* Now needle — extends all the way through all rings */}
@@ -696,11 +699,11 @@ function DayFace({ todayBookings }: Pick<FaceProps, 'todayBookings'>) {
       <text x={CX + 32} y={207} textAnchor="middle" fontSize={8} fill="#333" fontFamily="system-ui">done</text>
 
       {/* Room legend */}
-      {ROOM_NAMES.map((name, i) => {
+      {roomNames.map((name, i) => {
         const y = 222 + i * 11;
         return (
           <g key={name}>
-            <circle cx={120} cy={y - 2} r={3.5} fill={ROOM_COLOR[name]} fillOpacity={0.8} />
+            <circle cx={120} cy={y - 2} r={3.5} fill={ROOM_COLOR[name] ?? ROOM_PALETTE[i]} fillOpacity={0.8} />
             <text x={128} y={y} fontSize={8} fill="#444" fontFamily="'JetBrains Mono', monospace">
               {name}
             </text>
@@ -804,7 +807,7 @@ const MODE_LABELS: Record<ClockMode, string> = { studio: 'STUDIO', focus: 'FOCUS
 
 function ModeBar({ mode, color, onSelect }: { mode: ClockMode; color: string; onSelect: (m: ClockMode) => void }) {
   return (
-    <div style={{
+    <div role="tablist" aria-label="Studio Clock view" style={{
       display: 'flex', gap: 2, background: '#0d0d0d',
       border: '1px solid #1a1a1a', borderRadius: 8, padding: 3,
       width: 'fit-content',
@@ -812,7 +815,29 @@ function ModeBar({ mode, color, onSelect }: { mode: ClockMode; color: string; on
       {MODES.map(m => {
         const active = m === mode;
         return (
-          <button key={m} onClick={() => onSelect(m)} style={{
+          <button
+            key={m}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            aria-controls="studio-clock-display"
+            tabIndex={active ? 0 : -1}
+            onClick={() => onSelect(m)}
+            onKeyDown={(event) => {
+              if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+              event.preventDefault();
+              const current = MODES.indexOf(m);
+              const next = event.key === 'Home'
+                ? 0
+                : event.key === 'End'
+                  ? MODES.length - 1
+                  : (current + (event.key === 'ArrowRight' ? 1 : -1) + MODES.length) % MODES.length;
+              onSelect(MODES[next]);
+              event.currentTarget.parentElement
+                ?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]
+                ?.focus();
+            }}
+            style={{
             background: active ? '#1a1a1a' : 'transparent',
             border: active ? `1px solid ${color}22` : '1px solid transparent',
             borderRadius: 6,
@@ -1013,6 +1038,8 @@ export default function SmartClock({
         )}
 
         <svg
+          id="studio-clock-display"
+          role="img"
           width={size} height={size} viewBox="0 0 320 320"
           style={{ overflow: 'visible', display: 'block' }}
           aria-label={`OIANO Studio Clock — ${mode} mode`}
@@ -1041,6 +1068,7 @@ export default function SmartClock({
           <g className="ck-arc-group">
           <RoomArcs
             bookings={todayBookings}
+            rooms={studioState.roomStatus}
             activeSessionId={session?.id}
             hoveredId={hoveredId}
             onHover={handleHover}
@@ -1068,7 +1096,7 @@ export default function SmartClock({
           <g style={{ opacity: 1, transition: 'opacity 0.2s ease' }}>
             {mode === 'studio' && <StudioFace data={data} todayBookings={todayBookings} hoveredBooking={hoveredBk} />}
             {mode === 'focus'  && <FocusFace  data={data} todayBookings={todayBookings} hoveredBooking={hoveredBk} />}
-            {mode === 'day'    && <DayFace    todayBookings={todayBookings} />}
+            {mode === 'day'    && <DayFace    todayBookings={todayBookings} rooms={studioState.roomStatus} />}
             {mode === 'pulse'  && <PulseFace  utilizationPct={utilizationPct} weekSessions={weekSessions} todayBookings={todayBookings} />}
           </g>
 
@@ -1108,9 +1136,9 @@ export default function SmartClock({
             { color: STATUS_COLOR.ending_soon, label: 'Ending soon' },
             { color: STATUS_COLOR.overtime,    label: 'Overtime' },
             { color: STATUS_COLOR.idle,        label: 'Idle' },
-            { color: ROOM_COLOR['Studio A'],   label: 'Studio A' },
-            { color: ROOM_COLOR['Studio B'],   label: 'Studio B' },
-            { color: ROOM_COLOR['Vocal Booth'],label: 'Vocal Booth' },
+            ...studioState.roomStatus.slice(0, ROOM_R.length).map((room, index) => ({
+              color: ROOM_COLOR[room.name] ?? ROOM_PALETTE[index], label: room.name,
+            })),
           ].map(item => (
             <div key={item.label} style={legendItem}>
               <span style={{ width: 8, height: 8, background: item.color, borderRadius: 2, display: 'block' }} />

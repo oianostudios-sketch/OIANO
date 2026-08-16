@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
 import { emitActivityEvent } from '../lib/activityEvents';
 import { computeArtistTier } from '../lib/artistTier';
+import { broadcastAll } from './notifications.routes';
 
 export const artistsRouter = Router();
 artistsRouter.use(authenticate);
@@ -23,6 +24,15 @@ artistsRouter.patch('/me/status', async (req: any, res, next) => {
     const updated = await prisma.artist.update({ where: { id: artist.id }, data: { status } });
 
     await emitActivityEvent('status.changed', { artist_id: artist.id, status });
+
+    // Was written to ActivityEvent but never pushed live -- studio-wide since
+    // admin/engineer dashboards want to see "who's available" without a poll.
+    broadcastAll({
+      type: 'artist_status_changed',
+      artistId: artist.id,
+      artistName: artist.name,
+      status,
+    });
 
     res.json({ status: updated.status });
   } catch (err) { next(err); }

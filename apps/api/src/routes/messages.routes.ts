@@ -4,11 +4,32 @@ import { authenticate } from '../middleware/auth.middleware';
 import { AppError } from '../lib/errors';
 import { z } from 'zod';
 import { broadcastToUser } from './notifications.routes';
+import { canAccessBookingMessages } from '../lib/resourceAuthorization';
 
 export const messagesRouter = Router({ mergeParams: true });
 messagesRouter.use(authenticate);
 
 const SendBody = z.object({ body: z.string().min(1).max(2000) });
+
+type MessageBookingAccess = {
+  studio_id: string;
+  artist: { user_id: string } | null;
+  engineer: { user_id: string | null } | null;
+};
+
+async function hasBookingMessageAccess(booking: MessageBookingAccess, userId: string, userRole: string) {
+  const staff = userRole === 'STUDIO_ADMIN'
+    ? await prisma.studioStaff.findUnique({ where: { user_id: userId } })
+    : null;
+  return canAccessBookingMessages({
+    artistUserId: booking.artist?.user_id ?? null,
+    engineerUserId: booking.engineer?.user_id ?? null,
+    bookingStudioId: booking.studio_id,
+    actorId: userId,
+    actorRole: userRole,
+    actorStudioId: staff?.studio_id,
+  });
+}
 
 // GET /api/bookings/:id/messages
 messagesRouter.get('/', async (req: any, res: Response, next: NextFunction) => {
@@ -18,15 +39,17 @@ messagesRouter.get('/', async (req: any, res: Response, next: NextFunction) => {
 
     const booking = await prisma.booking.findUnique({
       where: { id: req.params.id },
-      select: { artist_id: true, engineer_id: true, artist: { select: { user_id: true } } },
+      select: {
+        studio_id: true,
+        artist: { select: { user_id: true } },
+        engineer: { select: { user_id: true } },
+      },
     });
     if (!booking) throw new AppError('Booking not found', 404);
 
-    // Access: the artist who owns the booking, any engineer, or any admin
-    const isArtist   = userRole === 'ARTIST'       && booking.artist?.user_id === userId;
-    const isEngineer = userRole === 'ENGINEER';
-    const isAdmin    = userRole === 'STUDIO_ADMIN';
-    if (!isArtist && !isEngineer && !isAdmin) throw new AppError('Forbidden', 403);
+    if (!(await hasBookingMessageAccess(booking, userId, userRole))) {
+      throw new AppError('Booking not found', 404);
+    }
 
     const messages = await prisma.bookingMessage.findMany({
       where: { booking_id: req.params.id },
@@ -58,10 +81,10 @@ messagesRouter.post('/', async (req: any, res: Response, next: NextFunction) => 
     });
     if (!booking) throw new AppError('Booking not found', 404);
 
-    const isArtist   = userRole === 'ARTIST'       && booking.artist?.user_id === userId;
-    const isEngineer = userRole === 'ENGINEER';
-    const isAdmin    = userRole === 'STUDIO_ADMIN';
-    if (!isArtist && !isEngineer && !isAdmin) throw new AppError('Forbidden', 403);
+    const isArtist = userRole === 'ARTIST' && booking.artist?.user_id === userId;
+    if (!(await hasBookingMessageAccess(booking, userId, userRole))) {
+      throw new AppError('Booking not found', 404);
+    }
 
     const message = await prisma.bookingMessage.create({
       data: {
@@ -96,16 +119,12 @@ messagesRouter.post('/', async (req: any, res: Response, next: NextFunction) => 
       broadcastToUser(booking.artist.user.id, event);
     }
 
-    // If sender is the artist, notify any engineer staff in the studio
+    // If the sender is the artist, notify only the assigned engineer.
     if (isArtist) {
       // Engineers are studio staff with role ENGINEER — broadcast to all of them
-      const engStaff = await prisma.studioStaff.findMany({
-        where: { role: 'ENGINEER' },
-        select: { user_id: true },
-      });
-      engStaff.forEach(({ user_id }) => {
-        if (user_id !== userId) broadcastToUser(user_id, event);
-      });
+      if (booking.engineer?.user_id && booking.engineer.user_id !== userId) {
+        broadcastToUser(booking.engineer.user_id, event);
+      }
     }
 
     res.status(201).json(message);

@@ -10,8 +10,9 @@ import { api } from '../lib/api';
 import { useToast } from './Toast';
 import { useAuthStore } from '../store/auth.store';
 import { getPersonality } from '../lib/personality';
-
-const API_ORIGIN = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
+import ArtistAvatar from './ArtistAvatar';
+import OianoBrand from './OianoBrand';
+import { Camera } from 'lucide-react';
 
 interface PassportCardProps {
   artist: {
@@ -32,7 +33,7 @@ interface PassportCardProps {
       };
     } | null;
   };
-  editable?: boolean;   // show avatar upload on hover
+  editable?: boolean;   // show an explicit avatar upload action
   size?: 'sm' | 'md' | 'lg';
 }
 
@@ -93,20 +94,27 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
   return (
     <div
       style={{ width: cardWidth, height: cardHeight, perspective: 1200 }}
+      role="button"
+      tabIndex={0}
+      aria-label={`Artist passport for ${artist.name}. Press Enter to flip.`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       onClick={() => setFlipped((f) => !f)}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          setFlipped((f) => !f);
+        }
+      }}
     >
       <style>{`
         @keyframes apc-shimmer-sweep {
-          0%   { transform: translateX(-120%) rotate(8deg); }
-          100% { transform: translateX(120%) rotate(8deg); }
-        }
-        @keyframes apc-shimmer-stutter {
-          0%,100% { transform: translateX(-130%) rotate(8deg); opacity: 0.9; }
-          45%     { transform: translateX(10%) rotate(8deg);   opacity: 0.3; }
-          55%     { transform: translateX(20%) rotate(8deg);   opacity: 0.9; }
-          100%    { transform: translateX(130%) rotate(8deg); }
+          0%, 62% { transform: translateX(-180%) rotate(10deg); opacity: 0; }
+          66%     { opacity: 0.18; }
+          82%     { opacity: 0.72; }
+          96%     { transform: translateX(540%) rotate(10deg); opacity: 0; }
+          100%    { transform: translateX(540%) rotate(10deg); opacity: 0; }
         }
         @keyframes apc-upload-pulse {
           0%   { box-shadow: 0 0 0 0 rgba(90,155,203,0.55); }
@@ -146,8 +154,7 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
             transition: 'box-shadow 0.3s ease',
           }}
         >
-          {/* Holographic shimmer — a slow, always-on sweep so the card reads as
-              alive at rest, not just on hover. Hover brightens it further. */}
+          {/* A restrained security-foil sweep with a long rest between passes. */}
           <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 10 }}>
             <div
               className="apc-shimmer"
@@ -155,15 +162,14 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
                 position: 'absolute',
                 top: '-50%',
                 left: 0,
-                width: '40%',
+                width: '22%',
                 height: '200%',
-                background: hover
-                  ? `linear-gradient(125deg, transparent 20%, rgba(${personality.rgb},0.14) 50%, transparent 80%)`
-                  : `linear-gradient(125deg, transparent 20%, rgba(${personality.rgb},0.05) 50%, transparent 80%)`,
+                background: `linear-gradient(110deg, transparent 0%, rgba(90,155,203,0.02) 22%, rgba(255,255,255,${hover ? '.13' : '.075'}) 47%, rgba(${personality.rgb},${hover ? '.18' : '.10'}) 58%, rgba(201,168,76,${hover ? '.12' : '.065'}) 72%, transparent 100%)`,
+                filter: 'blur(.35px)',
                 transition: 'background 0.4s ease',
-                animationName: personality.shimmerKeyframe,
-                animationDuration: personality.shimmerDuration,
-                animationTimingFunction: personality.shimmerEasing,
+                animationName: 'apc-shimmer-sweep',
+                animationDuration: hover ? '5.8s' : '9.5s',
+                animationTimingFunction: 'cubic-bezier(.34,.05,.22,1)',
                 animationIterationCount: 'infinite',
               }}
             />
@@ -177,15 +183,7 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
 
           {/* Header row */}
           <div style={{ padding: '14px 20px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{
-              fontFamily: "'Playfair Display', serif",
-              fontSize: size === 'sm' ? 13 : 15,
-              color: '#C9A84C',
-              letterSpacing: 3,
-              fontWeight: 600,
-            }}>
-              OIANO
-            </span>
+            <OianoBrand variant="mono" size={size === 'sm' ? 11 : 13} />
             <span style={{
               fontFamily: "'JetBrains Mono', monospace",
               fontSize: 9,
@@ -209,55 +207,33 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
                 background: '#1e1e1e',
                 position: 'relative',
               }}
-              onClick={(e) => {
-                if (editable) { e.stopPropagation(); fileRef.current?.click(); }
-              }}
             >
-              {artist.avatar_url ? (
-                <img
-                  src={artist.avatar_url.startsWith('/') ? `${API_ORIGIN}${artist.avatar_url}` : artist.avatar_url}
-                  alt={artist.name}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                />
-              ) : (
-                <div style={{
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontFamily: "'Playfair Display', serif",
-                  fontSize: size === 'sm' ? 28 : 38,
-                  color: '#5A9BCB',
-                  fontWeight: 600,
-                }}>
-                  {artist.name?.[0]?.toUpperCase()}
-                </div>
-              )}
-
-              {/* Edit overlay */}
-              {editable && hover && (
-                <div style={{
-                  position: 'absolute',
-                  inset: 0,
-                  background: 'rgba(0,0,0,0.55)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 10,
-                  color: '#5A9BCB',
-                  fontFamily: "'DM Sans', sans-serif",
-                  fontWeight: 600,
-                  letterSpacing: 0.5,
-                  cursor: 'pointer',
-                }}>
-                  {uploadAvatar.isPending ? '…' : '+ Photo'}
-                </div>
-              )}
+              <ArtistAvatar src={artist.avatar_url} name={artist.alias ?? artist.name} size="100%" decorative={false} />
             </div>
 
             {editable && (
-              <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onFileChange} />
+              <>
+                <button
+                  type="button"
+                  aria-label={artist.avatar_url ? 'Change artist photo' : 'Add artist photo'}
+                  title={artist.avatar_url ? 'Change artist photo' : 'Add artist photo'}
+                  disabled={uploadAvatar.isPending}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    fileRef.current?.click();
+                  }}
+                  style={{
+                    position: 'absolute', left: 'calc(50% + 32px)', bottom: -2,
+                    width: 30, height: 30, borderRadius: '50%', display: 'grid', placeItems: 'center',
+                    border: '1px solid rgba(90,155,203,.38)', background: '#111820', color: '#8fc0df',
+                    boxShadow: '0 5px 14px rgba(0,0,0,.55)', cursor: uploadAvatar.isPending ? 'wait' : 'pointer',
+                    zIndex: 12,
+                  }}
+                >
+                  <Camera size={13} aria-hidden="true" />
+                </button>
+                <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onFileChange} />
+              </>
             )}
           </div>
 

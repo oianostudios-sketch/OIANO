@@ -8,8 +8,11 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import ArtistFacetMark from '../components/ArtistFacetMark';
+import ArtistAvatar from '../components/ArtistAvatar';
 import { useAuthStore } from '../store/auth.store';
 import { getPersonality } from '../lib/personality';
+import ArtistEmptyState from '../components/ArtistEmptyState';
+import { SearchX, UsersRound } from 'lucide-react';
 
 interface DiscoverArtist {
   id: string;
@@ -176,18 +179,7 @@ export default function DiscoverPage() {
 
         {/* Empty */}
         {!isLoading && filtered.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '60px 0' }}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
-            <p style={{ color: '#555', fontSize: 14 }}>
-              {hasFilters ? 'No artists match those filters.' : 'No other artists to discover yet.'}
-            </p>
-            {hasFilters && (
-              <button onClick={() => { setSearch(''); setActiveGenre(null); setActiveEnergy(null); }}
-                style={{ marginTop: 12, fontSize: 12, color: '#C9A84C', background: 'none', border: 'none', cursor: 'pointer' }}>
-                Clear filters
-              </button>
-            )}
-          </div>
+          <ArtistEmptyState icon={hasFilters ? SearchX : UsersRound} title={hasFilters ? 'No creative match yet' : 'The roster is growing'} description={hasFilters ? 'Broaden your sound, energy, or name filters to discover more artists.' : 'New verified artists will appear here as they join the studio community.'} actionLabel={hasFilters ? 'Clear filters' : undefined} onAction={hasFilters ? () => { setSearch(''); setActiveGenre(null); setActiveEnergy(null); } : undefined} />
         )}
 
         {/* Results */}
@@ -214,16 +206,7 @@ export default function DiscoverPage() {
                   >
                     <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
                       {/* Avatar */}
-                      <div style={{
-                        width: 44, height: 44, borderRadius: '50%', flexShrink: 0,
-                        background: '#1a1a1a', border: '1px solid #222',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-                      }}>
-                        {a.avatar
-                          ? <img src={a.avatar} alt={a.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          : <span style={{ color: '#555', fontSize: 16, fontWeight: 700 }}>{a.name.charAt(0)}</span>
-                        }
-                      </div>
+                      <ArtistAvatar src={a.avatar} name={a.name} size={44} />
 
                       {/* Main info */}
                       <div style={{ flex: 1, minWidth: 0 }}>

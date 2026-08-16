@@ -8,6 +8,8 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
+import ArtistEmptyState from '../components/ArtistEmptyState';
+import { CalendarPlus2 } from 'lucide-react';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const HOUR_START  = 8;
@@ -675,10 +677,7 @@ export default function CalendarPage() {
 
       {/* Empty state */}
       {bookings.length === 0 && rooms.length > 0 && (
-        <div style={{ textAlign:'center', padding:'48px', color:'#555', fontSize:13 }}>
-          No sessions in this period.
-          {(isAdmin||isArtist) && <span style={{ color:'#5A9BCB', marginLeft:6, cursor:'pointer' }} onClick={() => navigate('/book')}>Book one →</span>}
-        </div>
+        <ArtistEmptyState compact icon={CalendarPlus2} title="Your schedule has room" description="Choose an open studio time and turn it into your next session." actionLabel={(isAdmin||isArtist) ? 'Explore studio dates' : undefined} onAction={(isAdmin||isArtist) ? () => navigate('/book') : undefined} />
       )}
     </div>
   );

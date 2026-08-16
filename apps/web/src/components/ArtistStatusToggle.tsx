@@ -19,7 +19,7 @@ const STATUS_META: Record<Status, { label: string; dotClass: string }> = {
 
 const DEBOUNCE_MS = 2500;
 
-export default function ArtistStatusToggle() {
+export default function ArtistStatusToggle({ inline = false }: { inline?: boolean }) {
   const user = useAuthStore((s) => s.user);
   const setAuth = useAuthStore((s) => s.setAuth);
 
@@ -53,13 +53,16 @@ export default function ArtistStatusToggle() {
   const meta = STATUS_META[status];
 
   return (
-    <div
+    <button
+      type="button"
       className="artist-status-toggle"
+      style={inline ? { position: 'static' } : undefined}
       onClick={handleTap}
       title="Tap to change your booking availability"
+      aria-label={`Booking availability: ${meta.label}. Activate to change.`}
     >
       <span className={`ast-dot ${meta.dotClass}`} />
       <span className="ast-label">{meta.label}</span>
-    </div>
+    </button>
   );
 }

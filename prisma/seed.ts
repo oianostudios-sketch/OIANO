@@ -12,13 +12,13 @@ async function main() {
   // ── Studio ──────────────────────────────────────────────────────────────────
   const studio = await prisma.studio.upsert({
     where: { slug: 'dreamz-music-lab' },
-    update: {},
+    update: { timezone: 'Asia/Nicosia', currency: 'EUR', address: 'Lefkoşa, TRNC' },
     create: {
       slug: 'dreamz-music-lab',
       name: 'Dreamz Music Lab',
-      timezone: 'America/New_York',
-      currency: 'USD',
-      address: '123 Studio Row, New York, NY 10001',
+      timezone: 'Asia/Nicosia',
+      currency: 'EUR',
+      address: 'Lefkoşa, TRNC',
       email: 'hello@dreamzmusiclab.com',
       phone: '+1 (555) 000-0000',
     },
@@ -30,11 +30,11 @@ async function main() {
   const rooms = await Promise.all([
     prisma.room.upsert({
       where: { id: 'room-studio-a' },
-      update: {},
+      update: { name: 'Main Studio', capacity: 8, description: 'Dreamz Music Lab main recording and production room', hourly_rate: 45 },
       create: {
         id: 'room-studio-a',
         studio_id: studio.id,
-        name: 'Studio A',
+        name: 'Main Studio',
         capacity: 8,
         description: 'Main tracking room — SSL console, full live room',
         hourly_rate: 45,
@@ -69,10 +69,16 @@ async function main() {
   console.log('✅ Rooms created:', rooms.map((r) => r.name).join(', '));
 
   // ── Engineers ────────────────────────────────────────────────────────────────
+  // Dreamz operates one canonical bookable room. Remove legacy demo rooms so
+  // rerunning the seed cannot reintroduce them into operator or booking views.
+  await prisma.room.deleteMany({
+    where: { id: { in: ['room-studio-b', 'room-vocal-booth'] }, bookings: { none: {} } },
+  });
+
   const engineers = await Promise.all([
     prisma.engineer.upsert({
       where: { id: 'eng-marcus' },
-      update: {},
+      update: { avatar_url: '/images/engineers/marcus-dean-v1.webp' },
       create: {
         id: 'eng-marcus',
         studio_id: studio.id,
@@ -80,11 +86,12 @@ async function main() {
         specialties: ['Hip-Hop', 'R&B', 'Mixing'],
         hourly_rate_usd: 40,
         bio: '10+ years tracking and mixing. Credits include major label artists across Hip-Hop and R&B.',
+        avatar_url: '/images/engineers/marcus-dean-v1.webp',
       },
     }),
     prisma.engineer.upsert({
       where: { id: 'eng-priya' },
-      update: {},
+      update: { avatar_url: '/images/engineers/priya-nair-v1.webp' },
       create: {
         id: 'eng-priya',
         studio_id: studio.id,
@@ -92,11 +99,12 @@ async function main() {
         specialties: ['Pop', 'Electronic', 'Mastering'],
         hourly_rate_usd: 45,
         bio: 'Specialist in modern pop production and loudness-compliant mastering.',
+        avatar_url: '/images/engineers/priya-nair-v1.webp',
       },
     }),
     prisma.engineer.upsert({
       where: { id: 'eng-torre' },
-      update: {},
+      update: { avatar_url: '/images/engineers/torre-williams-v1.webp' },
       create: {
         id: 'eng-torre',
         studio_id: studio.id,
@@ -104,6 +112,7 @@ async function main() {
         specialties: ['Afrobeats', 'Gospel', 'Live Recording'],
         hourly_rate_usd: 35,
         bio: 'Live recording specialist with deep roots in Afrobeats and Gospel.',
+        avatar_url: '/images/engineers/torre-williams-v1.webp',
       },
     }),
   ]);
@@ -202,10 +211,48 @@ async function main() {
 
   // ── Seed credentials — read from env, never hardcoded ───────────────────────
   // Passwords: read from env for production; fall back to demo defaults for local dev
+  // A complete alternative catalogue for multi-studio booking tests.
+  const secondStudio = await prisma.studio.upsert({
+    where: { slug: 'northlight-sound-house' },
+    update: { name: 'Northlight Sound House', address: '88 Wythe Avenue, Brooklyn, NY 11249', email: 'sessions@northlightsound.com' },
+    create: {
+      slug: 'northlight-sound-house', name: 'Northlight Sound House',
+      timezone: 'America/New_York', currency: 'USD',
+      address: '88 Wythe Avenue, Brooklyn, NY 11249',
+      email: 'sessions@northlightsound.com', phone: '+1 (555) 014-2026', mint_letter: 'N',
+    },
+  });
+  await Promise.all([
+    prisma.room.upsert({ where: { id: 'northlight-live-room' }, update: { studio_id: secondStudio.id }, create: { id: 'northlight-live-room', studio_id: secondStudio.id, name: 'Live Room', capacity: 10, description: 'Warm live room for bands, drums and ensemble tracking', hourly_rate: 60 } }),
+    prisma.room.upsert({ where: { id: 'northlight-writing-suite' }, update: { studio_id: secondStudio.id }, create: { id: 'northlight-writing-suite', studio_id: secondStudio.id, name: 'Writing Suite', capacity: 4, description: 'Private writing and vocal production suite', hourly_rate: 38 } }),
+    prisma.engineer.upsert({ where: { id: 'eng-amara-northlight' }, update: { studio_id: secondStudio.id, avatar_url: '/images/engineers/amara-cole-v1.webp' }, create: { id: 'eng-amara-northlight', studio_id: secondStudio.id, name: 'Amara Cole', specialties: ['Afro-pop', 'Vocal Production', 'Songwriting'], hourly_rate_usd: 48, bio: 'Vocal producer and tracking engineer focused on expressive modern records.', avatar_url: '/images/engineers/amara-cole-v1.webp' } }),
+    prisma.engineer.upsert({ where: { id: 'eng-eli-northlight' }, update: { studio_id: secondStudio.id, avatar_url: '/images/engineers/eli-mercer-v1.webp' }, create: { id: 'eng-eli-northlight', studio_id: secondStudio.id, name: 'Eli Mercer', specialties: ['Live Bands', 'Alternative', 'Mixing'], hourly_rate_usd: 52, bio: 'Live-room specialist known for detailed band tracking and textured mixes.', avatar_url: '/images/engineers/eli-mercer-v1.webp' } }),
+    prisma.serviceOffering.upsert({ where: { id: 'northlight-recording' }, update: { studio_id: secondStudio.id }, create: { id: 'northlight-recording', studio_id: secondStudio.id, category: ServiceCategory.RECORDING, name: 'Recording Session', description: 'Hourly recording with the Northlight team', min_price_usd: 38, max_price_usd: 60, unit: 'hour' } }),
+    prisma.serviceOffering.upsert({ where: { id: 'northlight-vocal-production' }, update: { studio_id: secondStudio.id }, create: { id: 'northlight-vocal-production', studio_id: secondStudio.id, category: ServiceCategory.COACHING, name: 'Vocal Production', description: 'Performance direction, comping and vocal arrangement', min_price_usd: 55, max_price_usd: 85, unit: 'hour' } }),
+    prisma.serviceOffering.upsert({ where: { id: 'northlight-full-day' }, update: { studio_id: secondStudio.id }, create: { id: 'northlight-full-day', studio_id: secondStudio.id, category: ServiceCategory.FULL_DAY, name: 'Northlight Day Lockout', description: 'Ten-hour private studio lockout', min_price_usd: 320, max_price_usd: 480, unit: 'session' } }),
+  ]);
+  console.log('Second test studio created:', secondStudio.name);
+
   const ADMIN_PASSWORD    = process.env.SEED_ADMIN_PASSWORD    ?? 'admin123';
   const ARTIST_PASSWORD   = process.env.SEED_ARTIST_PASSWORD   ?? 'artist123';
   const ENGINEER_PASSWORD = process.env.SEED_ENGINEER_PASSWORD ?? 'engineer123';
   const PRODUCER_PASSWORD = process.env.SEED_PRODUCER_PASSWORD ?? 'producer123';
+  const OIANO_ADMIN_PASSWORD = process.env.SEED_OIANO_ADMIN_PASSWORD ?? 'maintenance123';
+
+  // ── OIANO Maintenance User ─────────────────────────────────────────────────
+  // Private platform-owner account. It has no studio_staff or creator profile
+  // because its authority belongs to the OIANO network, not an individual studio.
+  const oianoAdminPasswordHash = await bcrypt.hash(OIANO_ADMIN_PASSWORD, 10);
+  const oianoAdmin = await prisma.user.upsert({
+    where: { email: 'maintenance@oiano.com' },
+    update: { password_hash: oianoAdminPasswordHash, role: UserRole.OIANO_ADMIN },
+    create: {
+      email: 'maintenance@oiano.com',
+      password_hash: oianoAdminPasswordHash,
+      role: UserRole.OIANO_ADMIN,
+    },
+  });
+  console.log('✅ OIANO Maintenance user created:', oianoAdmin.email);
 
   // ── Admin User ───────────────────────────────────────────────────────────────
   const adminPasswordHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
@@ -231,7 +278,10 @@ async function main() {
   const artistPasswordHash = await bcrypt.hash(ARTIST_PASSWORD, 10);
   const artistUser = await prisma.user.upsert({
     where: { email: 'demo@artist.com' },
-    update: { password_hash: artistPasswordHash },
+    update: {
+      password_hash: artistPasswordHash,
+      artist: { update: { avatar_url: '/images/artists/znova-display-v1.png' } },
+    },
     create: {
       email: 'demo@artist.com',
       password_hash: artistPasswordHash,
@@ -240,6 +290,7 @@ async function main() {
         create: {
           name: 'Zara Nova',
           alias: 'ZNOVA',
+          avatar_url: '/images/artists/znova-display-v1.png',
           bio: 'Afro-pop artist blending Lagos rhythms with New York production',
           passport: {
             create: {
@@ -272,6 +323,16 @@ async function main() {
       update: { balance_usd: 500.0 },
       create: { artist_id: demoArtist.id, balance_usd: 500.0 },
     });
+    const novaState = await prisma.artistRelease.findFirst({ where: { artist_id: demoArtist.id, title: 'NOVA STATE' } });
+    const novaStateData = {
+      release_type: 'SINGLE',
+      release_date: new Date('2026-08-12T00:00:00.000Z'),
+      artwork_url: '/images/artists/znova-nova-state-cover-v1.png',
+      collaborators: [],
+      is_featured: true,
+    };
+    if (novaState) await prisma.artistRelease.update({ where: { id: novaState.id }, data: novaStateData });
+    else await prisma.artistRelease.create({ data: { artist_id: demoArtist.id, title: 'NOVA STATE', ...novaStateData } });
   }
 
   console.log('✅ Demo artist created:', artistUser.email);

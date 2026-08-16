@@ -15,11 +15,11 @@ VALUES (gen_random_uuid(), 'demo@artist.com',
 ON CONFLICT (email) DO UPDATE
   SET password_hash = EXCLUDED.password_hash, updated_at = now();
 
-INSERT INTO artists (id, user_id, name, alias, bio, created_at)
+INSERT INTO artists (id, user_id, name, alias, bio, avatar_url, created_at)
 SELECT gen_random_uuid(), u.id, 'Zara Nova', 'ZNOVA',
-  'Afro-pop artist blending Lagos rhythms with New York production', now()
+  'Afro-pop artist blending Lagos rhythms with New York production', '/images/artists/znova-display-v1.png', now()
 FROM users u WHERE u.email = 'demo@artist.com'
-ON CONFLICT (user_id) DO UPDATE SET name = EXCLUDED.name, alias = EXCLUDED.alias, bio = EXCLUDED.bio;
+ON CONFLICT (user_id) DO UPDATE SET name = EXCLUDED.name, alias = EXCLUDED.alias, bio = EXCLUDED.bio, avatar_url = EXCLUDED.avatar_url;
 
 INSERT INTO wallets (id, artist_id, balance_usd)
 SELECT gen_random_uuid(), a.id, 500.00

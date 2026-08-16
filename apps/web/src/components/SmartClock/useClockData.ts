@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
 const API      = import.meta.env.VITE_API_URL    ?? '';
-const WS_URL   = import.meta.env.VITE_WS_URL     ?? `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws/clock`;
+// WebSocket transport is optional. The API currently exposes the clock over
+// REST, so do not probe a non-existent /ws endpoint unless one is configured.
+const WS_URL   = import.meta.env.VITE_WS_URL as string | undefined;
 const POLL_MS  = 30_000;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -116,12 +118,22 @@ export function useClockData(): {
   }, []);
 
   const startPolling = useCallback(() => {
+    if (pollRef.current) return;
     fetchRest();
     pollRef.current = setInterval(fetchRest, POLL_MS);
   }, [fetchRest]);
 
   useEffect(() => {
     let didCleanup = false;
+
+    if (!WS_URL) {
+      startPolling();
+      return () => {
+        didCleanup = true;
+        if (pollRef.current) clearInterval(pollRef.current);
+        pollRef.current = null;
+      };
+    }
 
     try {
       const ws = new WebSocket(WS_URL);
@@ -172,6 +184,7 @@ export function useClockData(): {
       didCleanup = true;
       wsRef.current?.close();
       if (pollRef.current) clearInterval(pollRef.current);
+      pollRef.current = null;
     };
   }, [startPolling]);
 

@@ -74,6 +74,13 @@ export function StudioStateProvider({ children }: { children: React.ReactNode })
     select: (d) => (Array.isArray(d) ? d : d?.data ?? []),
   });
 
+  const { data: studio } = useQuery({
+    queryKey: ['studio'],
+    queryFn: async () => (await api.get('/studio')).data,
+    enabled: !!token,
+    staleTime: 5 * 60_000,
+  });
+
   const todaySessions = useMemo(() => {
     const today = new Date().toDateString();
     return (bookings as any[]).filter((b) => {
@@ -120,7 +127,7 @@ export function StudioStateProvider({ children }: { children: React.ReactNode })
     return () => { document.body.classList.remove('session-live'); };
   }, [isLive]);
 
-  const roomStatus = useMemo(() => {
+  const roomStatus: StudioStateValue['roomStatus'] = useMemo(() => {
     const occupied = new Set(
       todaySessions
         .filter((s) => {
@@ -130,12 +137,12 @@ export function StudioStateProvider({ children }: { children: React.ReactNode })
         })
         .map((s) => s.room?.name)
     );
-    return [
-      { name: 'Studio A',    use: 'Main tracking',   busy: occupied.has('Studio A') },
-      { name: 'Studio B',    use: 'Production suite', busy: occupied.has('Studio B') },
-      { name: 'Vocal Booth', use: 'Isolation booth',  busy: occupied.has('Vocal Booth') },
-    ];
-  }, [todaySessions, now]);
+    return (studio?.rooms ?? []).map((room: any) => ({
+      name: room.name,
+      use: room.description ?? 'Studio room',
+      busy: occupied.has(room.name),
+    }));
+  }, [studio?.rooms, todaySessions, now]);
 
   // Build ticker text
   const tickerText = useMemo(() => {

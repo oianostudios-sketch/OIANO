@@ -145,6 +145,76 @@ h1, .text-4xl, .text-5xl, .text-3xl {
   color: var(--gold);
 }
 
+/* Unified Oiano identity: solar origin, Sierra Leone flag inlay, network orbit. */
+.oiano-brand{--brand-scale:1;display:inline-flex;flex-direction:column;align-items:flex-start;line-height:1;color:#c9a84c}.oiano-brand-word{display:inline-flex;align-items:center;gap:calc(3px * var(--brand-scale));height:calc(34px * var(--brand-scale));filter:drop-shadow(0 calc(5px * var(--brand-scale)) calc(8px * var(--brand-scale)) rgba(0,0,0,.35))}.oiano-brand-sun{display:inline-grid;place-items:center;margin-right:calc(1px * var(--brand-scale))}.oiano-brand-letter{position:relative;display:inline-block;font-family:'Playfair Display',serif;font-size:calc(31px * var(--brand-scale));font-weight:500;line-height:1;background:linear-gradient(180deg,#f1dfa7,#c29a45 48%,#725019);background-clip:text;-webkit-background-clip:text;color:transparent;-webkit-text-fill-color:transparent;text-shadow:0 1px 0 rgba(255,245,205,.14)}.oiano-brand-a{margin-right:calc(2px * var(--brand-scale))}.oiano-brand-flag{position:absolute;z-index:2;right:3%;top:9%;width:31%;height:82%;clip-path:polygon(18% 0,55% 0,100% 100%,63% 100%);background:linear-gradient(180deg,#302519 0 11%,#1eb53a 17% 43%,#fff 44% 68%,#0072c6 69% 100%);opacity:.9;filter:saturate(.8)}.oiano-brand-orbit-o{margin-left:calc(1px * var(--brand-scale))}.oiano-brand-orbit{position:absolute;inset:18% -18% 8% -18%;border:calc(1px * var(--brand-scale)) solid rgba(220,181,92,.62);border-radius:50%;transform:rotate(-18deg)}.oiano-brand-node{position:absolute;right:-16%;top:43%;width:calc(4px * var(--brand-scale));height:calc(4px * var(--brand-scale));border-radius:50%;background:#f5d88f;box-shadow:0 0 calc(7px * var(--brand-scale)) #d6a33b}.oiano-brand-subtitle{margin-top:calc(4px * var(--brand-scale));padding-left:calc(2px * var(--brand-scale));font-family:'JetBrains Mono',monospace;font-size:calc(6.5px * var(--brand-scale));letter-spacing:.2em;text-transform:uppercase;color:#65615a}.oiano-brand-full .oiano-brand-word{gap:calc(7px * var(--brand-scale))}.oiano-brand-full .oiano-brand-letter{font-size:calc(39px * var(--brand-scale))}.oiano-brand-full .oiano-brand-word{height:calc(44px * var(--brand-scale))}.oiano-brand-mono{filter:grayscale(1)}.oiano-brand-mono .oiano-brand-flag{display:none}.oiano-brand.is-loading .oiano-brand-node{animation:oiano-brand-charge 1.5s ease-in-out infinite}.oiano-brand.is-loading .sun-mark-core{animation-duration:1.15s}.oiano-brand.is-loading .sun-mark-core:after{animation-duration:1.2s}@keyframes oiano-brand-charge{50%{filter:brightness(3);transform:scale(1.6);box-shadow:0 0 calc(16px * var(--brand-scale)) #fff1bd}}@media(prefers-reduced-motion:reduce){.oiano-brand *{animation:none!important}}
+
+.oiano-brand-sun{position:relative;display:inline-block;width:calc(27px * var(--brand-scale));height:calc(27px * var(--brand-scale));flex:0 0 auto;margin-right:calc(1px * var(--brand-scale));border:calc(1.2px * var(--brand-scale)) solid #c9a84c;border-radius:50%;box-shadow:inset 0 0 calc(5px * var(--brand-scale)) rgba(201,168,76,.22),0 0 calc(7px * var(--brand-scale)) rgba(201,168,76,.12)}.oiano-brand-sun:before{content:'';position:absolute;inset:14%;border-radius:50%;background:repeating-conic-gradient(from 0deg,rgba(235,199,109,.95) 0 1deg,transparent 1.5deg 8deg);animation:oiano-solar-inward 18s linear infinite reverse}.oiano-brand-sun:after{content:'';position:absolute;inset:39%;border-radius:50%;background:#ad7f2b;box-shadow:0 0 calc(5px * var(--brand-scale)) rgba(232,191,91,.5)}.oiano-brand-full .oiano-brand-sun{width:calc(36px * var(--brand-scale));height:calc(36px * var(--brand-scale))}@keyframes oiano-solar-inward{to{transform:rotate(360deg)}}
+
+.enter-realistic-wordmark{display:block;opacity:.96;transition:filter .3s ease,transform .3s ease}.enter-realistic-wordmark.is-loading{animation:realistic-wordmark-charge 1.8s ease-in-out infinite}@keyframes realistic-wordmark-charge{50%{filter:drop-shadow(0 0 22px rgba(220,174,70,.4)) brightness(1.12);transform:scale(1.008)}}@media(prefers-reduced-motion:reduce){.enter-realistic-wordmark{animation:none!important}}
+
+/* Canonical interface lockup. The cinematic master is optically cropped here so every
+   internal surface receives the same letterforms, flag inlay and orbital geometry. */
+.oiano-brand-interface {
+  --brand-height: 30px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  color: #c9a84c;
+  line-height: 1;
+}
+.oiano-brand-interface .oiano-brand-word {
+  position: relative;
+  display: block;
+  width: calc(var(--brand-height) * 4.48);
+  height: var(--brand-height);
+  overflow: visible;
+  filter: none;
+}
+.oiano-brand-interface-image {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  display: block;
+  width: 100%;
+  height: auto;
+  transform: translateY(-50%);
+  filter: drop-shadow(0 3px 6px rgba(0,0,0,.42));
+}
+.oiano-brand-interface .oiano-brand-subtitle {
+  margin-top: 5px;
+  padding-left: 1px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: max(6px, calc(var(--brand-height) * .29));
+  letter-spacing: .18em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  color: #69645b;
+  white-space: nowrap;
+}
+.oiano-brand-interface.oiano-brand-mono .oiano-brand-interface-image {
+  filter: grayscale(1) brightness(.86) contrast(1.08);
+  opacity: .78;
+}
+.oiano-brand-interface-signal {
+  position: absolute;
+  z-index: 2;
+  right: 1.5%;
+  top: 43%;
+  width: calc(var(--brand-height) * .14);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #ffe9a1;
+  box-shadow: 0 0 7px rgba(237,186,66,.82);
+  animation: oiano-interface-signal 1.8s ease-in-out infinite;
+}
+@keyframes oiano-interface-signal {
+  50% { transform: scale(1.45); filter: brightness(1.7); box-shadow: 0 0 13px rgba(255,220,125,.9); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .oiano-brand-interface-signal { animation: none; }
+}
+
 /* Sun mark — compact glowing core shedding dust particles, used in place of
    the text wordmark where a small brand mark is needed (e.g. admin header) */
 .sun-mark {

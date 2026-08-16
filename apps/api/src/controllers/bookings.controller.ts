@@ -12,6 +12,9 @@ import {
   sendBookingCancelled,
 } from '../services/email.service';
 import { createNotification } from '../routes/notifications.routes';
+import { Prisma } from '@prisma/client';
+import { resolveStaffStudio } from '../middleware/studioScope.middleware';
+import { syncStudioCircleMembership } from '../services/studio-circle.service';
 
 const CreateBookingSchema = z.object({
   // Room/service/engineer ids are plain strings, not enforced-UUID — the
@@ -19,18 +22,43 @@ const CreateBookingSchema = z.object({
   // "room-studio-a", "svc-recording", "eng-marcus" (see prisma/seed.ts).
   // Requiring .uuid() here rejected every real booking against seed data.
   room_id: z.string().min(1),
+  studio_id: z.string().min(1).optional(),
   service_id: z.string().min(1),
-  engineer_id: z.string().min(1).optional(),
+  // The studio assigns the session producer after booking.
   starts_at: z.string().datetime(),
   ends_at: z.string().datetime(),
   notes: z.string().optional(),
   repeat_weeks: z.number().int().min(1).max(12).optional().default(1),
   project_id: z.string().uuid().optional(),
-});
+}).strict().refine(
+  (value) => new Date(value.ends_at).getTime() > new Date(value.starts_at).getTime(),
+  { message: 'ends_at must be after starts_at', path: ['ends_at'] },
+);
 
 const UpdateStatusSchema = z.object({
   status: z.enum(['PENDING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'NO_SHOW']),
 });
+const AssignProducerSchema = z.object({ producer_id: z.string().min(1).nullable() });
+
+export async function assignBookingProducer(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { producer_id } = AssignProducerSchema.parse(req.body);
+    const studio = await resolveStaffStudio((req as any).userId);
+    const booking = await prisma.booking.findFirst({ where: { id: req.params.id, studio_id: studio.id } });
+    if (!booking) throw new AppError('Booking not found', 404);
+    if (['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(booking.status)) throw new AppError('Producer assignment is closed for this booking', 409);
+    if (producer_id) {
+      const producer = await prisma.engineer.findFirst({ where: { id: producer_id, studio_id: studio.id } });
+      if (!producer) throw new AppError('Producer not found at this studio', 404);
+    }
+    const updated = await prisma.booking.update({
+      where: { id: booking.id },
+      data: { engineer_id: producer_id },
+      include: { artist: true, room: true, engineer: true, service: true, payment: true },
+    });
+    res.json(updated);
+  } catch (error) { next(error); }
+}
 
 // GET /api/bookings
 export async function getBookings(req: Request, res: Response, next: NextFunction) {
@@ -41,8 +69,9 @@ export async function getBookings(req: Request, res: Response, next: NextFunctio
     const take = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? '100'))));
     const skip = (Math.max(1, parseInt(String(req.query.page ?? '1'))) - 1) * take;
 
-    const studio = await prisma.studio.findUnique({ where: { slug: DEFAULT_STUDIO_SLUG } });
-    if (!studio) throw new AppError('Studio not found', 404);
+    const staffStudio = ['STUDIO_ADMIN', 'ENGINEER'].includes(role)
+      ? await resolveStaffStudio(userId)
+      : null;
 
     let bookings: unknown[];
     let total: number;
@@ -55,11 +84,11 @@ export async function getBookings(req: Request, res: Response, next: NextFunctio
       : {};
 
     if (role === 'STUDIO_ADMIN') {
-      const where = { studio_id: studio.id, ...dateRange };
+      const where = { studio_id: staffStudio!.id, ...dateRange };
       [bookings, total] = await Promise.all([
         prisma.booking.findMany({
           where,
-          include: { artist: true, room: true, engineer: true, service: true, payment: true },
+          include: { artist: true, room: true, engineer: true, service: true, payment: true, project: { select: { id: true, title: true, phase: true } } },
           orderBy: { starts_at: 'asc' },
           take,
           skip,
@@ -67,11 +96,11 @@ export async function getBookings(req: Request, res: Response, next: NextFunctio
         prisma.booking.count({ where }),
       ]);
     } else if (role === 'ENGINEER') {
-      const where = { studio_id: studio.id, ...dateRange };
+      const where = { studio_id: staffStudio!.id, ...dateRange };
       [bookings, total] = await Promise.all([
         prisma.booking.findMany({
           where,
-          include: { artist: true, room: true, engineer: true, service: true, payment: true },
+          include: { artist: true, room: true, engineer: true, service: true, payment: true, project: { select: { id: true, title: true, phase: true } } },
           orderBy: { starts_at: 'asc' },
           take,
           skip,
@@ -85,7 +114,7 @@ export async function getBookings(req: Request, res: Response, next: NextFunctio
       [bookings, total] = await Promise.all([
         prisma.booking.findMany({
           where,
-          include: { room: true, engineer: true, service: true, payment: true },
+          include: { room: true, engineer: true, service: true, payment: true, project: { select: { id: true, title: true, phase: true } } },
           orderBy: { starts_at: 'asc' },
           take,
           skip,
@@ -112,6 +141,10 @@ export async function getBookingById(req: Request, res: Response, next: NextFunc
       include: {
         artist: { include: { user: true } }, room: true, engineer: true, service: true, payment: true, session_log: true,
         project: { include: { producer: { select: { id: true, name: true, alias: true } } } },
+        deliverables: {
+          include: { versions: { orderBy: { version_number: 'desc' } }, reviews: { orderBy: { created_at: 'desc' } } },
+          orderBy: { created_at: 'desc' },
+        },
       },
     });
     if (!booking) throw new AppError('Booking not found', 404);
@@ -119,6 +152,10 @@ export async function getBookingById(req: Request, res: Response, next: NextFunc
     // Ownership guard: ARTISTs can only see their own bookings
     if (userRole === 'ARTIST' && booking.artist?.user_id !== userId) {
       throw new AppError('Booking not found', 404); // 404 not 403 — don't reveal existence
+    }
+    if (['STUDIO_ADMIN', 'ENGINEER'].includes(userRole)) {
+      const studio = await resolveStaffStudio(userId);
+      if (booking.studio_id !== studio.id) throw new AppError('Booking not found', 404);
     }
 
     res.json(booking);
@@ -136,11 +173,25 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
     const artist = await prisma.artist.findUnique({ where: { user_id: userId } });
     if (!artist) throw new AppError('Artist profile not found', 404);
 
-    const studio = await prisma.studio.findUnique({ where: { slug: DEFAULT_STUDIO_SLUG } });
+    // Only the authenticated artist may connect a booking to one of their
+    // active projects. Never trust a client-supplied project id on its own.
+    if (data.project_id) {
+      const project = await prisma.project.findFirst({
+        where: { id: data.project_id, artist_id: artist.id, is_active: true },
+        select: { id: true },
+      });
+      if (!project) throw new AppError('Active project not found for this artist', 404);
+    }
+
+    const studio = data.studio_id
+      ? await prisma.studio.findUnique({ where: { id: data.studio_id } })
+      : await prisma.studio.findUnique({ where: { slug: DEFAULT_STUDIO_SLUG } });
     if (!studio) throw new AppError('Studio not found', 404);
 
-    const service = await prisma.serviceOffering.findUnique({ where: { id: data.service_id } });
+    const service = await prisma.serviceOffering.findFirst({ where: { id: data.service_id, studio_id: studio.id } });
     if (!service) throw new AppError('Service not found', 404);
+    const room = await prisma.room.findFirst({ where: { id: data.room_id, studio_id: studio.id } });
+    if (!room) throw new AppError('Room not found at selected studio', 404);
 
     // Calculate price
     const hours =
@@ -187,54 +238,55 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
     }
 
     // Create all bookings + deduct wallet in a single atomic transaction
-    const bookingCreates = occurrences.map((occ) =>
-      prisma.booking.create({
-        data: {
-          studio_id:   studio.id,
-          artist_id:   artist.id,
-          project_id:  data.project_id ?? undefined,
-          room_id:     data.room_id,
-          engineer_id: data.engineer_id,
-          service_id:  data.service_id,
-          starts_at:   occ.starts_at,
-          ends_at:     occ.ends_at,
-          total_usd:   total,
-          notes:       data.notes,
-          status:      'PENDING',
-          payment: {
-            create: {
-              provider:   'wallet',
-              amount_usd: total,
-              status:     'PAID',
-              paid_at:    new Date(),
-            },
-          },
-        },
-        include: { room: true, service: true, payment: true },
-      })
-    );
-
-    const walletDeduct = prisma.wallet.update({
-      where: { id: wallet.id },
-      data:  { balance_usd: { decrement: totalCost } },
-    });
-
     const txLabel = repeatWeeks > 1
       ? `${repeatWeeks} recurring sessions (${service.name})`
       : `Studio session: ${service.name}`;
 
-    const walletTx = prisma.walletTransaction.create({
-      data: {
-        wallet_id:   wallet.id,
-        amount_usd:  -totalCost,
-        type:        'debit',
-        description: txLabel,
-      },
-    });
+    const bookings = await prisma.$transaction(async (tx) => {
+      const debit = await tx.wallet.updateMany({
+        where: { id: wallet.id, balance_usd: { gte: totalCost } },
+        data: { balance_usd: { decrement: totalCost } },
+      });
+      if (debit.count !== 1) throw new AppError('Insufficient wallet balance', 402);
 
-    const results = await prisma.$transaction([...bookingCreates, walletDeduct, walletTx]);
-    // First N results are bookings; last two are the wallet update and wallet tx
-    const bookings = results.slice(0, occurrences.length) as Awaited<ReturnType<typeof prisma.booking.create>>[];
+      const created = [];
+      for (const occ of occurrences) {
+        created.push(await tx.booking.create({
+          data: {
+            studio_id: studio.id,
+            artist_id: artist.id,
+            project_id: data.project_id ?? undefined,
+            room_id: data.room_id,
+            engineer_id: undefined,
+            service_id: data.service_id,
+            starts_at: occ.starts_at,
+            ends_at: occ.ends_at,
+            total_usd: total,
+            notes: data.notes,
+            status: 'PENDING',
+            payment: {
+              create: {
+                provider: 'wallet',
+                amount_usd: total,
+                status: 'PAID',
+                paid_at: new Date(),
+              },
+            },
+          },
+          include: { room: true, service: true, payment: true },
+        }));
+      }
+
+      await tx.walletTransaction.create({
+        data: {
+          wallet_id: wallet.id,
+          amount_usd: -totalCost,
+          type: 'debit',
+          description: txLabel,
+        },
+      });
+      return created;
+    }, { isolationLevel: 'Serializable' });
 
     // One session.booked per reserved slot — separate from session.completed
     for (const b of bookings) {
@@ -254,6 +306,9 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
         : booking
     );
   } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && ['P2004', 'P2034'].includes(err.code)) {
+      return next(new AppError('Time slot is no longer available; please choose another slot', 409));
+    }
     next(err);
   }
 }
@@ -262,10 +317,11 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
 export async function updateBookingStatus(req: Request, res: Response, next: NextFunction) {
   try {
     const { status } = UpdateStatusSchema.parse(req.body);
+    const studio = await resolveStaffStudio((req as any).userId);
 
     // Scope to studio slug — prevents cross-studio mutations
     const existing = await prisma.booking.findFirst({
-      where: { id: req.params.id, studio: { slug: DEFAULT_STUDIO_SLUG } },
+      where: { id: req.params.id, studio_id: studio.id },
       include: {
         artist: {
           include: { user: { select: { email: true } } },
@@ -298,6 +354,8 @@ export async function updateBookingStatus(req: Request, res: Response, next: Nex
         artist_id: booking.artist_id,
         booking_id: booking.id,
       }).catch((e) => console.error('[activity] session.completed emit failed:', e?.message));
+
+      await syncStudioCircleMembership(booking.studio_id, booking.artist_id);
     }
 
     // On COMPLETED — update project's last_session_at if booking is tied to one
@@ -389,8 +447,9 @@ const DeliverSchema = z.object({
 export async function deliverSessionFiles(req: Request, res: Response, next: NextFunction) {
   try {
     const data = DeliverSchema.parse(req.body);
+    const studio = await resolveStaffStudio((req as any).userId);
     const booking = await prisma.booking.findFirst({
-      where:   { id: req.params.id, studio: { slug: DEFAULT_STUDIO_SLUG } },
+      where:   { id: req.params.id, studio_id: studio.id },
       include: { artist: { include: { user: true } }, service: true },
     });
     if (!booking) throw new AppError('Booking not found', 404);
@@ -407,6 +466,41 @@ export async function deliverSessionFiles(req: Request, res: Response, next: Nex
         tracks_worked: data.file_urls,
         notes:         data.notes,
       },
+    });
+
+    // Every delivery is an immutable version. Re-delivery never overwrites the
+    // artist's review history or the files attached to an earlier version.
+    const deliverable = await prisma.$transaction(async (tx) => {
+      const existing = await tx.deliverable.findFirst({
+        where: { booking_id: booking.id },
+        orderBy: { created_at: 'asc' },
+      });
+      if (!existing) {
+        return tx.deliverable.create({
+          data: {
+            booking_id: booking.id,
+            title: `${booking.service?.name ?? 'Session'} files`,
+            status: 'PENDING_REVIEW',
+            current_version: 1,
+            review_due_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+            created_by: (req as any).userId,
+            versions: { create: { version_number: 1, file_urls: data.file_urls, notes: data.notes, created_by: (req as any).userId } },
+          },
+          include: { versions: true },
+        });
+      }
+      const nextVersion = existing.current_version + 1;
+      return tx.deliverable.update({
+        where: { id: existing.id },
+        data: {
+          current_version: nextVersion,
+          status: 'PENDING_REVIEW',
+          reviewed_at: null,
+          review_due_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          versions: { create: { version_number: nextVersion, file_urls: data.file_urls, notes: data.notes, created_by: (req as any).userId } },
+        },
+        include: { versions: { orderBy: { version_number: 'desc' } } },
+      });
     });
 
     // Move booking to COMPLETED if still CONFIRMED/IN_PROGRESS
@@ -437,7 +531,57 @@ export async function deliverSessionFiles(req: Request, res: Response, next: Nex
       );
     }
 
-    res.json({ success: true, files_delivered: data.file_urls.length });
+    res.json({ success: true, files_delivered: data.file_urls.length, deliverable });
+  } catch (err) { next(err); }
+}
+
+const DeliverableReviewSchema = z.object({
+  decision: z.enum(['APPROVED', 'CHANGES_REQUESTED']),
+  note: z.string().trim().max(1500).optional(),
+}).refine(value => value.decision !== 'CHANGES_REQUESTED' || Boolean(value.note), {
+  message: 'Tell the studio what should change', path: ['note'],
+});
+
+export async function reviewDeliverable(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = DeliverableReviewSchema.parse(req.body);
+    const artist = await prisma.artist.findUnique({ where: { user_id: (req as any).userId } });
+    if (!artist) throw new AppError('Artist profile not found', 404);
+    const deliverable = await prisma.deliverable.findFirst({
+      where: { id: req.params.deliverableId, booking: { id: req.params.id, artist_id: artist.id } },
+      include: { booking: { include: { studio: { include: { staff: true } } } } },
+    });
+    if (!deliverable) throw new AppError('Deliverable not found', 404);
+    if (deliverable.status === 'APPROVED') throw new AppError('This deliverable is already approved', 409);
+
+    const updated = await prisma.deliverable.update({
+      where: { id: deliverable.id },
+      data: {
+        status: data.decision,
+        reviewed_at: new Date(),
+        reviews: { create: { version_number: deliverable.current_version, decision: data.decision, note: data.note, reviewed_by: (req as any).userId } },
+      },
+      include: { versions: { orderBy: { version_number: 'desc' } }, reviews: { orderBy: { created_at: 'desc' } } },
+    });
+
+    const staffUserIds = deliverable.booking.studio.staff.map(staff => staff.user_id);
+    if (staffUserIds.length) {
+      await prisma.notification.createMany({
+        data: staffUserIds.map(user_id => ({
+          user_id,
+          type: data.decision === 'APPROVED' ? 'DELIVERABLE_APPROVED' : 'DELIVERABLE_CHANGES_REQUESTED',
+          title: data.decision === 'APPROVED' ? 'Deliverable approved' : 'Artist requested changes',
+          body: data.decision === 'APPROVED'
+            ? `Version ${deliverable.current_version} of ${deliverable.title} was approved.`
+            : `Revision requested for version ${deliverable.current_version} of ${deliverable.title}.`,
+          payload: { booking_id: req.params.id, deliverable_id: deliverable.id },
+        })),
+      });
+      staffUserIds.forEach(userId => broadcastToUser(userId, {
+        type: 'deliverable_reviewed', bookingId: req.params.id, deliverableId: deliverable.id, decision: data.decision,
+      }));
+    }
+    res.json(updated);
   } catch (err) { next(err); }
 }
 
@@ -460,7 +604,7 @@ export async function rescheduleBooking(req: Request, res: Response, next: NextF
 
     // Fetch booking — confirm ownership
     const booking = await prisma.booking.findFirst({
-      where: { id: req.params.id, studio: { slug: DEFAULT_STUDIO_SLUG } },
+      where: { id: req.params.id },
       include: { artist: { include: { user: { select: { email: true } } } } },
     });
     if (!booking) throw new AppError('Booking not found', 404);
@@ -510,8 +654,9 @@ const SessionNotesSchema = z.object({
 export async function updateSessionNotes(req: Request, res: Response, next: NextFunction) {
   try {
     const data = SessionNotesSchema.parse(req.body);
+    const studio = await resolveStaffStudio((req as any).userId);
     const booking = await prisma.booking.findFirst({
-      where: { id: req.params.id, studio: { slug: DEFAULT_STUDIO_SLUG } },
+      where: { id: req.params.id, studio_id: studio.id },
     });
     if (!booking) throw new AppError('Booking not found', 404);
 

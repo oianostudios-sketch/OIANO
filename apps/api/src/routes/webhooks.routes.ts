@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
 import { sendReceiptEmail } from '../services/email.service';
 import { broadcastToUser } from './notifications.routes';
+import { Prisma } from '@prisma/client';
 
 export const webhooksRouter = Router();
 
@@ -12,7 +13,17 @@ webhooksRouter.post('/stripe', async (req, res, next) => {
     const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body));
     const event = constructEvent(rawBody, req.header('Stripe-Signature'));
 
-    switch (event.type) {
+    try {
+      await prisma.stripeWebhookEvent.create({ data: { id: event.id, type: event.type } });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        return res.json({ received: true, duplicate: true });
+      }
+      throw err;
+    }
+
+    try {
+      switch (event.type) {
       case 'checkout.session.completed':
         await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
         break;
@@ -28,6 +39,15 @@ webhooksRouter.post('/stripe', async (req, res, next) => {
 
       default:
         break;
+      }
+
+      await prisma.stripeWebhookEvent.update({
+        where: { id: event.id },
+        data: { status: 'COMPLETED', processed_at: new Date() },
+      });
+    } catch (err) {
+      await prisma.stripeWebhookEvent.delete({ where: { id: event.id } }).catch(() => undefined);
+      throw err;
     }
 
     res.json({ received: true });
@@ -65,43 +85,24 @@ async function handleBookingPayment(session: Stripe.Checkout.Session) {
     ? session.payment_intent
     : (session.payment_intent as any)?.id ?? null;
 
-  await prisma.$transaction(async (tx) => {
+  const applied = await prisma.$transaction(async (tx) => {
     // 1. Update payment — store payment_intent_id for reliable future matching
-    await tx.payment.upsert({
-      where:  { booking_id: bookingId },
-      create: {
-        booking_id:        bookingId,
-        provider:          'stripe',
-        provider_ref:      session.id,
-        payment_intent_id: paymentIntentId,
-        amount_usd:        booking.total_usd,
-        status:            'PAID',
-        paid_at:           new Date(),
-      },
-      update: {
+    const claimed = await tx.payment.updateMany({
+      where: { booking_id: bookingId, status: { not: 'PAID' } },
+      data: {
         provider_ref:      session.id,
         payment_intent_id: paymentIntentId,
         status:            'PAID',
         paid_at:           new Date(),
       },
     });
+    if (claimed.count === 0) return false;
 
     // 2. Confirm booking
     await tx.booking.update({ where: { id: bookingId }, data: { status: 'CONFIRMED' } });
 
-    // 3. Debit wallet ledger so balance stays accurate
-    if (booking.artist?.wallet) {
-      await tx.walletTransaction.create({
-        data: {
-          wallet_id:   booking.artist.wallet.id,
-          amount_usd:  booking.total_usd,
-          type:        'debit',
-          description: `Stripe payment — booking ${bookingId.slice(0, 8).toUpperCase()}`,
-        },
-      });
-    }
-
-    // 4. In-app notification
+    // Stripe payments do not mutate the studio-credit wallet ledger.
+    // In-app notification
     if (booking.artist?.user_id) {
       await tx.notification.create({
         data: {
@@ -112,7 +113,10 @@ async function handleBookingPayment(session: Stripe.Checkout.Session) {
         },
       });
     }
+    return true;
   });
+
+  if (!applied) return;
 
   // 5. Email receipt — outside transaction, non-fatal
   if (booking.artist?.user?.email) {
@@ -134,31 +138,32 @@ async function handleWalletTopUp(session: Stripe.Checkout.Session) {
     : null;
 
   // Mark top-up record paid
-  const topUp = await prisma.walletTopUp.findFirst({
-    where: { wallet_id: walletId, provider_ref: session.id },
-  });
-  if (topUp) {
-    await prisma.walletTopUp.update({
-      where: { id: topUp.id },
-      data:  { status: 'PAID', payment_intent_id: paymentIntentId },
+  const wallet = await prisma.$transaction(async (tx) => {
+    const claimed = await tx.walletTopUp.updateMany({
+      where: { wallet_id: walletId, provider_ref: session.id, status: 'PENDING' },
+      data: { status: 'PAID', payment_intent_id: paymentIntentId },
     });
-  }
+    if (claimed.count === 0) return null;
 
-  // Credit wallet atomically
-  const wallet = await prisma.wallet.update({
-    where: { id: walletId },
-    data:  { balance_usd: { increment: amount } },
-    include: { artist: { include: { user: true } } },
+    // Credit wallet atomically
+    const credited = await tx.wallet.update({
+      where: { id: walletId },
+      data:  { balance_usd: { increment: amount } },
+      include: { artist: { include: { user: true } } },
+    });
+
+    await tx.walletTransaction.create({
+      data: {
+        wallet_id: walletId,
+        amount_usd: amount,
+        type: 'credit',
+        description: `Stripe top-up ${session.id.slice(-8).toUpperCase()} - $${amount}`,
+      },
+    });
+    return credited;
   });
 
-  await prisma.walletTransaction.create({
-    data: {
-      wallet_id:   walletId,
-      amount_usd:  amount,
-      type:        'credit',
-      description: `Top-up ${session.id.slice(-8).toUpperCase()} — $${amount}`,
-    },
-  });
+  if (!wallet) return;
 
   if (wallet.artist?.user_id) {
     await prisma.notification.create({

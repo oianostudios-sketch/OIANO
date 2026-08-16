@@ -5,7 +5,7 @@ import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
 import { useToast } from '../components/Toast';
 import { getPersonality } from '../lib/personality';
-import SunMark from '../components/SunMark';
+import OianoBrand from '../components/OianoBrand';
 
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 
@@ -285,7 +285,7 @@ export default function ArtistProfilePage() {
       {/* Header */}
       <header style={{ borderBottom:'1px solid #141414', padding:'14px 24px', display:'flex', alignItems:'center', gap:12 }}>
         <button onClick={() => navigate(backTo)} style={{ fontSize:11, color:'#3a3a3a', background:'none', border:'none', cursor:'pointer', fontFamily:'inherit' }}>← Back</button>
-        <SunMark size={22} />
+        <OianoBrand variant="compact" size={19} />
         {passportCode && (
           <span style={{ fontSize:9, color:'#222', fontFamily:"'JetBrains Mono',monospace", letterSpacing:'0.22em', textTransform:'uppercase', marginLeft:'auto' }}>
             {passportCode}
@@ -333,7 +333,7 @@ export default function ArtistProfilePage() {
           {/* Actions */}
           <div style={{ display:'flex', flexDirection:'column', gap:8, flexShrink:0 }}>
             {isOwner && (
-              <Link to="/passport" style={{ fontSize:11, color:'#C9A84C', border:'1px solid #C9A84C30', borderRadius:8, padding:'7px 14px', textDecoration:'none', fontFamily:"'JetBrains Mono',monospace", letterSpacing:'0.06em', textAlign:'center', background:'#C9A84C0a' }}>
+              <Link to="/artist/passport" style={{ fontSize:11, color:'#C9A84C', border:'1px solid #C9A84C30', borderRadius:8, padding:'7px 14px', textDecoration:'none', fontFamily:"'JetBrains Mono',monospace", letterSpacing:'0.06em', textAlign:'center', background:'#C9A84C0a' }}>
                 View passport
               </Link>
             )}
@@ -399,7 +399,7 @@ export default function ArtistProfilePage() {
                   </div>
                 )}
                 {!genres.length && !themes.length && !dna.vocal_type && !dna.energy_profile && (
-                  <p style={{ fontSize:12, color:'#2a2a2a', fontStyle:'italic' }}>No creative DNA yet — {isOwner ? <Link to="/passport" style={{ color:'#C9A84C' }}>edit your passport</Link> : 'artist has not filled this in yet.'}</p>
+                  <p style={{ fontSize:12, color:'#2a2a2a', fontStyle:'italic' }}>No creative DNA yet — {isOwner ? <Link to="/artist/passport" style={{ color:'#C9A84C' }}>edit your passport</Link> : 'artist has not filled this in yet.'}</p>
                 )}
               </div>
             </div>

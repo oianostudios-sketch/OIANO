@@ -1,4 +1,4 @@
-import { useState, useRef, KeyboardEvent } from 'react';
+import { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
@@ -206,6 +206,7 @@ interface Props {
     vocal_type?: string;
     energy_profile?: string;
     key_themes?: string[];
+    profile_strength?: number;
   };
 }
 
@@ -242,6 +243,29 @@ export default function ProfileEditDrawer({ open, onClose, initialData }: Props)
   const [vocalType, setVocalType] = useState(initialData?.vocal_type ?? '');
   const [energyProfile, setEnergyProfile] = useState(initialData?.energy_profile ?? '');
   const [keyThemes, setKeyThemes] = useState<string[]>(initialData?.key_themes ?? []);
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setBio(initialData?.bio ?? '');
+    setAlias(initialData?.alias ?? '');
+    setGenres(initialData?.genres ?? []);
+    setVocalType(initialData?.vocal_type ?? '');
+    setEnergyProfile(initialData?.energy_profile ?? '');
+    setKeyThemes(initialData?.key_themes ?? []);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const timer = window.setTimeout(() => closeRef.current?.focus(), 0);
+    const handleKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener('keydown', handleKey);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
 
   const saveProfile = useMutation({
     mutationFn: () =>
@@ -255,46 +279,47 @@ export default function ProfileEditDrawer({ open, onClose, initialData }: Props)
           key_themes: keyThemes,
         },
       }),
-    onSuccess: (res) => {
-      const passport = res.data?.passport;
-      const strength = passport?.profile_strength;
-      qc.invalidateQueries({ queryKey: ['artist'] });
-      refreshMe(setAuth, token);
+    onSuccess: async (res) => {
+      const strength = res.data?.passport?.profile_strength;
+      await refreshMe(setAuth, token);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['passport'] }),
+        qc.invalidateQueries({ queryKey: ['artist', user?.artist?.id] }),
+      ]);
       toast.success(`Profile updated${strength != null ? ` · ${strength}% strength` : ''}`);
       onClose();
     },
-    onError: () => toast.error('Failed to save profile'),
+    onError: (error: any) => toast.error(error?.response?.data?.message ?? 'Failed to save profile'),
   });
 
   if (!open) return null;
 
-  const strengthFields = [!!bio, genres.length > 0, !!vocalType, !!energyProfile, keyThemes.length > 0];
-  const previewStrength = Math.round((strengthFields.filter(Boolean).length / strengthFields.length) * 100);
+  const currentStrength = initialData?.profile_strength ?? user?.artist?.passport?.profile_strength ?? 0;
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/60" onClick={onClose} />
+      <div className="fixed inset-0 z-40 bg-black/60" onClick={onClose} aria-hidden="true" />
 
-      <div className="fixed right-0 top-0 h-full w-full max-w-md z-50 bg-studio-surface border-l border-studio-border overflow-y-auto flex flex-col">
+      <div className="fixed right-0 top-0 h-full w-full max-w-md z-50 bg-studio-surface border-l border-studio-border overflow-y-auto flex flex-col" role="dialog" aria-modal="true" aria-labelledby="profile-edit-title">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-studio-border sticky top-0 bg-studio-surface">
           <div>
             <p className="label-mono mb-0.5">Edit Profile</p>
-            <h3 className="font-display text-lg text-white">{user?.artist?.name}</h3>
+            <h3 id="profile-edit-title" className="font-display text-lg text-white">{user?.artist?.name}</h3>
           </div>
           <div className="flex items-center gap-4">
             <div className="text-right">
-              <p className="text-zinc-500 text-xs">Strength preview</p>
-              <p className="text-dome font-display text-lg">{previewStrength}%</p>
+              <p className="text-zinc-500 text-xs">Passport score</p>
+              <p className="text-dome font-display text-lg">{currentStrength}%</p>
             </div>
-            <button onClick={onClose} className="text-zinc-500 hover:text-white transition-colors text-xl leading-none">×</button>
+            <button ref={closeRef} type="button" onClick={onClose} aria-label="Close profile editor" className="text-zinc-500 hover:text-white transition-colors text-xl leading-none">×</button>
           </div>
         </div>
 
         {/* Strength bar */}
         <div className="px-6 pt-4 pb-0">
           <div className="w-full h-1 bg-studio-border rounded-full">
-            <div className="h-full bg-dome rounded-full transition-all duration-300" style={{ width: `${previewStrength}%` }} />
+            <div className="h-full bg-dome rounded-full transition-all duration-300" style={{ width: `${currentStrength}%` }} />
           </div>
         </div>
 
@@ -308,6 +333,7 @@ export default function ProfileEditDrawer({ open, onClose, initialData }: Props)
               type="text"
               value={alias}
               onChange={(e) => setAlias(e.target.value)}
+              maxLength={120}
               placeholder="e.g. DJ Nova, The Kid"
               className="w-full bg-studio-muted border border-studio-border text-white placeholder-zinc-600 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-dome transition-colors"
             />
@@ -316,21 +342,23 @@ export default function ProfileEditDrawer({ open, onClose, initialData }: Props)
           {/* Bio */}
           <div>
             <label className="label-mono block mb-2">
-              Bio <span className="text-dome normal-case">+20%</span>
+              Bio
             </label>
             <textarea
               value={bio}
               onChange={(e) => setBio(e.target.value)}
+              maxLength={2000}
               placeholder="Tell your story — where you're from, what drives your sound, where you're headed..."
               rows={4}
               className="w-full bg-studio-muted border border-studio-border text-white placeholder-zinc-600 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-dome transition-colors resize-none"
             />
+            <p className="mt-1 text-right text-xs text-zinc-600">{bio.length}/2000</p>
           </div>
 
           {/* Genres */}
           <div>
             <label className="label-mono block mb-2">
-              Genres <span className="text-dome normal-case">+20%</span>
+              Genres
             </label>
             <ChipInput
               chips={genres}
@@ -343,7 +371,7 @@ export default function ProfileEditDrawer({ open, onClose, initialData }: Props)
           {/* Vocal / Role type */}
           <div>
             <label className="label-mono block mb-2">
-              You are a… <span className="text-dome normal-case">+20%</span>
+              You are a…
             </label>
             <SingleChipSelect
               value={vocalType}
@@ -356,7 +384,7 @@ export default function ProfileEditDrawer({ open, onClose, initialData }: Props)
           {/* Energy profile */}
           <div>
             <label className="label-mono block mb-2">
-              Energy <span className="text-dome normal-case">+20%</span>
+              Energy
             </label>
             <SingleChipSelect
               value={energyProfile}
@@ -374,7 +402,7 @@ export default function ProfileEditDrawer({ open, onClose, initialData }: Props)
           {/* Key themes */}
           <div>
             <label className="label-mono block mb-2">
-              Key themes <span className="text-dome normal-case">+20%</span>
+              Key themes
             </label>
             <ChipInput
               chips={keyThemes}
@@ -389,12 +417,14 @@ export default function ProfileEditDrawer({ open, onClose, initialData }: Props)
         {/* Footer */}
         <div className="px-6 py-5 border-t border-studio-border sticky bottom-0 bg-studio-surface flex gap-3">
           <button
+            type="button"
             onClick={onClose}
             className="flex-1 border border-studio-border text-zinc-400 py-3 rounded-lg text-sm hover:text-white transition-colors"
           >
             Cancel
           </button>
           <button
+            type="button"
             onClick={() => saveProfile.mutate()}
             disabled={saveProfile.isPending}
             className="flex-1 bg-dome text-black font-semibold py-3 rounded-lg text-sm hover:bg-dome-light transition-colors disabled:opacity-50"
