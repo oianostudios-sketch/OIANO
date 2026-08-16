@@ -15,6 +15,7 @@ type MessageBookingAccess = {
   studio_id: string;
   artist: { user_id: string } | null;
   engineer: { user_id: string | null } | null;
+  project: { producer: { user_id: string } | null } | null;
 };
 
 async function hasBookingMessageAccess(booking: MessageBookingAccess, userId: string, userRole: string) {
@@ -28,6 +29,7 @@ async function hasBookingMessageAccess(booking: MessageBookingAccess, userId: st
     actorId: userId,
     actorRole: userRole,
     actorStudioId: staff?.studio_id,
+    projectProducerUserId: booking.project?.producer?.user_id ?? null,
   });
 }
 
@@ -43,6 +45,7 @@ messagesRouter.get('/', async (req: any, res: Response, next: NextFunction) => {
         studio_id: true,
         artist: { select: { user_id: true } },
         engineer: { select: { user_id: true } },
+        project: { select: { producer: { select: { user_id: true } } } },
       },
     });
     if (!booking) throw new AppError('Booking not found', 404);
@@ -77,11 +80,11 @@ messagesRouter.post('/', async (req: any, res: Response, next: NextFunction) => 
       include: {
         artist:   { include: { user: true } },
         engineer: true,
+        project:  { include: { producer: { select: { user_id: true } } } },
       },
     });
     if (!booking) throw new AppError('Booking not found', 404);
 
-    const isArtist = userRole === 'ARTIST' && booking.artist?.user_id === userId;
     if (!(await hasBookingMessageAccess(booking, userId, userRole))) {
       throw new AppError('Booking not found', 404);
     }
@@ -96,14 +99,18 @@ messagesRouter.post('/', async (req: any, res: Response, next: NextFunction) => 
         id: true,
         body: true,
         created_at: true,
-        sender: { select: { id: true, role: true, artist: { select: { name: true, alias: true } } } },
+        sender: { select: { id: true, role: true, artist: { select: { name: true, alias: true } }, producer: { select: { name: true, alias: true } } } },
       },
     });
 
     // Resolve sender name for toast
     const senderName = message.sender.artist?.alias
       ?? message.sender.artist?.name
-      ?? (message.sender.role === 'STUDIO_ADMIN' ? 'Studio' : 'Engineer');
+      ?? message.sender.producer?.alias
+      ?? message.sender.producer?.name
+      ?? (message.sender.role === 'STUDIO_ADMIN' ? 'Studio'
+        : message.sender.role === 'ENGINEER' ? 'Engineer'
+        : message.sender.role);
 
     // Broadcast to all parties — type must match useSSE handler
     const event = {
@@ -114,17 +121,17 @@ messagesRouter.post('/', async (req: any, res: Response, next: NextFunction) => 
       message,
     };
 
-    // Always notify the artist
+    // Notify every other party in this thread (never the sender) so
+    // whoever sends -- artist, engineer, studio admin, or the linked
+    // project's producer -- everyone else with access gets it live.
     if (booking.artist?.user?.id && booking.artist.user.id !== userId) {
       broadcastToUser(booking.artist.user.id, event);
     }
-
-    // If the sender is the artist, notify only the assigned engineer.
-    if (isArtist) {
-      // Engineers are studio staff with role ENGINEER — broadcast to all of them
-      if (booking.engineer?.user_id && booking.engineer.user_id !== userId) {
-        broadcastToUser(booking.engineer.user_id, event);
-      }
+    if (booking.engineer?.user_id && booking.engineer.user_id !== userId) {
+      broadcastToUser(booking.engineer.user_id, event);
+    }
+    if (booking.project?.producer?.user_id && booking.project.producer.user_id !== userId) {
+      broadcastToUser(booking.project.producer.user_id, event);
     }
 
     res.status(201).json(message);

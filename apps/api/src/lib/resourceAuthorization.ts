@@ -22,12 +22,19 @@ export type BookingMessageAccessInput = {
   actorId: string;
   actorRole: string;
   actorStudioId?: string | null;
+  // The user_id of the Producer who owns this booking's linked project (if
+  // any). A Producer isn't a party to a booking directly -- they only ever
+  // reach one through a project they own (see producer.routes.ts's
+  // link-booking endpoint) -- so this is the only way a Producer can
+  // legitimately access the thread.
+  projectProducerUserId?: string | null;
 };
 
 export function canAccessBookingMessages(input: BookingMessageAccessInput) {
   if (input.actorRole === 'OIANO_ADMIN') return true;
   if (input.actorRole === 'ARTIST') return input.artistUserId === input.actorId;
   if (input.actorRole === 'ENGINEER') return input.engineerUserId === input.actorId;
+  if (input.actorRole === 'PRODUCER') return input.projectProducerUserId === input.actorId;
   if (input.actorRole === 'STUDIO_ADMIN') {
     return Boolean(input.actorStudioId && input.bookingStudioId === input.actorStudioId);
   }
