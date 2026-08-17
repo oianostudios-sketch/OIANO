@@ -13,6 +13,7 @@ import ReleaseArtwork from '../components/ReleaseArtwork';
 import TrustSignal from '../components/TrustSignal';
 import { useToast } from '../components/Toast';
 import ArtistEmptyState from '../components/ArtistEmptyState';
+import Modal from '../components/Modal';
 import { AtSign, ChevronRight, Copy, Disc3, Download, ExternalLink, FolderKanban, Globe2, Headphones, MoreHorizontal, Music2, Plus, Radio, Share2, Video, X } from 'lucide-react';
 
 const API_ORIGIN = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
@@ -661,8 +662,7 @@ export default function PassportPage() {
       )}
 
       {editingLinks && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,.82)', display: 'grid', placeItems: 'center', padding: 20 }} onClick={() => setEditingLinks(false)}>
-          <div role="dialog" aria-modal="true" aria-label="Social and streaming links" style={{ width: '100%', maxWidth: 480, maxHeight: '85vh', overflowY: 'auto', background: '#101010', border: '1px solid #292929', borderRadius: 16, padding: 24 }} onClick={(event) => event.stopPropagation()}>
+        <Modal onClose={() => setEditingLinks(false)} ariaLabel="Social and streaming links" maxHeight="85vh">
             <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, marginBottom: 5 }}>Professional details</h2>
             <p style={{ color: '#666', fontSize: 12, marginBottom: 18 }}>Add context for collaborators, then paste complete public links.</p>
             <label style={{ display: 'block', color: '#888', fontSize: 11, marginBottom: 12 }}>Creative base / location<input value={locationDraft} onChange={(event) => setLocationDraft(event.target.value)} placeholder="Lagos · London · New York" maxLength={120} style={{ width: '100%', marginTop: 5, background: '#080808', border: '1px solid #252525', borderRadius: 8, padding: '10px 12px', color: '#fff' }} /></label>
@@ -674,13 +674,11 @@ export default function PassportPage() {
               </label>
             ))}
             <div style={{ display: 'flex', gap: 10, marginTop: 18 }}><button className="pp-btn" style={{ flex: 1 }} onClick={() => setEditingLinks(false)}>Cancel</button><button className="pp-btn pp-btn-primary" style={{ flex: 1 }} onClick={() => saveLinks.mutate()} disabled={saveLinks.isPending}>{saveLinks.isPending ? 'Saving…' : 'Save links'}</button></div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {releaseOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,.82)', display: 'grid', placeItems: 'center', padding: 20 }} onClick={() => setReleaseOpen(false)}>
-          <div role="dialog" aria-modal="true" aria-label="Add release" style={{ width: '100%', maxWidth: 480, background: '#101010', border: '1px solid #292929', borderRadius: 16, padding: 24 }} onClick={(event) => event.stopPropagation()}>
+        <Modal onClose={() => setReleaseOpen(false)} ariaLabel="Add release">
             <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, marginBottom: 18 }}>{editingReleaseId ? 'Edit release' : 'Add released work'}</h2>
             <input value={releaseDraft.title} onChange={(event) => setReleaseDraft({ ...releaseDraft, title: event.target.value })} placeholder="Release title" style={{ width: '100%', marginBottom: 12, background: '#080808', border: '1px solid #252525', borderRadius: 8, padding: '11px 12px', color: '#fff' }} />
             <select value={releaseDraft.release_type} onChange={(event) => setReleaseDraft({ ...releaseDraft, release_type: event.target.value })} style={{ width: '100%', marginBottom: 12, background: '#080808', border: '1px solid #252525', borderRadius: 8, padding: '11px 12px', color: '#fff' }}>{['SINGLE','EP','ALBUM','MIXTAPE','VIDEO'].map(type => <option key={type}>{type}</option>)}</select>
@@ -695,17 +693,14 @@ export default function PassportPage() {
             <input value={releaseDraft.collaborators} onChange={(event) => setReleaseDraft({ ...releaseDraft, collaborators: event.target.value })} placeholder="Collaborators, separated by commas" style={{ width: '100%', marginBottom: 12, background: '#080808', border: '1px solid #252525', borderRadius: 8, padding: '11px 12px', color: '#fff' }} />
             <label style={{ display: 'flex', gap: 8, color: '#888', fontSize: 12, marginBottom: 18 }}><input type="checkbox" checked={releaseDraft.is_featured} onChange={(event) => setReleaseDraft({ ...releaseDraft, is_featured: event.target.checked })} /> Feature this release</label>
             <div style={{ display: 'flex', gap: 10 }}><button className="pp-btn" style={{ flex: 1 }} onClick={() => { setReleaseOpen(false); setEditingReleaseId(null); setArtworkFile(null); setArtworkPreview(''); }}>Cancel</button><button className="pp-btn pp-btn-primary" style={{ flex: 1 }} onClick={() => addRelease.mutate()} disabled={!releaseDraft.title || addRelease.isPending}>{addRelease.isPending ? (artworkFile ? 'Uploading…' : 'Saving…') : editingReleaseId ? 'Save changes' : 'Add release'}</button></div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {pendingDeleteRelease && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 210, background: 'rgba(0,0,0,.82)', display: 'grid', placeItems: 'center', padding: 20 }} onClick={() => setPendingDeleteRelease(null)}>
-          <div role="alertdialog" aria-modal="true" aria-labelledby="delete-release-title" style={{ width: '100%', maxWidth: 400, background: '#101010', border: '1px solid #392020', borderRadius: 16, padding: 24 }} onClick={(event) => event.stopPropagation()}>
-            <h2 id="delete-release-title" style={{ fontFamily: "'Playfair Display',serif", fontSize: 21 }}>Remove “{pendingDeleteRelease.title}”?</h2><p style={{ color: '#777', fontSize: 12, margin: '8px 0 20px' }}>This removes it from your private and public Passport. It does not affect the release on streaming platforms.</p>
+        <Modal onClose={() => setPendingDeleteRelease(null)} role="alertdialog" ariaLabelledBy="delete-release-title" maxWidth={400} borderColor="#392020" zIndex={210}>
+            <h2 id="delete-release-title" style={{ fontFamily: "'Playfair Display',serif", fontSize: 21 }}>Remove "{pendingDeleteRelease.title}"?</h2><p style={{ color: '#777', fontSize: 12, margin: '8px 0 20px' }}>This removes it from your private and public Passport. It does not affect the release on streaming platforms.</p>
             <div style={{ display: 'flex', gap: 10 }}><button className="pp-btn" style={{ flex: 1 }} onClick={() => setPendingDeleteRelease(null)}>Keep release</button><button className="pp-btn" style={{ flex: 1, color: '#fca5a5', borderColor: '#5f2828' }} onClick={() => { deleteRelease.mutate(pendingDeleteRelease.id); setPendingDeleteRelease(null); }}>Remove</button></div>
-          </div>
-        </div>
+        </Modal>
       )}
     
     </div>

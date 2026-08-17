@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Bell, CalendarDays, FolderKanban, MessageSquareText, Radio, Search, Users } from 'lucide-react';
+import { Bell, CalendarDays, FolderKanban, MessageSquareText, Radio, Users } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
+import SearchInput from '../components/SearchInput';
 
 type Booking = {
   id: string; status: string; starts_at: string; updated_at?: string; notes?: string | null;
@@ -77,7 +78,7 @@ export default function WorkroomsPage() {
             <div><div className="mb-4 flex items-center gap-2 text-[10px] font-mono uppercase tracking-[.18em] text-emerald-400"><Radio size={12}/> Context stays with the work</div><h2 className="max-w-2xl text-3xl font-medium md:text-4xl">One professional conversation from booking to delivery.</h2><p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-500">Messages, collaborators, sessions and decisions remain attached to the project or booking they belong to.</p></div>
             <div className="grid grid-cols-2 gap-2"><div className="min-w-28 rounded-xl border border-white/[.07] bg-black/20 p-4"><strong className="text-2xl">{activeCount}</strong><span className="mt-1 block text-[9px] uppercase tracking-widest text-zinc-600">Active rooms</span></div><div className="min-w-28 rounded-xl border border-white/[.07] bg-black/20 p-4"><strong className={urgentCount ? 'text-amber-300 text-2xl' : 'text-2xl'}>{urgentCount}</strong><span className="mt-1 block text-[9px] uppercase tracking-widest text-zinc-600">Need action</span></div></div>
           </div>
-          <label className="mt-7 flex max-w-xl items-center gap-3 rounded-xl border border-white/[.08] bg-black/25 px-4 py-3 focus-within:border-dome/35"><Search size={15} className="text-zinc-600"/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Find a project, artist, room or session" className="w-full bg-transparent text-sm text-white outline-none placeholder:text-zinc-700"/></label>
+          <SearchInput value={query} onChange={setQuery} placeholder="Find a project, artist, room or session" className="mt-7 max-w-xl" />
         </section>
 
         {loading ? <div className="grid min-h-72 place-items-center text-[10px] font-mono tracking-widest text-zinc-600">OPENING WORKROOMS…</div> : <>
