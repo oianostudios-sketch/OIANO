@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { ProducerNav } from '../components/ProducerNav';
+import { initials } from '../components/ArtistAvatar';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Phase =
@@ -60,10 +61,6 @@ function ago(dateStr: string): string {
   const h = Math.floor(m / 60);
   if (h < 24) return `${h}h ago`;
   return `${Math.floor(h / 24)}d ago`;
-}
-
-function initials(name: string): string {
-  return name.split(' ').slice(0, 2).map(w => w[0]?.toUpperCase()).join('');
 }
 
 // last_session_at was fetched into every project object and never shown —

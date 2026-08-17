@@ -2,8 +2,9 @@ import { CSSProperties } from 'react';
 
 const API_ORIGIN = import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, '') ?? 'http://localhost:4000';
 
-function initials(name: string) {
-  return name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('') || 'A';
+export function initials(name?: string) {
+  if (!name?.trim()) return '?';
+  return name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('');
 }
 
 export function resolveArtistImage(src?: string | null) {

@@ -11,7 +11,7 @@ import StudioIntelligencePanel, { PulseData, Insight } from '../components/Studi
 import OianoBrand from '../components/OianoBrand';
 import { Activity, LayoutDashboard, Calendar, ClipboardList, DollarSign, Gauge, Wallet } from 'lucide-react';
 import { useToast } from '../components/Toast';
-import ArtistAvatar from '../components/ArtistAvatar';
+import ArtistAvatar, { initials } from '../components/ArtistAvatar';
 import { BookingStatus, STATUS_HEX } from '../lib/bookingStatus';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -81,10 +81,6 @@ function fmtCurrency(n: number) {
 function isToday(iso?: string) {
   if (!iso) return false;
   return new Date(iso).toDateString() === new Date().toDateString();
-}
-function initials(name?: string) {
-  if (!name) return '?';
-  return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
 }
 function collection<T>(v: unknown): T[] {
   if (Array.isArray(v)) return v as T[];
