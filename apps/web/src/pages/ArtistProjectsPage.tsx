@@ -7,7 +7,7 @@ import { useAuthStore } from '../store/auth.store';
 import ArtistAvatar from '../components/ArtistAvatar';
 import TrustSignal from '../components/TrustSignal';
 import { useToast } from '../components/Toast';
-import ProjectMessageThread from '../components/ProjectMessageThread';
+import MessageThread from '../components/MessageThread';
 import ProjectActionPanel from '../components/ProjectActionPanel';
 
 const PHASES = ['PRE_PRODUCTION', 'TRACKING', 'EDITING', 'MIXING', 'MASTERING', 'DELIVERED'];
@@ -124,7 +124,17 @@ export default function ArtistProjectsPage() {
 
               {selected.notes && <div className="mb-7 rounded-xl border border-white/[.06] bg-black/20 p-4"><p className="text-[9px] font-mono uppercase tracking-widest text-zinc-600">Project brief</p><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-zinc-400">{selected.notes}</p></div>}
 
-              <div className="mb-7"><ProjectActionPanel project={selected}/><ProjectMessageThread projectId={selected.id}/></div>
+              <div className="mb-7"><ProjectActionPanel project={selected}/><MessageThread
+                variant="project"
+                endpoint={`/projects/${selected.id}/messages`}
+                queryKey={['project-messages', selected.id]}
+                sseMatch={(e) => e?.type === 'new_project_message' && e?.projectId === selected.id}
+                title="Project conversation"
+                subtitle="Shared context for the whole working team"
+                emptyTitle="Start with the creative direction."
+                emptySubtitle="Reference tracks, goals and decisions will stay with this project."
+                placeholder="Share an update, reference or decision…"
+              /></div>
 
               <div className="grid gap-6 lg:grid-cols-2">
                 <div><h3 className="flex items-center gap-2 text-sm"><Users size={15} className="text-dome"/> Collaborators</h3><div className="mt-3 space-y-2">{selected.collaborators.length ? selected.collaborators.map((person: any) => <div key={`${person.role}-${person.id}`} className="flex items-center gap-3 rounded-lg border border-white/[.05] px-3 py-2.5"><ArtistAvatar src={person.avatar_url} name={person.name} size={32} /><div><p className="text-xs text-zinc-300">{person.name}</p><p className="text-[9px] text-zinc-600">{person.role}</p></div></div>) : <p className="text-xs text-zinc-700">Collaborators will appear when sessions are connected.</p>}</div></div>

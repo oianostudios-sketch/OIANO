@@ -5,7 +5,7 @@ import { Calendar, CreditCard, UploadCloud, Download } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
 import { fmtTime, fmtDateLong, fmtDuration } from '../lib/fmt';
-import BookingMessageThread from '../components/BookingMessageThread';
+import MessageThread from '../components/MessageThread';
 import ArtistReviewForm from '../components/ArtistReviewForm';
 import { useToast } from '../components/Toast';
 import { BookingStatus, STATUS_TAILWIND, STATUS_DOT_TAILWIND, STATUS_MESSAGE } from '../lib/bookingStatus';
@@ -366,7 +366,18 @@ export default function BookingDetailPage() {
         )}
 
         {/* ── A: Message thread ── */}
-        {showThread && id && <BookingMessageThread bookingId={id} />}
+        {showThread && id && (
+          <MessageThread
+            variant="booking"
+            endpoint={`/bookings/${id}/messages`}
+            queryKey={['booking-messages', id]}
+            sseMatch={(e) => e?.type === 'booking_message' && e?.booking_id === id}
+            title="Session thread"
+            emptyTitle="No messages yet."
+            emptySubtitle="Start the conversation — reference tracks, session goals, anything."
+            placeholder="Reference tracks, goals, questions…"
+          />
+        )}
 
         {/* ── B: Artist review ── */}
         {showReview && id && (

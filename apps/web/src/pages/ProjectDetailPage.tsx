@@ -11,7 +11,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { ProducerNav } from '../components/ProducerNav';
 import { useToast } from '../components/Toast';
-import ProjectMessageThread from '../components/ProjectMessageThread';
+import MessageThread from '../components/MessageThread';
 import ProjectActionPanel from '../components/ProjectActionPanel';
 import { fmtDate, fmtDuration, fmtCurrency } from '../lib/fmt';
 import { BookingStatus, STATUS_HEX } from '../lib/bookingStatus';
@@ -328,7 +328,17 @@ export default function ProjectDetailPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>{project.rights_agreements?.map(agreement => <div key={agreement.id} style={{ padding: 12, border: '1px solid #1e1e1e', borderRadius: 9, background: '#121212' }}><div style={{ display: 'flex', justifyContent: 'space-between' }}><strong style={{ color: '#ddd', fontSize: 12 }}>{agreement.title}</strong><span style={{ color: agreement.status === 'APPROVED' ? '#1D9E75' : agreement.status === 'DISPUTED' ? '#D94A4A' : '#C9A84C', fontSize: 10 }}>{agreement.status}</span></div><div style={{ display: 'flex', gap: 7, marginTop: 8 }}>{agreement.shares.map(share => <span key={share.id} style={{ border: '1px solid #252525', borderRadius: 99, padding: '4px 8px', color: '#777', fontSize: 10 }}>{share.holder_name} · {Number(share.percentage)}%</span>)}</div>{agreement.response_note && <p style={{ margin: '8px 0 0', color: '#777', fontSize: 10 }}>{agreement.response_note}</p>}</div>)}{!project.rights_agreements?.length && <div style={{ padding: 16, border: '1px dashed #222', borderRadius: 9, color: '#444', textAlign: 'center', fontSize: 11 }}>No ownership split proposed.</div>}</div>
         </div>
 
-        <div style={{ marginBottom: '2rem' }}><ProjectActionPanel project={project}/><ProjectMessageThread projectId={project.id}/></div>
+        <div style={{ marginBottom: '2rem' }}><ProjectActionPanel project={project}/><MessageThread
+          variant="project"
+          endpoint={`/projects/${project.id}/messages`}
+          queryKey={['project-messages', project.id]}
+          sseMatch={(e) => e?.type === 'new_project_message' && e?.projectId === project.id}
+          title="Project conversation"
+          subtitle="Shared context for the whole working team"
+          emptyTitle="Start with the creative direction."
+          emptySubtitle="Reference tracks, goals and decisions will stay with this project."
+          placeholder="Share an update, reference or decision…"
+        /></div>
 
         {/* Linked sessions — the whole point: this project's booking history in one place */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>

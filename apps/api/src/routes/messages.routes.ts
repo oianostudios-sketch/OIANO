@@ -61,7 +61,15 @@ messagesRouter.get('/', async (req: any, res: Response, next: NextFunction) => {
         id: true,
         body: true,
         created_at: true,
-        sender: { select: { id: true, role: true, artist: { select: { name: true, alias: true } } } },
+        sender: {
+          select: {
+            id: true,
+            role: true,
+            artist: { select: { name: true, alias: true } },
+            producer: { select: { name: true, alias: true } },
+            engineer: { select: { name: true } },
+          },
+        },
       },
     });
     res.json(messages);
@@ -99,7 +107,15 @@ messagesRouter.post('/', async (req: any, res: Response, next: NextFunction) => 
         id: true,
         body: true,
         created_at: true,
-        sender: { select: { id: true, role: true, artist: { select: { name: true, alias: true } }, producer: { select: { name: true, alias: true } } } },
+        sender: {
+          select: {
+            id: true,
+            role: true,
+            artist: { select: { name: true, alias: true } },
+            producer: { select: { name: true, alias: true } },
+            engineer: { select: { name: true } },
+          },
+        },
       },
     });
 
@@ -108,9 +124,8 @@ messagesRouter.post('/', async (req: any, res: Response, next: NextFunction) => 
       ?? message.sender.artist?.name
       ?? message.sender.producer?.alias
       ?? message.sender.producer?.name
-      ?? (message.sender.role === 'STUDIO_ADMIN' ? 'Studio'
-        : message.sender.role === 'ENGINEER' ? 'Engineer'
-        : message.sender.role);
+      ?? message.sender.engineer?.name
+      ?? (message.sender.role === 'STUDIO_ADMIN' ? 'Studio' : message.sender.role);
 
     // Broadcast to all parties — type must match useSSE handler
     const event = {
