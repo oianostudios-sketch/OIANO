@@ -145,7 +145,11 @@ export default function CalendarPage() {
   const isEngineer = user?.role === 'ENGINEER';
   const isArtist  = user?.role === 'ARTIST';
 
-  const [view,      setView]      = useState<ViewMode>('week');
+  // Week view's 7-day grid needs ~700px and has no way to shrink further,
+  // so it overflows a phone screen with no hint that it's scrollable.
+  // Day view's single-day column fits comfortably instead — default to it
+  // below the mobile breakpoint, same threshold MobileBottomNav uses.
+  const [view,      setView]      = useState<ViewMode>(() => (typeof window !== 'undefined' && window.innerWidth < 768 ? 'day' : 'week'));
   const [anchor,    setAnchor]    = useState(() => new Date()); // focal date
   const [colorMode, setColorMode] = useState<ColorMode>('status');
   const [hoverId,   setHoverId]   = useState<string|null>(null);
@@ -407,7 +411,7 @@ export default function CalendarPage() {
         <div style={{ minWidth:700 }}>
           {/* Day headers */}
           <div style={{ display:'flex', borderBottom:'1px solid #1e1e1e', position:'sticky', top:0, zIndex:20, background:'#0d0d0d' }}>
-            <div style={{ width:56, flexShrink:0 }} />
+            <div style={{ width:56, flexShrink:0, position:'sticky', left:0, zIndex:21, background:'#0d0d0d' }} />
             {days.map(day => {
               const today = isSameDay(day, new Date());
               const cnt = bookings.filter(b => isSameDay(new Date(b.starts_at), day)).length;
@@ -434,9 +438,9 @@ export default function CalendarPage() {
             const rc = hashColor(room.name, ROOM_PALETTE);
             return (
               <div key={room.id} style={{ display:'flex', borderBottom:'1px solid #141414' }}>
-                {/* Room label */}
+                {/* Room label — sticky so it stays visible while the day columns scroll horizontally */}
                 <div style={{ width:56, flexShrink:0, display:'flex', alignItems:'center', padding:'0 6px',
-                  borderRight:'1px solid #1a1a1a' }}>
+                  borderRight:'1px solid #1a1a1a', position:'sticky', left:0, zIndex:11, background:'#0d0d0d' }}>
                   <span style={{ fontSize:9, color:rc, fontFamily:'monospace', writingMode:'vertical-rl', transform:'rotate(180deg)', whiteSpace:'nowrap' }}>
                     {room.name}
                   </span>
@@ -663,6 +667,15 @@ export default function CalendarPage() {
           fontSize:10, color:'#444', fontFamily:'monospace' }}>
           Click any empty slot to book → pre-fills the booking form
         </div>
+      )}
+      {view === 'week' && (
+        <>
+          <style>{'@media (max-width: 768px) { .cal-swipe-hint { display: block !important; } }'}</style>
+          <div className="cal-swipe-hint" style={{ display:'none', padding:'5px 20px', background:'#0d0d0d', borderBottom:'1px solid #141414',
+            fontSize:10, color:'#5A9BCB', fontFamily:'monospace' }}>
+            ← Swipe to see the rest of the week →
+          </div>
+        </>
       )}
 
       {/* Content */}
