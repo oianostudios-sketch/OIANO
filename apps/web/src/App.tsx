@@ -1,15 +1,12 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from './store/auth.store';
 import { useSSE } from './hooks/useSSE';
-import { useStudioState } from './context/StudioState';
 import MobileBottomNav from './components/MobileBottomNav';
-import StudioTicker from './components/StudioTicker';
-import StudioPulseWidget from './components/StudioPulseWidget';
+import StudioStatusBar from './components/StudioStatusBar';
 import ArtistStatusToggle from './components/ArtistStatusToggle';
 import { StudioStateProvider } from './context/StudioState';
 import CommandPalette from './components/CommandPalette';
-import SessionLiveBar from './components/SessionLiveBar';
 import ErrorBoundary from './components/ErrorBoundary';
 import FeedbackWidget from './components/FeedbackWidget';
 import './styles/artist-experience.css';
@@ -82,9 +79,7 @@ function Chrome() {
   const artistDashboard = pathname === '/dashboard' && user?.role === 'ARTIST';
   return (
     <>
-      {!artistDashboard && <StudioTicker />}
-      {!artistDashboard && <SessionLiveBar />}
-      {!artistDashboard && <StudioPulseWidget />}
+      {!artistDashboard && <StudioStatusBar />}
       {!artistDashboard && <ArtistStatusToggle />}
       <MobileBottomNav />
       <CommandPalette />
@@ -151,22 +146,10 @@ function AnimatedRoutes() {
   );
 }
 
-// ── Body padding sync — adds/removes class when live bar appears ──────────────
-function LiveBarSync() {
-  const { isLive } = useStudioState();
-  useEffect(() => {
-    if (isLive) document.body.classList.add('has-live-bar');
-    else document.body.classList.remove('has-live-bar');
-    return () => document.body.classList.remove('has-live-bar');
-  }, [isLive]);
-  return null;
-}
-
 export default function App() {
   return (
     <StudioStateProvider>
       <SSEProvider />
-      <LiveBarSync />
       <Chrome />
       <AnimatedRoutes />
       <FeedbackWidget />

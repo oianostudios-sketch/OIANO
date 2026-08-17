@@ -1,6 +1,6 @@
 /**
  * ArtistStatusToggle — one-tap booking-availability badge, visible on every
- * screen for ARTIST users (mirrors StudioPulseWidget's always-mounted pattern).
+ * screen for ARTIST users (mirrors StudioStatusBar's always-mounted pattern).
  * Emits status.changed server-side, debounced so rapid taps don't spam the Clock.
  */
 import { useRef, useState } from 'react';

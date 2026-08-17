@@ -251,10 +251,6 @@ export default function PassportPage() {
           backdrop-filter: blur(18px);
           margin-top: calc(var(--pp-chrome-offset) * -1);
         }
-        body.has-live-bar .pp-shell {
-          --pp-chrome-offset: 60px;
-          --pp-card-sticky-top: 119px;
-        }
         .pp-topbar-btn {
           font-size: 11px; color: #777; background: none;
           border: none; cursor: pointer; font-family: inherit;

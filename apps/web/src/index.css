@@ -333,8 +333,12 @@ a {
 }
 a:hover { color: var(--gold); }
 
-/* ─── Studio status strip (quiet cycling ticker) ─────────────── */
-.studio-ticker-strip {
+/* ─── StudioStatusBar — single live/ambient status strip ──────
+   Replaces the old StudioTicker + SessionLiveBar + StudioPulseWidget,
+   which independently rendered the same "is the studio live" fact in
+   three places at once. Both states render at the same fixed slot and
+   height so no dynamic body-padding sync is needed between them. */
+.ssb-bar {
   position: fixed;
   top: 0;
   left: 0;
@@ -345,86 +349,67 @@ a:hover { color: var(--gold); }
   align-items: center;
   gap: 10px;
   padding: 0 18px;
-  background: #080808;
-  border-bottom: 1px solid #141414;
   font-family: 'JetBrains Mono', monospace;
   font-size: 10px;
   letter-spacing: 0.06em;
+  overflow: hidden;
 }
-.sts-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  flex-shrink: 0;
+.ssb-ambient {
+  background: #080808;
+  border-bottom: 1px solid #141414;
 }
-.sts-content {
+.ssb-ambient-content {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.sts-label {
-  color: #333;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-size: 9px;
-}
-.sts-sep {
-  color: #1e1e1e;
-}
-.sts-value {
-  color: #555;
-}
-.sts-accent {
-  color: #C9A84C;
-}
-
-/* ─── StudioPulseWidget ──────────────────────────────────────── */
-.studio-pulse-widget {
-  position: fixed;
-  top: 14px;
-  right: 16px;
-  z-index: 1000;
+.ssb-live {
+  background: linear-gradient(90deg, #0f0d08 0%, #131008 60%, #0f0d08 100%);
+  border-bottom: 1px solid #5A9BCB30;
   cursor: pointer;
-  user-select: none;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: #0f0f0f;
-  border: 1px solid #1e1e1e;
-  border-radius: 20px;
-  padding: 5px 10px;
-  font-size: 10px;
-  font-family: 'JetBrains Mono', monospace;
-  letter-spacing: 0.08em;
-  transition: border-color 0.3s, background 0.3s;
-  backdrop-filter: blur(8px);
+  animation: ssb-slide-in 240ms cubic-bezier(0.16,1,0.3,1);
 }
-.studio-pulse-widget:hover { border-color: #2a2a2a; background: #141414; }
-
-.spw-live  { display: flex; align-items: center; gap: 6px; }
-.spw-next  { display: flex; align-items: center; gap: 6px; }
-.spw-idle  { display: flex; align-items: center; gap: 6px; }
-
-.spw-dot {
-  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+@keyframes ssb-slide-in {
+  from { opacity: 0; transform: translateY(-100%); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-.spw-dot-live  { background: var(--live-accent, #E8823A); box-shadow: 0 0 5px var(--live-accent, #E8823A); animation: spw-pulse 1.2s ease-in-out infinite; }
-.spw-dot-ready { background: #22c55e; box-shadow: 0 0 4px #22c55e; }
-.spw-dot-idle  { background: #C9A84C; opacity: 0.5; }
-
-@keyframes spw-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50%       { opacity: 0.5; transform: scale(0.8); }
+.ssb-live::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent 0%, #5A9BCB06 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: ssb-shimmer 3s linear infinite;
+}
+@keyframes ssb-shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
 }
 
-.spw-label  { color: #e4e4e7; font-weight: 700; }
-.spw-time   { color: #C9A84C; }
-.spw-detail { color: #555; white-space: nowrap; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
-
-body.session-live .studio-pulse-widget {
-  border-color: var(--live-accent, #E8823A);
-  background: #120d08;
+.ssb-dot {
+  width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0;
 }
+.ssb-dot-live {
+  width: 6px; height: 6px;
+  background: #5A9BCB; box-shadow: 0 0 6px #5A9BCB;
+  animation: ssb-dot-pulse 1.6s ease-in-out infinite;
+}
+@keyframes ssb-dot-pulse {
+  0%, 100% { box-shadow: 0 0 4px #5A9BCB; }
+  50%       { box-shadow: 0 0 12px #5A9BCB, 0 0 24px #5A9BCB40; }
+}
+.ssb-dot-ready { background: #22c55e; }
+
+.ssb-pill { font-size: 9px; letter-spacing: 0.12em; color: #5A9BCB; flex-shrink: 0; }
+.ssb-divider { color: #2a2a2a; font-size: 10px; flex-shrink: 0; }
+.ssb-artist  { font-size: 12px; color: #e4e4e7; font-weight: 600; flex-shrink: 0; }
+.ssb-room    { font-size: 11px; color: #71717a; flex-shrink: 0; }
+.ssb-time    { font-size: 10px; color: #555; flex-shrink: 0; }
+.ssb-remaining { font-size: 10px; color: #5A9BCB88; flex-shrink: 0; }
+.ssb-click-hint { font-size: 10px; color: #2a2a2a; flex-shrink: 0; transition: color 0.15s; }
+.ssb-live:hover .ssb-click-hint { color: #5A9BCB88; }
+
+.ssb-label { color: #333; text-transform: uppercase; letter-spacing: 0.1em; font-size: 9px; }
+.ssb-value { color: #555; }
 
 /* ─── ArtistStatusToggle ─────────────────────────────────────── */
 .artist-status-toggle {
@@ -614,11 +599,6 @@ a[role="button"]:not(:active) {
   border: 1px solid var(--gold);
   pointer-events: none;
   animation: bell-burst-ring 0.6s ease-out;
-}
-
-/* ─── Live bar body offset (applied by JS when bar is visible) ─ */
-body.has-live-bar {
-  padding-top: 60px; /* 28px ticker + 32px live bar */
 }
 
 /* ─── Cmd+K hint in header (keyboard-savvy users discover it) ── */
