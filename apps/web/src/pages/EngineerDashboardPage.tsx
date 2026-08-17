@@ -97,26 +97,26 @@ export default function EngineerDashboardPage() {
   return (
     <div className="min-h-screen bg-studio-bg text-white">
       {/* Header */}
-      <header className="border-b border-studio-border px-6 py-4 flex items-center justify-between sticky top-0 bg-studio-bg z-10">
-        <div className="flex items-center gap-3">
+      <header className="border-b border-studio-border px-4 py-3 sm:px-6 sm:py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sticky top-0 bg-studio-bg z-10">
+        <div className="flex items-center gap-3 min-w-0">
           <OianoBrand variant="compact" size={20} />
           {myEngineer ? (
-            <span className="text-zinc-400 text-xs">
+            <span className="text-zinc-400 text-xs truncate">
               <span className="text-white font-medium">{myEngineer.name}</span>
               <span className="text-zinc-600"> · Session Engineer</span>
-              {myEngineer.specialties?.length ? <span className="text-zinc-600"> · {myEngineer.specialties.slice(0, 2).join(', ')}</span> : null}
+              {myEngineer.specialties?.length ? <span className="text-zinc-600 hidden sm:inline"> · {myEngineer.specialties.slice(0, 2).join(', ')}</span> : null}
             </span>
           ) : (
             <span className="text-zinc-600 text-xs">Studio Team · Session Engineer</span>
           )}
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
           <Link to="/calendar" className="text-zinc-500 hover:text-white text-sm transition-colors">Calendar</Link>
           <Link to="/runsheet" className="text-zinc-500 hover:text-white text-sm transition-colors">Runsheet</Link>
-          <span className="text-zinc-500 text-sm">{user?.email}</span>
+          <span className="text-zinc-500 text-sm hidden sm:inline">{user?.email}</span>
           <button
             onClick={() => { logout(); navigate('/enter'); }}
-            className="text-zinc-600 hover:text-zinc-400 text-sm transition-colors"
+            className="text-zinc-600 hover:text-zinc-400 text-sm transition-colors ml-auto sm:ml-0"
           >
             Sign out
           </button>
