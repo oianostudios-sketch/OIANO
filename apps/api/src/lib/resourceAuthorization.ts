@@ -1,20 +1,3 @@
-export type PaymentAccessInput = {
-  payerId: string;
-  paymentStudioId: string | null;
-  actorId: string;
-  actorRole: string;
-  actorStudioId?: string | null;
-};
-
-export function canAccessPayment(input: PaymentAccessInput) {
-  if (input.actorRole === 'OIANO_ADMIN') return true;
-  if (input.actorRole === 'ARTIST') return input.payerId === input.actorId;
-  if (input.actorRole === 'STUDIO_ADMIN') {
-    return Boolean(input.actorStudioId && input.paymentStudioId === input.actorStudioId);
-  }
-  return false;
-}
-
 export type BookingMessageAccessInput = {
   artistUserId: string | null;
   engineerUserId: string | null;

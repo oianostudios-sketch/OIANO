@@ -26,7 +26,6 @@ import { artistReviewRouter } from './routes/artist-review.routes';
 import { discoverRouter } from './routes/discover.routes';
 import { statsRouter } from './routes/stats.routes';
 import { pulseRouter } from './routes/pulse.routes';
-import { universalPaymentsRouter } from './payments/routes';
 import { producerRouter } from './routes/producer.routes';
 import { connectRouter } from './routes/connect.routes';
 import { artistProjectsRouter } from './routes/artist-projects.routes';
@@ -93,8 +92,6 @@ app.use('/uploads', (_req, res, next) => {
 
 // Raw body for Stripe — must be before express.json()
 app.use('/api/webhooks', express.raw({ type: 'application/json' }));
-// Provider-neutral callbacks also require exact bytes for signature verification.
-app.use('/api/payments/webhooks', express.raw({ type: 'application/json', limit: '1mb' }));
 app.use(express.json());
 
 app.get('/health', (_req, res) => {
@@ -111,10 +108,6 @@ app.use('/api/bookings',                 bookingsRouter);
 app.use('/api/bookings/:id/messages',    messagesRouter);
 app.use('/api/projects/:id/messages',    projectMessagesRouter);
 app.use('/api/bookings/:id/artist-review', artistReviewRouter);
-// Canonical provider-neutral payments API. Keep this before the legacy router so
-// /checkout, list and detail resolve here while existing /stripe and /wallet
-// endpoints continue to fall through unchanged.
-app.use('/api/payments',                 universalPaymentsRouter);
 app.use('/api/payments',                 paymentsRouter);
 app.use('/api/admin',                    creditRequestRouter);
 app.use('/api/admin',                    adminRouter);

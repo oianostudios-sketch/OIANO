@@ -1,18 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { canAccessBookingMessages, canAccessPayment, canArtistActOnProject, canManageOwnedProject, isConsentTransitionAllowed, isRightsTransitionAllowed, ownershipSharesAreValid } from './resourceAuthorization';
-
-test('payment access is explicitly scoped by role and ownership', () => {
-  const base = { payerId: 'artist-1', paymentStudioId: 'studio-1', actorId: 'artist-1' };
-  assert.equal(canAccessPayment({ ...base, actorRole: 'ARTIST' }), true);
-  assert.equal(canAccessPayment({ ...base, actorId: 'artist-2', actorRole: 'ARTIST' }), false);
-  assert.equal(canAccessPayment({ ...base, actorId: 'admin-1', actorRole: 'STUDIO_ADMIN', actorStudioId: 'studio-1' }), true);
-  assert.equal(canAccessPayment({ ...base, actorId: 'admin-2', actorRole: 'STUDIO_ADMIN', actorStudioId: 'studio-2' }), false);
-  assert.equal(canAccessPayment({ ...base, actorId: 'engineer-1', actorRole: 'ENGINEER' }), false);
-  assert.equal(canAccessPayment({ ...base, actorId: 'producer-1', actorRole: 'PRODUCER' }), false);
-  assert.equal(canAccessPayment({ ...base, actorId: 'root', actorRole: 'OIANO_ADMIN' }), true);
-  assert.equal(canAccessPayment({ ...base, actorId: 'unknown', actorRole: 'UNKNOWN' }), false);
-});
+import { canAccessBookingMessages, canArtistActOnProject, canManageOwnedProject, isConsentTransitionAllowed, isRightsTransitionAllowed, ownershipSharesAreValid } from './resourceAuthorization';
 
 test('project mutations require the owning producer', () => {
   assert.equal(canManageOwnedProject('PRODUCER', 'producer-1', 'producer-1'), true);

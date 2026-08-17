@@ -3,6 +3,7 @@
 
 import { PrismaClient, UserRole, ServiceCategory } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { applyWalletDelta } from '../apps/api/src/lib/walletLedger';
 
 const prisma = new PrismaClient();
 
@@ -305,24 +306,27 @@ async function main() {
               },
             },
           },
-          wallet: {
-            create: {
-              balance_usd: 500.0,
-            },
-          },
         },
       },
     },
   });
 
-  // Always ensure demo artist has a funded wallet — safe to re-run
+  // Ensure the demo artist has a funded wallet — safe to re-run. Only funds
+  // a genuinely brand-new wallet (zero balance, zero transaction history);
+  // if it already has any balance or activity, leave it alone rather than
+  // stacking a second grant on top, since the WalletTransaction ledger (not
+  // this seed step) is the source of truth for the balance going forward.
   const demoArtist = await prisma.artist.findUnique({ where: { user_id: artistUser.id } });
   if (demoArtist) {
-    await prisma.wallet.upsert({
+    const demoWallet = await prisma.wallet.upsert({
       where: { artist_id: demoArtist.id },
-      update: { balance_usd: 500.0 },
-      create: { artist_id: demoArtist.id, balance_usd: 500.0 },
+      update: {},
+      create: { artist_id: demoArtist.id, balance_usd: 0 },
     });
+    const transactionCount = await prisma.walletTransaction.count({ where: { wallet_id: demoWallet.id } });
+    if (transactionCount === 0 && Number(demoWallet.balance_usd) === 0) {
+      await prisma.$transaction((tx) => applyWalletDelta(tx, demoWallet.id, 500.0, 'initial_grant', 'Demo wallet funding (seed)'));
+    }
     const novaState = await prisma.artistRelease.findFirst({ where: { artist_id: demoArtist.id, title: 'NOVA STATE' } });
     const novaStateData = {
       release_type: 'SINGLE',

@@ -15,6 +15,7 @@ import { createNotification } from '../routes/notifications.routes';
 import { Prisma } from '@prisma/client';
 import { resolveStaffStudio } from '../middleware/studioScope.middleware';
 import { syncStudioCircleMembership } from '../services/studio-circle.service';
+import { applyWalletDelta } from '../lib/walletLedger';
 
 const CreateBookingSchema = z.object({
   // Room/service/engineer ids are plain strings, not enforced-UUID — the
@@ -247,11 +248,7 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
       : `Studio session: ${service.name}`;
 
     const bookings = await prisma.$transaction(async (tx) => {
-      const debit = await tx.wallet.updateMany({
-        where: { id: wallet.id, balance_usd: { gte: totalCost } },
-        data: { balance_usd: { decrement: totalCost } },
-      });
-      if (debit.count !== 1) throw new AppError('Insufficient wallet balance', 402);
+      await applyWalletDelta(tx, wallet.id, -totalCost, 'debit', txLabel);
 
       const created = [];
       for (const occ of occurrences) {
@@ -281,14 +278,6 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
         }));
       }
 
-      await tx.walletTransaction.create({
-        data: {
-          wallet_id: wallet.id,
-          amount_usd: -totalCost,
-          type: 'debit',
-          description: txLabel,
-        },
-      });
       return created;
     }, { isolationLevel: 'Serializable' });
 

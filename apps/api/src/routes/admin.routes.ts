@@ -6,6 +6,7 @@ import { AppError } from '../lib/errors';
 import { DEFAULT_STUDIO_SLUG } from '@oiano/shared';
 import { broadcastAll } from './notifications.routes';
 import { attachStudioScope } from '../middleware/studioScope.middleware';
+import { applyWalletDelta } from '../lib/walletLedger';
 
 export const adminRouter = Router();
 
@@ -176,22 +177,17 @@ adminRouter.post('/wallet/credit', async (req, res, next) => {
     });
     if (!artist) throw new AppError('Artist not found', 404);
 
-    const wallet = await prisma.wallet.upsert({
-      where: { artist_id },
-      update: { balance_usd: { increment: amount_usd } },
-      create: { artist_id, balance_usd: amount_usd },
+    const newBalance = await prisma.$transaction(async (tx) => {
+      const wallet = await tx.wallet.upsert({
+        where: { artist_id },
+        update: {},
+        create: { artist_id, balance_usd: 0 },
+      });
+      await applyWalletDelta(tx, wallet.id, amount_usd, 'credit', description ?? `Admin credit — $${amount_usd}`);
+      return tx.wallet.findUniqueOrThrow({ where: { id: wallet.id } });
     });
 
-    await prisma.walletTransaction.create({
-      data: {
-        wallet_id: wallet.id,
-        amount_usd,
-        type: 'credit',
-        description: description ?? `Admin credit — $${amount_usd}`,
-      },
-    });
-
-    res.json({ success: true, artist_id, new_balance_usd: wallet.balance_usd });
+    res.json({ success: true, artist_id, new_balance_usd: newBalance.balance_usd });
   } catch (err) { next(err); }
 });
 

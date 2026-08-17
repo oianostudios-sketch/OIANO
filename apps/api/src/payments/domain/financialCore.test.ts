@@ -1,6 +1,0 @@
-import test from 'node:test';import assert from 'node:assert/strict';
-import { decimalToMinor, normalizeCurrency } from './money';import { calculateFee,assertBalanced } from './financialMath';import { assertPaymentTransition } from './stateMachine';
-test('currency precision is exact',()=>{assert.equal(decimalToMinor('25.00','GBP'),2500n);assert.equal(decimalToMinor('100','JPY'),100n);assert.equal(decimalToMinor('1.234','KWD'),1234n);assert.throws(()=>decimalToMinor('1.001','EUR'));assert.equal(normalizeCurrency('eur'),'EUR')});
-test('platform fee reconciles',()=>{const x=calculateFee(10000n,1500n);assert.deepEqual(x,{fee:1500n,net:8500n});assert.equal(x.fee+x.net,10000n)});
-test('ledger and multi-beneficiary allocation balance',()=>{assert.equal(assertBalanced([{direction:'DEBIT',amountMinor:1000n},{direction:'CREDIT',amountMinor:700n},{direction:'CREDIT',amountMinor:100n},{direction:'CREDIT',amountMinor:50n},{direction:'CREDIT',amountMinor:150n}]),true);assert.throws(()=>assertBalanced([{direction:'DEBIT',amountMinor:1000n},{direction:'CREDIT',amountMinor:999n}]))});
-test('payment state machine rejects unsafe transitions',()=>{assert.doesNotThrow(()=>assertPaymentTransition('PROCESSING','SUCCEEDED'));assert.throws(()=>assertPaymentTransition('FAILED','SUCCEEDED'));assert.throws(()=>assertPaymentTransition('CREATED','REFUNDED'))});

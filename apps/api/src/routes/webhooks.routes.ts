@@ -5,6 +5,7 @@ import { AppError } from '../lib/errors';
 import { sendReceiptEmail } from '../services/email.service';
 import { broadcastToUser } from './notifications.routes';
 import { Prisma } from '@prisma/client';
+import { applyWalletDelta } from '../lib/walletLedger';
 
 export const webhooksRouter = Router();
 
@@ -145,22 +146,12 @@ async function handleWalletTopUp(session: Stripe.Checkout.Session) {
     });
     if (claimed.count === 0) return null;
 
-    // Credit wallet atomically
-    const credited = await tx.wallet.update({
+    await applyWalletDelta(tx, walletId, amount, 'credit', `Stripe top-up ${session.id.slice(-8).toUpperCase()} - $${amount}`);
+
+    return tx.wallet.findUniqueOrThrow({
       where: { id: walletId },
-      data:  { balance_usd: { increment: amount } },
       include: { artist: { include: { user: true } } },
     });
-
-    await tx.walletTransaction.create({
-      data: {
-        wallet_id: walletId,
-        amount_usd: amount,
-        type: 'credit',
-        description: `Stripe top-up ${session.id.slice(-8).toUpperCase()} - $${amount}`,
-      },
-    });
-    return credited;
   });
 
   if (!wallet) return;

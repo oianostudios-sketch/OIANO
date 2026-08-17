@@ -1,6 +1,135 @@
-import { useQuery } from '@tanstack/react-query';import { ArrowLeft,CheckCircle2,CircleDollarSign,CreditCard,Landmark,Layers3,ShieldCheck,WalletCards,X } from 'lucide-react';import { useState } from 'react';import { useNavigate } from 'react-router-dom';import MaintenanceShell from '../components/MaintenanceShell';import { api } from '../lib/api';
-type Money={currency:string;minor:string};type Reconciliation={status:'RECONCILED'|'EXCEPTION'|'PENDING';issues:string[];ledger_transactions:number;gateway_events:number};type Payment={id:string;reference:string;created_at:string;paid_at:string|null;status:string;provider:string;amount_minor:string;platform_fee_minor:string;merchant_net_minor:string;currency:string;studio:string;customer:string;booking_id:string|null;payment_method:string;purpose:string;reconciliation:Reconciliation};type Finance={totals:{booked_value:number;collected:number;wallet_liability:number;failed:number;reconciliation_exceptions:number;processing:number;gross:Money[];fees:Money[];net:Money[]};payments:Payment[];balances:Array<{id:string;owner_type:string;owner_id:string;account_type:string;currency:string;balance_minor:string}>;capabilities:Record<string,boolean>};
-const amount=(minor:string,currency:string)=>new Intl.NumberFormat(undefined,{style:'currency',currency}).format(Number(minor)/100);const total=(xs:Money[])=>xs.length?xs.map(x=>amount(x.minor,x.currency)).join(' · '):'—';const tone=(s:string)=>s==='SUCCEEDED'?'text-emerald-400 bg-emerald-500/10':s==='FAILED'?'text-red-400 bg-red-500/10':s.includes('REFUND')?'text-violet-300 bg-violet-500/10':'text-amber-300 bg-amber-500/10';
-function Detail({id,onClose}:{id:string;onClose:()=>void}){const{data,isLoading}=useQuery({queryKey:['payment',id],queryFn:async()=>(await api.get('/payments/'+id)).data});return <div className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-sm" onClick={onClose}><aside onClick={e=>e.stopPropagation()} className="h-full w-full max-w-xl overflow-y-auto border-l border-white/10 bg-[#0a0b0d] p-7"><button onClick={onClose} className="float-right rounded-lg border border-white/10 p-2 text-zinc-500"><X size={15}/></button>{isLoading?<p className="mt-20 text-xs text-zinc-600">Opening verified record…</p>:data&&<><p className="text-[9px] font-mono uppercase tracking-[.25em] text-[#C9A84C]">Payment evidence</p><h2 className="mt-3 font-display text-2xl">{data.reference}</h2><span className={'mt-4 inline-block rounded-full px-3 py-1 text-[9px] '+tone(data.status)}>{data.status}</span><div className="mt-7 grid grid-cols-3 gap-2">{[['Gross',data.amount_minor],['Oiano fee',data.platform_fee_minor],['Studio net',data.merchant_net_minor]].map(([l,v])=><div className="rounded-xl border border-white/[.06] bg-white/[.02] p-4" key={l}><p className="text-[8px] uppercase text-zinc-700">{l}</p><b className="mt-2 block text-sm">{amount(v,data.transaction_currency)}</b></div>)}</div><Section title="Allocation">{data.allocations?.map((a:any)=><Row key={a.id} a={a.beneficiary_type+' · '+a.allocation_type} b={amount(a.amount_minor,a.currency)}/>)}</Section><Section title="Immutable ledger">{data.ledger_transactions?.flatMap((t:any)=>t.entries).map((e:any)=><Row key={e.id} a={e.account.owner_type+' / '+e.account.account_type} b={(e.direction==='DEBIT'?'− ':'+ ')+amount(e.amount_minor,e.currency)}/>)}</Section><Section title="Gateway evidence">{data.gateway_events?.map((e:any)=><Row key={e.id} a={e.event_type} b={e.status}/>)}</Section><Section title="Refunds">{data.refunds?.length?data.refunds.map((r:any)=><Row key={r.id} a={r.reason} b={amount(r.amount_minor,r.currency)}/>):<p className="text-xs text-zinc-700">No refunds.</p>}</Section></>}</aside></div>}
-function Section({title,children}:{title:string;children:any}){return <section className="mt-7 border-t border-white/[.06] pt-5"><h3 className="mb-3 text-[9px] font-mono uppercase tracking-widest text-zinc-600">{title}</h3><div className="space-y-2">{children}</div></section>}function Row({a,b}:{a:string;b:string}){return <div className="flex justify-between rounded-lg bg-white/[.025] p-3 text-[10px]"><span className="text-zinc-500">{a}</span><b>{b}</b></div>}
-export default function MaintenanceFinancePage(){const nav=useNavigate(),[selected,setSelected]=useState<string|null>(null);const{data,isLoading,error}=useQuery<Finance>({queryKey:['maintenance-finance-v2'],queryFn:async()=>(await api.get('/maintenance/finance')).data,refetchInterval:30000});return <MaintenanceShell title="Payments" eyebrow="Oiano financial infrastructure"><div className="mx-auto max-w-[1380px] px-5 py-10 md:px-8"><button onClick={()=>nav('/maintenance')} className="mb-7 flex items-center gap-2 text-xs text-zinc-600 hover:text-white"><ArrowLeft size={13}/>Network overview</button><div className="flex flex-wrap items-end justify-between gap-4"><div><h1 className="font-display text-4xl">Money, with evidence.</h1><p className="mt-3 text-sm text-zinc-600">Universal payments, studio entitlement and Oiano revenue—reconciled by currency.</p></div><span className="flex items-center gap-2 rounded-full border border-emerald-500/15 bg-emerald-500/[.05] px-4 py-2 text-[9px] text-emerald-400"><ShieldCheck size={13}/> IMMUTABLE LEDGER ACTIVE</span></div>{isLoading?<p className="mt-14 text-xs text-zinc-700">Reconciling accounts…</p>:error||!data?<p className="mt-12 text-red-400">Payments intelligence unavailable.</p>:<><div className="mt-9 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{[[CircleDollarSign,'Gross volume',total(data.totals.gross)],[Landmark,'Oiano fees',total(data.totals.fees)],[WalletCards,'Studio net',total(data.totals.net)],[Layers3,'Processing',String(data.totals.processing)],[CreditCard,'Exceptions',String(data.totals.failed)]].map(([Icon,l,v]:any)=><article key={l} className="rounded-2xl border border-white/[.065] bg-[#0b0d0f] p-5"><Icon size={15} className="text-[#C9A84C]"/><b className="mt-7 block text-xl">{v}</b><p className="mt-2 text-[8px] font-mono uppercase tracking-wider text-zinc-700">{l}</p></article>)}</div><div className="mt-4 flex flex-wrap gap-2">{Object.entries(data.capabilities).map(([k,v])=><span key={k} className={'rounded-full border px-3 py-1 text-[8px] uppercase '+(v?'border-emerald-500/10 text-emerald-500':'border-white/5 text-zinc-700')}><CheckCircle2 size={9} className="mr-1 inline"/>{k.replaceAll('_',' ')}</span>)}</div><article className="mt-5 overflow-x-auto rounded-2xl border border-white/[.065] bg-[#0b0d0f] p-5"><div className="mb-5"><h2 className="text-sm font-semibold">Canonical transactions</h2><p className="mt-1 text-[10px] text-zinc-700">Select a payment to inspect its ledger and gateway evidence.</p></div><table className="w-full min-w-[900px] text-left"><thead><tr className="border-b border-white/[.06] text-[8px] uppercase text-zinc-700">{['Reference','Studio / purpose','Method','Gross','Fee','Status','Date'].map(x=><th className="pb-3" key={x}>{x}</th>)}</tr></thead><tbody>{data.payments.map(p=><tr onClick={()=>setSelected(p.id)} key={p.id} className="cursor-pointer border-b border-white/[.04] text-[10px] hover:bg-white/[.025]"><td className="py-4 font-mono text-[#C9A84C]">{p.reference}</td><td><b>{p.studio}</b><p className="mt-1 text-[8px] text-zinc-700">{p.purpose.replaceAll('_',' ')}</p></td><td className="text-zinc-500">{p.payment_method.replaceAll('_',' ')}</td><td>{amount(p.amount_minor,p.currency)}</td><td className="text-zinc-500">{amount(p.platform_fee_minor,p.currency)}</td><td><span className={'rounded-full px-2 py-1 text-[8px] '+tone(p.status)}>{p.status}</span></td><td className="text-zinc-600">{new Date(p.created_at).toLocaleDateString()}</td></tr>)}{!data.payments.length&&<tr><td colSpan={7} className="py-14 text-center text-xs text-zinc-700">No canonical Oiano payments yet. New checkouts will appear here.</td></tr>}</tbody></table></article></>}</div>{selected&&<Detail id={selected} onClose={()=>setSelected(null)}/>}</MaintenanceShell>}
+import { useQuery } from '@tanstack/react-query';
+import { AlertTriangle, ArrowLeft, CheckCircle2, CircleDollarSign, Clock3, CreditCard, WalletCards } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import MaintenanceShell from '../components/MaintenanceShell';
+import { api } from '../lib/api';
+
+type Provider = { provider: string; count: number; volume: number };
+type StudioRow = { id: string; name: string; payments: number; collected: number };
+type Payment = { id: string; created_at: string; paid_at: string | null; status: string; provider: string; amount_usd: number; studio: string; artist: string; booking_id: string };
+type WalletDrift = { wallet_id: string; artist: string; stored_balance: number; computed_balance: number; drift: number };
+type Finance = {
+  totals: { booked_value: number; collected: number; wallet_liability: number; wallet_topups: number; failed: number; refunded: number; processing: number; wallet_drift_count: number };
+  providers: Provider[];
+  studios: StudioRow[];
+  payments: Payment[];
+  wallet_reconciliation: WalletDrift[];
+};
+
+const usd = (n: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(n);
+const tone = (status: string) =>
+  status === 'PAID' ? 'text-emerald-400 bg-emerald-500/10'
+  : status === 'FAILED' ? 'text-red-400 bg-red-500/10'
+  : status === 'REFUNDED' ? 'text-violet-300 bg-violet-500/10'
+  : 'text-amber-300 bg-amber-500/10';
+
+export default function MaintenanceFinancePage() {
+  const nav = useNavigate();
+  const { data, isLoading, error } = useQuery<Finance>({
+    queryKey: ['maintenance-finance-v3'],
+    queryFn: async () => (await api.get('/maintenance/finance')).data,
+    refetchInterval: 30000,
+  });
+
+  return (
+    <MaintenanceShell title="Payments" eyebrow="Oiano financial infrastructure">
+      <div className="mx-auto max-w-[1380px] px-5 py-10 md:px-8">
+        <button onClick={() => nav('/maintenance')} className="mb-7 flex items-center gap-2 text-xs text-zinc-600 hover:text-white">
+          <ArrowLeft size={13} />Network overview
+        </button>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="font-display text-4xl">Money, with evidence.</h1>
+            <p className="mt-3 text-sm text-zinc-600">Wallet-funded and Stripe-paid bookings, reconciled against each wallet's own transaction history.</p>
+          </div>
+        </div>
+
+        {isLoading ? (
+          <p className="mt-14 text-xs text-zinc-700">Reconciling accounts…</p>
+        ) : error || !data ? (
+          <p className="mt-12 text-red-400">Payments intelligence unavailable.</p>
+        ) : (
+          <>
+            <div className="mt-9 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              {[
+                [CircleDollarSign, 'Collected', usd(data.totals.collected)],
+                [WalletCards, 'Wallet liability', usd(data.totals.wallet_liability)],
+                [Clock3, 'Processing', String(data.totals.processing)],
+                [CreditCard, 'Failed', String(data.totals.failed)],
+                [AlertTriangle, 'Wallet drift', String(data.totals.wallet_drift_count)],
+              ].map(([Icon, label, value]: any) => (
+                <article key={label} className="rounded-2xl border border-white/[.065] bg-[#0b0d0f] p-5">
+                  <Icon size={15} className={label === 'Wallet drift' && data.totals.wallet_drift_count > 0 ? 'text-amber-400' : 'text-[#C9A84C]'} />
+                  <b className="mt-7 block text-xl">{value}</b>
+                  <p className="mt-2 text-[8px] font-mono uppercase tracking-wider text-zinc-700">{label}</p>
+                </article>
+              ))}
+            </div>
+
+            {data.totals.wallet_drift_count > 0 && (
+              <article className="mt-5 rounded-2xl border border-amber-500/20 bg-amber-500/[.04] p-5">
+                <div className="mb-4 flex items-center gap-2">
+                  <AlertTriangle size={14} className="text-amber-400" />
+                  <h2 className="text-sm font-semibold text-amber-300">Wallet reconciliation exceptions</h2>
+                </div>
+                <p className="mb-4 text-[10px] text-zinc-500">A wallet's stored balance no longer matches the sum of its own transaction history — investigate before trusting its balance.</p>
+                <div className="space-y-2">
+                  {data.wallet_reconciliation.map((row) => (
+                    <div key={row.wallet_id} className="flex items-center justify-between rounded-xl border border-amber-500/10 bg-black/20 px-4 py-3 text-xs">
+                      <span className="font-medium">{row.artist}</span>
+                      <span className="text-zinc-500">stored {usd(row.stored_balance)} · computed {usd(row.computed_balance)}</span>
+                      <span className="font-mono text-amber-400">{row.drift > 0 ? '+' : ''}{usd(row.drift)}</span>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            )}
+            {data.totals.wallet_drift_count === 0 && (
+              <div className="mt-5 flex items-center gap-2 rounded-2xl border border-emerald-500/15 bg-emerald-500/[.04] px-5 py-3 text-[10px] text-emerald-400">
+                <CheckCircle2 size={13} /> All wallet balances reconciled against their transaction history.
+              </div>
+            )}
+
+            {data.providers.length > 0 && (
+              <div className="mt-5 flex flex-wrap gap-2">
+                {data.providers.map((p) => (
+                  <span key={p.provider} className="rounded-full border border-white/[.06] px-3 py-1.5 text-[9px] uppercase text-zinc-400">
+                    {p.provider} · {p.count} · {usd(p.volume)}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <article className="mt-5 overflow-x-auto rounded-2xl border border-white/[.065] bg-[#0b0d0f] p-5">
+              <div className="mb-5">
+                <h2 className="text-sm font-semibold">Payments</h2>
+                <p className="mt-1 text-[10px] text-zinc-700">Every booking payment, wallet-funded or Stripe-paid.</p>
+              </div>
+              <table className="w-full min-w-[820px] text-left">
+                <thead>
+                  <tr className="border-b border-white/[.06] text-[8px] uppercase text-zinc-700">
+                    {['Studio / artist', 'Provider', 'Amount', 'Status', 'Date'].map((x) => <th className="pb-3" key={x}>{x}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.payments.map((p) => (
+                    <tr key={p.id} className="border-b border-white/[.04] text-[10px]">
+                      <td className="py-4"><b>{p.artist}</b><p className="mt-1 text-[8px] text-zinc-700">{p.studio}</p></td>
+                      <td className="text-zinc-500">{p.provider}</td>
+                      <td>{usd(p.amount_usd)}</td>
+                      <td><span className={'rounded-full px-2 py-1 text-[8px] ' + tone(p.status)}>{p.status}</span></td>
+                      <td className="text-zinc-600">{new Date(p.created_at).toLocaleDateString()}</td>
+                    </tr>
+                  ))}
+                  {!data.payments.length && (
+                    <tr><td colSpan={5} className="py-14 text-center text-xs text-zinc-700">No payments yet.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </article>
+          </>
+        )}
+      </div>
+    </MaintenanceShell>
+  );
+}

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { prisma } from '../lib/prisma';
 import { auditMaintenanceAccess } from '../lib/adminAudit';
+import { findWalletDrift } from '../lib/walletLedger';
 
 export const maintenanceRouter = Router();
 
@@ -229,13 +230,12 @@ maintenanceRouter.get('/bookings', async (_req, res, next) => {
 
 maintenanceRouter.get('/finance', async (_req, res, next) => {
   try {
-    const [payments, canonical, bookingValue, wallets, topUps, accounts] = await Promise.all([
-      prisma.payment.findMany({ orderBy: { created_at: 'desc' }, include: { booking: { select: { id: true, studio: { select: { id: true, name: true } }, artist: { select: { name: true, alias: true } } } } } }),
-      prisma.oianoPayment.findMany({ orderBy: { created_at: 'desc' }, take: 100, include: { allocations: true, ledger_transactions: { include: { entries: true } }, gateway_events: true } }),
+    const [payments, bookingValue, wallets, topUps, walletDrift] = await Promise.all([
+      prisma.payment.findMany({ orderBy: { created_at: 'desc' }, take: 200, include: { booking: { select: { id: true, studio: { select: { id: true, name: true } }, artist: { select: { name: true, alias: true } } } } } }),
       prisma.booking.aggregate({ where: { status: { notIn: ['CANCELLED', 'NO_SHOW'] } }, _sum: { total_usd: true } }),
       prisma.wallet.aggregate({ _sum: { balance_usd: true } }),
       prisma.walletTopUp.aggregate({ where: { status: 'PAID' }, _sum: { amount_usd: true } }),
-      prisma.financialAccount.findMany({ include: { entries: true } }),
+      findWalletDrift(),
     ]);
     const paid = payments.filter((payment) => payment.status === 'PAID');
     const collected = paid.reduce((sum, payment) => sum + Number(payment.amount_usd), 0);
@@ -244,38 +244,21 @@ maintenanceRouter.get('/finance', async (_req, res, next) => {
     }, {})).map(([provider, values]) => ({ provider, ...values }));
     const studioMap = new Map<string, { id:string; name:string; payments:number; collected:number }>();
     for (const payment of paid) { const studio = payment.booking.studio; const row = studioMap.get(studio.id) ?? { id:studio.id, name:studio.name, payments:0, collected:0 }; row.payments += 1; row.collected += Number(payment.amount_usd); studioMap.set(studio.id,row); }
-    const studioNames = new Map((await prisma.studio.findMany({ select: { id:true, name:true } })).map(s => [s.id, s.name]));
-    const succeeded = canonical.filter(p => ['SUCCEEDED','PARTIALLY_REFUNDED','REFUNDED'].includes(p.status));
-    const legacyByBooking = new Map(payments.map(payment => [payment.booking_id, payment]));
-    const reconciliation = new Map(canonical.map(payment => {
-      const issues: string[] = [];
-      if (payment.amount_minor !== payment.platform_fee_minor + payment.merchant_net_minor) issues.push('FEE_NET_MISMATCH');
-      const ledgerChecks = payment.ledger_transactions.map(transaction => {
-        const debit = transaction.entries.filter(entry => entry.direction === 'DEBIT').reduce((sum, entry) => sum + entry.amount_minor, 0n);
-        const credit = transaction.entries.filter(entry => entry.direction === 'CREDIT').reduce((sum, entry) => sum + entry.amount_minor, 0n);
-        return debit === credit && transaction.entries.every(entry => entry.currency === transaction.currency);
-      });
-      if (payment.status === 'SUCCEEDED' && !ledgerChecks.length) issues.push('LEDGER_MISSING');
-      if (ledgerChecks.some(check => !check)) issues.push('LEDGER_UNBALANCED');
-      const allocationTotal = payment.allocations.reduce((sum, allocation) => sum + allocation.amount_minor, 0n);
-      if (payment.status === 'SUCCEEDED' && allocationTotal !== payment.merchant_net_minor) issues.push('ALLOCATION_MISMATCH');
-      if (payment.booking_id) {
-        const legacy = legacyByBooking.get(payment.booking_id);
-        if (!legacy) issues.push('BOOKING_PAYMENT_MISSING');
-        else if (BigInt(Math.round(Number(legacy.amount_usd) * 100)) !== payment.amount_minor) issues.push('BOOKING_AMOUNT_MISMATCH');
-      }
-      const pending = ['CREATED','PROCESSING','REQUIRES_ACTION'].includes(payment.status);
-      return [payment.id, { status: pending ? 'PENDING' : issues.length ? 'EXCEPTION' : 'RECONCILED', issues, ledger_transactions: payment.ledger_transactions.length, gateway_events: payment.gateway_events.length }];
-    }));
-    const reconciliationExceptions = [...reconciliation.values()].filter(result => result.status === 'EXCEPTION').length;
-    const sumByCurrency = (pick:(p:typeof canonical[number])=>bigint) => Object.entries(succeeded.reduce<Record<string,bigint>>((acc,p) => { acc[p.transaction_currency]=(acc[p.transaction_currency]??0n)+pick(p); return acc; },{})).map(([currency,minor])=>({currency,minor:minor.toString()}));
     res.json({
-      totals: { booked_value: Number(bookingValue._sum.total_usd ?? 0), collected, wallet_liability: Number(wallets._sum.balance_usd ?? 0), wallet_topups: Number(topUps._sum.amount_usd ?? 0), failed: canonical.filter(p=>p.status==='FAILED').length + payments.filter(p=>p.status==='FAILED').length, reconciliation_exceptions: reconciliationExceptions, refunded: payments.filter(p=>p.status==='REFUNDED').reduce((s,p)=>s+Number(p.amount_usd),0), processing: canonical.filter(p=>['PROCESSING','REQUIRES_ACTION'].includes(p.status)).length, gross:sumByCurrency(p=>p.amount_minor), fees:sumByCurrency(p=>p.platform_fee_minor), net:sumByCurrency(p=>p.merchant_net_minor) },
-      providers, studios: [...studioMap.values()].sort((a,b)=>b.collected-a.collected),
-      payments: canonical.map(p=>({id:p.id,reference:p.reference,created_at:p.created_at,paid_at:p.paid_at,status:p.status,provider:p.provider,amount_minor:p.amount_minor.toString(),platform_fee_minor:p.platform_fee_minor.toString(),merchant_net_minor:p.merchant_net_minor.toString(),currency:p.transaction_currency,studio:p.studio_id?studioNames.get(p.studio_id)??'Studio':'Network',customer:p.payer_id,booking_id:p.booking_id,payment_method:p.payment_method,purpose:p.purpose,source:'OIANO',reconciliation:reconciliation.get(p.id)})),
-      legacy_payments: payments.slice(0,100).map(p=>({ id:p.id, created_at:p.created_at, paid_at:p.paid_at, status:p.status, provider:p.provider, amount_usd:Number(p.amount_usd), studio:p.booking.studio.name, artist:p.booking.artist.alias??p.booking.artist.name, booking_id:p.booking.id })),
-      balances: accounts.map(a=>({id:a.id,owner_type:a.owner_type,owner_id:a.owner_id,account_type:a.account_type,currency:a.currency,balance_minor:a.entries.reduce((n,e)=>n+(e.direction==='CREDIT'?e.amount_minor:-e.amount_minor),0n).toString()})),
-      capabilities: { platform_fees:true, studio_payouts:true, processor_fees:false, immutable_ledger:true, multi_currency:true, automated_reconciliation:true },
+      totals: {
+        booked_value: Number(bookingValue._sum.total_usd ?? 0),
+        collected,
+        wallet_liability: Number(wallets._sum.balance_usd ?? 0),
+        wallet_topups: Number(topUps._sum.amount_usd ?? 0),
+        failed: payments.filter(p => p.status === 'FAILED').length,
+        refunded: payments.filter(p => p.status === 'REFUNDED').reduce((s, p) => s + Number(p.amount_usd), 0),
+        processing: payments.filter(p => p.status === 'PROCESSING').length,
+        wallet_drift_count: walletDrift.length,
+      },
+      providers,
+      studios: [...studioMap.values()].sort((a, b) => b.collected - a.collected),
+      payments: payments.map(p => ({ id: p.id, created_at: p.created_at, paid_at: p.paid_at, status: p.status, provider: p.provider, amount_usd: Number(p.amount_usd), studio: p.booking.studio.name, artist: p.booking.artist.alias ?? p.booking.artist.name, booking_id: p.booking.id })),
+      wallet_reconciliation: walletDrift,
     });
   } catch (error) { next(error); }
 });

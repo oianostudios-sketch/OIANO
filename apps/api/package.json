@@ -10,7 +10,6 @@
     "build": "rimraf dist && tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "test:payments": "node -r ts-node/register --test src/payments/domain/*.test.ts src/payments/gateways/*.test.ts",
     "test:security": "node -r ts-node/register --test src/lib/*.test.ts",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
