@@ -185,12 +185,12 @@ export default function BookingDetailPage() {
 
   return (
     <div className="min-h-screen bg-studio-bg text-white">
-      <header className="border-b border-studio-border px-6 py-4 flex items-center justify-between sticky top-0 bg-studio-bg z-10">
+      <header className="border-b border-studio-border px-4 py-3 sm:px-6 sm:py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sticky top-0 bg-studio-bg z-10">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate(backTo)} className="text-zinc-500 hover:text-white text-sm transition-colors">← Back</button>
           <h1 className="font-display text-xl text-dome font-semibold animate-heading">Booking Detail</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {/* Link DAW — downloads a pre-filled watcher.config.json for apps/watcher */}
           {['CONFIRMED','IN_PROGRESS'].includes(booking?.status ?? '') && (
             <button

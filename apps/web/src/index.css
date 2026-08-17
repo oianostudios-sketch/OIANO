@@ -439,6 +439,16 @@ a:hover { color: var(--gold); }
 .ast-dot-in-session  { background: var(--live-accent, #E8823A); box-shadow: 0 0 5px var(--live-accent, #E8823A); }
 .ast-dot-unavailable { background: #6b7280; }
 
+/* This badge is fixed at the same top-left corner most page headers put
+   their own "← Back [Title]" content — on desktop there's room for both,
+   but below 480px a full-width sticky header (once scrolled to the top)
+   sits directly under it. Collapse to a dot-only tap target so it covers
+   a sliver of header text instead of most of it. */
+@media (max-width: 480px) {
+  .artist-status-toggle { padding: 6px; }
+  .ast-label { display: none; }
+}
+
 .ast-label { color: #e4e4e7; font-weight: 700; }
 
 /* ─── Runsheet ───────────────────────────────────────────────────────────────── */
