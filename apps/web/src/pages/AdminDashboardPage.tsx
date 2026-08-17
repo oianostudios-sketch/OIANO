@@ -1,36 +1,16 @@
 import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { Filter, Megaphone, Wallet, Zap, Activity, Calendar, ClipboardList, LogOut, Radio, Command, Plus, ArrowRight } from 'lucide-react';
+import { Filter, Megaphone, Wallet, Zap, Activity, Calendar, ClipboardList, LogOut, Command, Plus, ArrowRight } from 'lucide-react';
 import { useAuthStore } from '../store/auth.store';
 import { api } from '../lib/api';
 import { useToast } from '../components/Toast';
 import OianoBrand from '../components/OianoBrand';
-import { useStudioState } from '../context/StudioState';
 import { SkeletonKPI, SkeletonRow, SkeletonArtistCard } from '../components/Skeleton';
-import { fmtTime, fmtDate } from '../lib/fmt';
+import { fmtDate } from '../lib/fmt';
 import { BookingStatus, STATUS_TAILWIND } from '../lib/bookingStatus';
 import NetworkExchangePanel from '../components/NetworkExchangePanel';
 import NotificationBell from '../components/NotificationBell';
-
-// ── Mini sparkline ────────────────────────────────────────────────────────────
-function MiniSparkline({ values, color = '#C9A84C' }: { values: number[]; color?: string }) {
-  const max = Math.max(...values, 1);
-  return (
-    <div className="flex items-end gap-[2px] h-[20px] w-full mt-2">
-      {values.map((v, i) => (
-        <div
-          key={i}
-          className="flex-1 rounded-sm transition-all"
-          style={{
-            height: `${Math.max(10, (v / max) * 100)}%`,
-            background: i === values.length - 1 ? color : `${color}55`,
-          }}
-        />
-      ))}
-    </div>
-  );
-}
 
 // ── Engagement badge ──────────────────────────────────────────────────────────
 function engagementLevel(lastDate: string | null): 'HOT' | 'WARM' | 'COLD' | null {
@@ -107,7 +87,6 @@ export default function AdminDashboardPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const toast = useToast();
-  const { roomStatus } = useStudioState();
 
   const [bookingTab, setBookingTab] = useState<BookingTab>('All');
   const [creditTarget, setCreditTarget] = useState<{ id: string; name: string } | null>(null);
@@ -232,7 +211,6 @@ export default function AdminDashboardPage() {
 
   // ── Derived data ─────────────────────────────────────────────────────────────
   const pending  = (allBookings as any[]).filter((b) => b.status === 'PENDING');
-  const today    = (analytics?.todays_bookings ?? []) as any[];
   const rooms    = (studio?.rooms ?? []) as any[];
   const tz       = studio?.timezone as string | undefined;
 
@@ -251,32 +229,13 @@ export default function AdminDashboardPage() {
 
   // ── Helpers — tz-aware via studio.timezone ────────────────────────────────────
   const fmt = (iso: string) => fmtDate(iso, tz);
-  const fmt2 = (iso: string) => fmtTime(iso, tz);
 
   const wiValid = wiName.trim().length > 0 && wiRoomId && wiDate && wiTime;
 
-  // Sparkline + delta helpers
-  const weekRevDays   = (analytics?.weekly_days ?? []) as { date: string; revenue_usd: number; booking_count: number }[];
-  const sparkRevenue  = weekRevDays.map((d) => d.revenue_usd);
-  const sparkSessions = weekRevDays.map((d) => d.booking_count);
-  function pctDelta(curr: number, prev: number): string | null {
-    if (!prev) return null;
-    const d = Math.round(((curr - prev) / prev) * 100);
-    return `${d >= 0 ? '+' : ''}${d}%`;
-  }
-  const revDelta = analytics ? pctDelta(analytics.week_revenue_usd ?? 0, analytics.prev_week_revenue_usd ?? 0) : null;
-  const sesDelta = analytics ? pctDelta(analytics.week_sessions ?? 0, analytics.prev_week_sessions ?? 0) : null;
-
   const kpis = [
-    { label: 'Artists',         value: analytics?.total_artists     ?? '—', spark: null,         delta: null },
-    { label: 'Sessions',        value: analytics?.total_bookings    ?? '—', spark: sparkSessions, delta: sesDelta },
-    { label: 'Revenue',         value: analytics ? `$${Number(analytics.total_revenue_usd).toFixed(0)}` : '—', spark: sparkRevenue, delta: revDelta },
-    { label: 'Awaiting review', value: pending.length,                       spark: null,         delta: null },
+    { label: 'Artists',         value: analytics?.total_artists ?? '—' },
+    { label: 'Awaiting review', value: pending.length },
   ];
-  const liveRooms = roomStatus.filter((room) => room.busy).length;
-  const nextSession = today
-    .filter((booking: any) => new Date(booking.ends_at).getTime() > Date.now() && !['CANCELLED', 'NO_SHOW'].includes(booking.status))
-    .sort((a: any, b: any) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())[0];
 
   return (
     <div className="min-h-screen bg-studio-bg text-white">
@@ -288,27 +247,6 @@ export default function AdminDashboardPage() {
           <span className="text-[10px] font-mono text-zinc-600 tracking-widest uppercase">
             {studio?.name ?? 'Studio workspace'} · Studio Operator
           </span>
-        </div>
-
-        {/* Room presence — live from StudioState, no extra fetch */}
-        <div className="hidden md:flex items-center gap-2">
-          {roomStatus.map((room) => (
-            <div key={room.name} style={{
-              display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px',
-              borderRadius: 99, fontSize: 11, fontFamily: 'JetBrains Mono, monospace',
-              background: room.busy ? 'rgba(232,130,58,0.1)' : 'rgba(255,255,255,0.04)',
-              border: `1px solid ${room.busy ? 'rgba(232,130,58,0.3)' : '#222'}`,
-              color: room.busy ? '#E8823A' : '#444',
-            }}>
-              <span style={{
-                width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
-                background: room.busy ? '#E8823A' : '#333',
-                boxShadow: room.busy ? '0 0 6px #E8823A' : 'none',
-                animation: room.busy ? 'spw-pulse 1.2s ease-in-out infinite' : 'none',
-              }} />
-              {room.name}
-            </div>
-          ))}
         </div>
 
         <nav className="flex items-center gap-1 overflow-x-auto">
@@ -349,9 +287,9 @@ export default function AdminDashboardPage() {
             <h1 className="font-display text-3xl text-white md:text-5xl">Run today with clarity.</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-500">The floor, people and decisions that need your attention—before the reporting.</p>
           </div>
-          <div className="flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/[.055] px-3 py-1.5 text-[9px] font-mono uppercase tracking-wider text-emerald-400">
-            <Radio size={10}/>{liveRooms ? `${liveRooms} room${liveRooms === 1 ? '' : 's'} live` : 'Studio ready'}
-          </div>
+          <Link to="/pulse" className="flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/[.055] px-3 py-1.5 text-[9px] font-mono uppercase tracking-wider text-emerald-400 hover:bg-emerald-500/[.09]">
+            <Activity size={10}/>Live floor status is in Pulse <ArrowRight size={10}/>
+          </Link>
         </section>
 
         <section aria-label="Operator shortcuts" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
@@ -366,27 +304,10 @@ export default function AdminDashboardPage() {
 
         <NetworkExchangePanel />
 
-        <section className="relative overflow-hidden rounded-2xl border border-dome/[.15] bg-[radial-gradient(circle_at_80%_30%,rgba(201,168,76,.12),transparent_34%),linear-gradient(135deg,#0d0e10,#090a0b)] p-6 md:p-8">
-          <div className="absolute -right-12 -top-20 h-64 w-64 rounded-full border border-dome/10"/>
-          <div className="absolute right-6 top-0 h-36 w-36 rounded-full border border-dome/[.08]"/>
-          <div className="relative grid gap-7 lg:grid-cols-[1.4fr_1fr] lg:items-center">
-            <div>
-              <div className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${liveRooms ? 'animate-pulse bg-orange-400' : 'bg-emerald-400'}`}/><p className="text-[9px] font-mono uppercase tracking-[.2em] text-zinc-500">{liveRooms ? 'Sessions in progress' : 'Floor status'}</p></div>
-              <h2 className="mt-5 font-display text-2xl text-zinc-100">{nextSession ? `${nextSession.artist?.name ?? 'Walk-in'} · ${nextSession.room?.name ?? 'Room pending'}` : 'The floor is clear and ready.'}</h2>
-              <p className="mt-2 text-xs text-zinc-600">{nextSession ? `${fmt2(nextSession.starts_at)}–${fmt2(nextSession.ends_at)} · ${nextSession.service?.name ?? 'Studio session'}` : 'No active or upcoming sessions remain today.'}</p>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-xl border border-white/[.06] bg-black/20 p-4"><Calendar size={14} className="text-dome"/><b className="mt-4 block text-xl">{today.length}</b><span className="text-[8px] font-mono uppercase tracking-wider text-zinc-700">Today</span></div>
-              <button onClick={()=>setBookingTab('Pending')} className="rounded-xl border border-white/[.06] bg-black/20 p-4 text-left hover:border-amber-500/20"><Zap size={14} className="text-amber-400"/><b className="mt-4 block text-xl">{pending.length}</b><span className="text-[8px] font-mono uppercase tracking-wider text-zinc-700">To review</span></button>
-              <button onClick={()=>setShowWalkIn(true)} className="rounded-xl border border-dome/15 bg-dome/[.035] p-4 text-left hover:bg-dome/[.07]"><Plus size={14} className="text-dome"/><b className="mt-4 block text-sm">Walk-in</b><span className="text-[8px] font-mono uppercase tracking-wider text-zinc-700">Fast book</span></button>
-            </div>
-          </div>
-        </section>
-
         {/* ── KPI strip ─────────────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2">
           {loadingAnalytics
-            ? Array.from({ length: 4 }).map((_, i) => (
+            ? Array.from({ length: 2 }).map((_, i) => (
                 <div key={i} className="rounded-xl border border-white/[.06] bg-[#0b0d0f] p-5">
                   <SkeletonKPI />
                 </div>
@@ -402,133 +323,18 @@ export default function AdminDashboardPage() {
                     <p className="label-mono mb-3">{kpi.label}</p>
                     <div className="flex items-baseline gap-3">
                       <p className="metric-number animate-metric text-3xl text-white leading-none">{kpi.value}</p>
-                      {kpi.delta && (
-                        <span className={`text-[11px] font-mono ${kpi.delta.startsWith('+') ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {kpi.delta} <span className="text-zinc-600">7d</span>
-                        </span>
-                      )}
                     </div>
                   </div>
-                  {kpi.spark && kpi.spark.length > 0 && (
-                    <MiniSparkline values={kpi.spark} color={kpi.label === 'Revenue' ? '#C9A84C' : '#3B8BFF'} />
-                  )}
                 </div>
                 );
               })
           }
         </div>
 
-        {/* ── Two-column: Today's schedule + Sidebar ─────────────────────────── */}
-        <div className="grid gap-6 lg:grid-cols-3">
+        {/* ── Two-column: funnel/credit/broadcast + roster ─────────────────────── */}
+        <div className="grid gap-6 lg:grid-cols-2">
 
-          {/* Today's schedule — takes 2 cols */}
-          <div className="space-y-4 lg:col-span-2">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="label-mono mb-1">
-                  {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-                </p>
-                <h2 className="font-display animate-heading-1 text-xl text-white">Today's sessions</h2>
-              </div>
-              <div className="flex items-center gap-2">
-                {today.filter((b: any) => b.status === 'PENDING').length > 0 && (
-                  <button
-                    onClick={() => {
-                      today
-                        .filter((b: any) => b.status === 'PENDING')
-                        .forEach((b: any) => mutate(b.id, 'CONFIRMED'));
-                    }}
-                    className="flex items-center gap-1.5 bg-emerald-900/20 border border-emerald-800/50 text-emerald-400 text-xs px-3 py-2 rounded-lg hover:bg-emerald-900/30 transition-colors font-mono"
-                  >
-                    Confirm all
-                    <span className="bg-emerald-900/40 text-emerald-300 text-[10px] px-1.5 py-0.5 rounded-full">
-                      {today.filter((b: any) => b.status === 'PENDING').length}
-                    </span>
-                  </button>
-                )}
-                <button
-                  onClick={() => setShowWalkIn(true)}
-                  className="flex items-center gap-2 bg-dome/10 border border-dome/30 text-dome text-xs px-4 py-2 rounded-lg hover:bg-dome/20 transition-colors font-medium"
-                >
-                  + Walk-in
-                </button>
-              </div>
-            </div>
-
-            {loadingAnalytics ? (
-              <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <SkeletonRow key={i} />)}</div>
-            ) : today.length === 0 ? (
-              <div className="bg-studio-surface border border-studio-border rounded-xl p-10 text-center">
-                <p className="font-display text-zinc-600 italic text-base">Studio is clear.</p>
-                <p className="text-zinc-700 text-xs mt-1 font-mono">No sessions on the books today</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {today.map((b: any, idx: number) => {
-                  const isActing = pendingAction === b.id;
-                  const animClass = SURFACE_ANIMS[Math.min(idx, 3)];
-                  return (
-                    <div
-                      key={b.id}
-                      className={`bg-studio-surface border border-studio-border rounded-xl px-4 py-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between md:px-5 ${animClass}`}
-                    >
-                      {/* Time + artist */}
-                      <div className="flex items-center gap-5">
-                        <div className="text-center w-16 border-r border-studio-border pr-5">
-                          <p className="metric-number text-dome text-sm">{fmt2(b.starts_at)}</p>
-                          <p className="metric-number text-zinc-600 text-xs">{fmt2(b.ends_at)}</p>
-                        </div>
-                        <div>
-                          <p className="text-white text-sm font-medium">{b.artist?.name ?? 'Walk-in'}</p>
-                          <p className="text-zinc-500 text-xs mt-0.5">
-                            {b.room?.name ?? '—'}
-                            {b.engineer?.name && (
-                              <span className="text-zinc-600"> · {b.engineer.name}</span>
-                            )}
-                            {b.service?.name && (
-                              <span className="text-zinc-700"> · {b.service.name}</span>
-                            )}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono ${STATUS_TAILWIND[b.status as BookingStatus] ?? 'text-zinc-500'}`}>
-                          {b.status}
-                        </span>
-                        {isActing ? (
-                          <span className="text-xs text-zinc-500 font-mono animate-pulse px-2">saving…</span>
-                        ) : (
-                          <>
-                            {b.status === 'PENDING' && (
-                              <button
-                                onClick={() => mutate(b.id, 'CONFIRMED')}
-                                className="text-xs bg-green-900/20 border border-green-800 text-green-400 px-3 py-1 rounded-lg hover:bg-green-900/40 transition-colors"
-                              >Confirm</button>
-                            )}
-                            {b.status === 'CONFIRMED' && (
-                              <>
-                                <button onClick={() => mutate(b.id, 'COMPLETED')}
-                                  className="text-xs bg-zinc-800 border border-zinc-700 text-zinc-300 px-2.5 py-1 rounded-lg hover:bg-zinc-700 transition-colors">Complete</button>
-                                <button onClick={() => mutate(b.id, 'NO_SHOW')}
-                                  className="text-xs bg-orange-900/20 border border-orange-800 text-orange-400 px-2.5 py-1 rounded-lg hover:bg-orange-900/30 transition-colors">No show</button>
-                                <button onClick={() => mutate(b.id, 'CANCELLED')}
-                                  className="text-xs bg-red-900/20 border border-red-800 text-red-400 px-2.5 py-1 rounded-lg hover:bg-red-900/30 transition-colors">Cancel</button>
-                              </>
-                            )}
-                          </>
-                        )}
-                        <Link to={`/bookings/${b.id}`} className="text-zinc-600 hover:text-dome text-xs transition-colors px-1.5 ml-1">→</Link>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Sidebar: funnel + credit requests + roster */}
+          {/* Funnel + credit requests + broadcast */}
           <div className="space-y-6">
 
             {/* Booking funnel */}
@@ -598,12 +404,21 @@ export default function AdminDashboardPage() {
                 </div>
               )}
             </div>
+          </div>
 
-            {/* Artist roster (compact) */}
-            <div className="animate-surface-2">
-              <p className="label-mono mb-3">
+          {/* Artist roster */}
+          <div className="animate-surface-2">
+            <div className="flex items-center justify-between mb-3">
+              <p className="label-mono">
                 Roster · {loadingArtists ? '…' : (artists as any[]).length} artists
               </p>
+              <button
+                onClick={() => setShowWalkIn(true)}
+                className="flex items-center gap-2 bg-dome/10 border border-dome/30 text-dome text-xs px-3 py-1.5 rounded-lg hover:bg-dome/20 transition-colors font-medium"
+              >
+                + Walk-in
+              </button>
+            </div>
               <input
                 type="text"
                 value={artistSearch}
@@ -670,7 +485,6 @@ export default function AdminDashboardPage() {
                   })}
                 </div>
               )}
-            </div>
           </div>
         </div>
 
