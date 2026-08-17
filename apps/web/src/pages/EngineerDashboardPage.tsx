@@ -42,12 +42,6 @@ export default function EngineerDashboardPage() {
   const [tracksText, setTracksText] = useState('');
   const [rating, setRating] = useState(0);
 
-  const { data: pulse } = useQuery({
-    queryKey: ['studio-pulse'],
-    queryFn: async () => (await api.get('/studio/pulse')).data,
-    refetchInterval: 15_000,
-  });
-
   // The bookable Engineer record (specialties/credits/hourly-rate) linked to
   // this login, if any — previously there was no way to know which Engineer
   // a logged-in "engineer" actually was. Null, not a 404, when unlinked.
@@ -116,29 +110,6 @@ export default function EngineerDashboardPage() {
             <span className="text-zinc-600 text-xs">Studio Team · Session Engineer</span>
           )}
         </div>
-        {/* Room status strip — live from pulse */}
-        <div className="hidden md:flex items-center gap-2">
-          {(pulse?.rooms ?? []).map((room: any) => {
-            const live = room.status === 'OCCUPIED' || room.is_live;
-            return (
-              <div key={room.id} style={{
-                display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px',
-                borderRadius: 99, fontSize: 11, fontFamily: 'JetBrains Mono, monospace',
-                background: live ? 'rgba(29,158,117,0.1)' : 'rgba(255,255,255,0.04)',
-                border: `1px solid ${live ? 'rgba(29,158,117,0.3)' : '#222'}`,
-                color: live ? '#1D9E75' : '#444',
-              }}>
-                <span style={{
-                  width: 6, height: 6, borderRadius: '50%', background: live ? '#1D9E75' : '#333', flexShrink: 0,
-                  boxShadow: live ? '0 0 6px #1D9E75' : 'none',
-                  animation: live ? 'spw-pulse 1.2s ease-in-out infinite' : 'none',
-                }} />
-                {room.name ?? room.room_type}
-              </div>
-            );
-          })}
-        </div>
-
         <div className="flex items-center gap-4">
           <Link to="/calendar" className="text-zinc-500 hover:text-white text-sm transition-colors">Calendar</Link>
           <Link to="/runsheet" className="text-zinc-500 hover:text-white text-sm transition-colors">Runsheet</Link>
