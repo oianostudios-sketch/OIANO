@@ -4,7 +4,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
 import { useToast } from '../components/Toast';
-import { getPersonality } from '../lib/personality';
 import OianoBrand from '../components/OianoBrand';
 import { BookingStatus, STATUS_HEX } from '../lib/bookingStatus';
 
@@ -374,42 +373,24 @@ export default function ArtistProfilePage() {
         {tab === 'Overview' && (
           <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
 
-            {/* Creative DNA panel */}
+            {/* Creative DNA lives on the artist's Passport — this page is the
+                studio's operational record of the artist, not an identity
+                editor, so it links out instead of re-rendering the field. */}
             <div className="ap-panel">
               <div className="ap-panel-label">Creative DNA</div>
-              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                {genres.length > 0 && (
-                  <div>
-                    <p style={{ fontSize:9, color:'#2a2a2a', fontFamily:"'JetBrains Mono',monospace", letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:6 }}>Genres</p>
-                    <div className="ap-chip-row">{genres.map(g => <DNAChip key={g} label={g} color="#C9A84C" />)}</div>
-                  </div>
-                )}
-                {themes.length > 0 && (
-                  <div>
-                    <p style={{ fontSize:9, color:'#2a2a2a', fontFamily:"'JetBrains Mono',monospace", letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:6 }}>Themes</p>
-                    <div className="ap-chip-row">{themes.map(t => <DNAChip key={t} label={t} color="#3B8BFF" />)}</div>
-                  </div>
-                )}
-                {(dna.vocal_type || dna.energy_profile) && (
-                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginTop:4 }}>
-                    {dna.vocal_type && (
-                      <div style={{ background:'#0a0a0a', borderRadius:8, padding:'10px 12px' }}>
-                        <p style={{ fontSize:9, color:'#2a2a2a', fontFamily:"'JetBrains Mono',monospace", letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:4 }}>Vocal type</p>
-                        <p style={{ fontSize:12, color:'#888' }}>{dna.vocal_type}</p>
-                      </div>
-                    )}
-                    {dna.energy_profile && (
-                      <div style={{ background:'#0a0a0a', borderRadius:8, padding:'10px 12px' }}>
-                        <p style={{ fontSize:9, color:'#2a2a2a', fontFamily:"'JetBrains Mono',monospace", letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:4 }}>Energy</p>
-                        <p style={{ fontSize:12, color: getPersonality(dna.energy_profile).color }}>{getPersonality(dna.energy_profile).label}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-                {!genres.length && !themes.length && !dna.vocal_type && !dna.energy_profile && (
-                  <p style={{ fontSize:12, color:'#2a2a2a', fontStyle:'italic' }}>No creative DNA yet — {isOwner ? <Link to="/artist/passport" style={{ color:'#C9A84C' }}>edit your passport</Link> : 'artist has not filled this in yet.'}</p>
-                )}
-              </div>
+              {(genres.length > 0 || themes.length > 0) ? (
+                <div className="ap-chip-row" style={{ marginBottom: 12 }}>
+                  {genres.map(g => <DNAChip key={g} label={g} color="#C9A84C" />)}
+                  {themes.map(t => <DNAChip key={t} label={t} color="#3B8BFF" />)}
+                </div>
+              ) : (
+                <p style={{ fontSize:12, color:'#2a2a2a', fontStyle:'italic', marginBottom:12 }}>No creative DNA yet.</p>
+              )}
+              {isOwner ? (
+                <Link to="/artist/passport" style={{ fontSize:11, color:'#C9A84C' }}>Edit on your Passport →</Link>
+              ) : passportCode ? (
+                <Link to={`/p/${passportCode}`} style={{ fontSize:11, color:'#C9A84C' }}>View full Passport →</Link>
+              ) : null}
             </div>
 
             {/* AI Brief — inline, collapsible */}
