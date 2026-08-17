@@ -9,6 +9,7 @@ import OianoBrand from '../components/OianoBrand';
 import { useStudioState } from '../context/StudioState';
 import { SkeletonKPI, SkeletonRow, SkeletonArtistCard } from '../components/Skeleton';
 import { fmtTime, fmtDate } from '../lib/fmt';
+import { BookingStatus, STATUS_TAILWIND } from '../lib/bookingStatus';
 import NetworkExchangePanel from '../components/NetworkExchangePanel';
 import NotificationBell from '../components/NotificationBell';
 
@@ -78,15 +79,6 @@ function BookingFunnel({ funnel }: { funnel: { pending: number; confirmed: numbe
     </div>
   );
 }
-
-const STATUS_COLORS: Record<string, string> = {
-  PENDING:     'bg-yellow-900/30 text-yellow-400',
-  CONFIRMED:   'bg-green-900/30 text-green-400',
-  IN_PROGRESS: 'bg-blue-900/30 text-blue-400',
-  COMPLETED:   'bg-zinc-800 text-zinc-400',
-  CANCELLED:   'bg-red-900/30 text-red-400',
-  NO_SHOW:     'bg-red-900/20 text-red-600',
-};
 
 const BOOKING_TABS = ['All', 'Pending', 'Confirmed', 'Completed', 'Cancelled'] as const;
 type BookingTab = typeof BOOKING_TABS[number];
@@ -502,7 +494,7 @@ export default function AdminDashboardPage() {
 
                       {/* Actions */}
                       <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono ${STATUS_COLORS[b.status] ?? 'text-zinc-500'}`}>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono ${STATUS_TAILWIND[b.status as BookingStatus] ?? 'text-zinc-500'}`}>
                           {b.status}
                         </span>
                         {isActing ? (
@@ -742,7 +734,7 @@ export default function AdminDashboardPage() {
                     <p className="metric-number text-zinc-300 text-sm">${Number(b.total_usd ?? 0).toFixed(0)}</p>
                   </div>
                   <div>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono ${STATUS_COLORS[b.status] ?? 'text-zinc-500'}`}>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono ${STATUS_TAILWIND[b.status as BookingStatus] ?? 'text-zinc-500'}`}>
                       {b.status}
                     </span>
                   </div>

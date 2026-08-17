@@ -12,6 +12,7 @@ import OianoBrand from '../components/OianoBrand';
 import { Activity, LayoutDashboard, Calendar, ClipboardList, DollarSign, Gauge, Wallet } from 'lucide-react';
 import { useToast } from '../components/Toast';
 import ArtistAvatar from '../components/ArtistAvatar';
+import { BookingStatus, STATUS_HEX } from '../lib/bookingStatus';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -286,14 +287,10 @@ function TimelineStrip({ sessions }: { sessions: Session[] }) {
           const eh = new Date(s.ends_at!).getHours()   + new Date(s.ends_at!).getMinutes()   / 60;
           const left  = Math.max(0, (sh - START_H) / TOTAL * 100);
           const width = Math.min(100 - left, (eh - sh) / TOTAL * 100);
-          const colors: Record<string, string> = {
-            CONFIRMED: '#1D9E75', PENDING: '#C9A84C',
-            COMPLETED: '#3f3f46', CANCELLED: '#7f1d1d',
-          };
           return (
             <div key={s.id} className="tl-block"
               title={`${sessionArtist(s)} · ${fmtTime(s.starts_at)}–${fmtTime(s.ends_at)}`}
-              style={{ left: `${left}%`, width: `${Math.max(width, 1)}%`, background: colors[s.status ?? ''] ?? '#2a2a2a' }}
+              style={{ left: `${left}%`, width: `${Math.max(width, 1)}%`, background: STATUS_HEX[s.status as BookingStatus] ?? '#2a2a2a' }}
             />
           );
         })}
@@ -1169,10 +1166,6 @@ export default function PulseDashboard() {
                 ) : (
                   todaySessions.map(s => {
                     const isActive = activeSession?.id === s.id;
-                    const statusColors: Record<string, string> = {
-                      CONFIRMED:'#1D9E75', PENDING:'#C9A84C',
-                      COMPLETED:'#3f3f46', CANCELLED:'#7f1d1d', NO_SHOW:'#7f1d1d',
-                    };
                     return (
                       <div key={s.id} role="button" tabIndex={0}
                         className={`cmd-session-row${isActive ? ' row-active' : ''}`}
@@ -1183,7 +1176,7 @@ export default function PulseDashboard() {
                           <span className="csr-end">{fmtTime(s.ends_at)}</span>
                         </div>
                         <div className="csr-dot" style={{
-                          background: isActive ? '#5A9BCB' : (statusColors[s.status ?? ''] ?? '#2a2a2a'),
+                          background: isActive ? '#5A9BCB' : (STATUS_HEX[s.status as BookingStatus] ?? '#2a2a2a'),
                           boxShadow: isActive ? '0 0 6px #5A9BCB' : 'none',
                           animation: isActive ? 'breath 1.8s ease-in-out infinite' : 'none',
                         }} />

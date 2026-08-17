@@ -14,6 +14,7 @@ import { useToast } from '../components/Toast';
 import ProjectMessageThread from '../components/ProjectMessageThread';
 import ProjectActionPanel from '../components/ProjectActionPanel';
 import { fmtDate, fmtDuration, fmtCurrency } from '../lib/fmt';
+import { BookingStatus, STATUS_HEX } from '../lib/bookingStatus';
 
 type Phase = 'PRE_PRODUCTION' | 'TRACKING' | 'EDITING' | 'MIXING' | 'MASTERING' | 'DELIVERED';
 
@@ -60,11 +61,6 @@ const PHASES: { key: Phase; label: string; color: string }[] = [
   { key: 'MASTERING',      label: 'Mastering',      color: '#C9A84C' },
   { key: 'DELIVERED',      label: 'Delivered',      color: '#666' },
 ];
-
-const STATUS_COLOR: Record<string, string> = {
-  PENDING: '#C9A84C', CONFIRMED: '#1D9E75', IN_PROGRESS: '#3B8BFF',
-  COMPLETED: '#666', CANCELLED: '#D94A4A', NO_SHOW: '#D94A4A',
-};
 
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -405,7 +401,7 @@ export default function ProjectDetailPage() {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: STATUS_COLOR[b.status] ?? '#555', flexShrink: 0 }} />
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: STATUS_HEX[b.status as BookingStatus] ?? '#555', flexShrink: 0 }} />
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: '0.85rem', color: '#eee', fontWeight: 500 }}>{fmtDate(b.starts_at)}</div>
                     <div style={{ fontSize: '0.72rem', color: '#666' }}>
@@ -414,7 +410,7 @@ export default function ProjectDetailPage() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0 }}>
-                  <span style={{ fontSize: '0.72rem', color: STATUS_COLOR[b.status] ?? '#555', fontFamily: 'var(--font-mono)' }}>{b.status}</span>
+                  <span style={{ fontSize: '0.72rem', color: STATUS_HEX[b.status as BookingStatus] ?? '#555', fontFamily: 'var(--font-mono)' }}>{b.status}</span>
                   <span style={{ fontSize: '0.85rem', color: '#888', fontFamily: 'var(--font-mono)' }}>{fmtCurrency(b.total_usd)}</span>
                 </div>
               </Link>

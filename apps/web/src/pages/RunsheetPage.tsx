@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
 import { fmtTime } from '../lib/fmt';
 import OianoBrand from '../components/OianoBrand';
+import { BookingStatus, STATUS_HEX } from '../lib/bookingStatus';
 
 interface RunsheetBooking {
   id: string;
@@ -72,12 +73,6 @@ function utilPct(sessions: RunsheetBooking[]): number {
   return Math.min(100, Math.round((totalMins / 840) * 100));
 }
 
-const STATUS_COLOR: Record<string, string> = {
-  CONFIRMED: '#22c55e',
-  PENDING:   '#C9A84C',
-  COMPLETED: '#6b7280',
-  NO_SHOW:   '#ef4444',
-};
 const PAY_COLOR: Record<string, string> = {
   PAID:    '#22c55e',
   PARTIAL: '#f59e0b',
@@ -237,7 +232,7 @@ export default function RunsheetPage() {
           <td style={{ padding: '10px 8px', fontSize: 12, color: '#555' }}>{b.engineer}</td>
           <td style={{ padding: '10px 8px', fontSize: 11, color: '#777' }}>{b.service}</td>
           <td style={{ padding: '10px 8px' }}>
-            <Pill label={b.status} color={STATUS_COLOR[b.status] ?? '#6b7280'} />
+            <Pill label={b.status} color={STATUS_HEX[b.status as BookingStatus] ?? '#6b7280'} />
             {isAdmin && <StatusActions b={b} />}
           </td>
           <td style={{ padding: '10px 8px' }}>

@@ -7,15 +7,7 @@ import { useToast } from '../components/Toast';
 import { SkeletonRow } from '../components/Skeleton';
 import OianoBrand from '../components/OianoBrand';
 import { fmtTime, fmtDate } from '../lib/fmt';
-
-const STATUS_COLORS: Record<string, string> = {
-  PENDING:     'bg-yellow-900/30 text-yellow-400',
-  CONFIRMED:   'bg-green-900/30 text-green-400',
-  IN_PROGRESS: 'bg-blue-900/30 text-blue-400',
-  COMPLETED:   'bg-zinc-800 text-zinc-400',
-  CANCELLED:   'bg-red-900/30 text-red-400',
-  NO_SHOW:     'bg-red-900/20 text-red-600',
-};
+import { BookingStatus, STATUS_TAILWIND } from '../lib/bookingStatus';
 
 const RATING_LABELS = ['', 'Poor', 'Fair', 'Good', 'Great', 'Excellent'];
 
@@ -221,7 +213,7 @@ export default function EngineerDashboardPage() {
 
                       {/* Status + actions */}
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[b.status] ?? 'text-zinc-500'}`}>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_TAILWIND[b.status as BookingStatus] ?? 'text-zinc-500'}`}>
                           {b.status}
                         </span>
                         {isPast && (
@@ -276,7 +268,7 @@ export default function EngineerDashboardPage() {
                     <p className="text-white text-sm font-medium truncate">{b.artist?.name ?? '—'}</p>
                     <p className="text-zinc-500 text-xs truncate">{b.service?.name} · {b.room?.name}</p>
                   </div>
-                  <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${STATUS_COLORS[b.status] ?? ''}`}>
+                  <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${STATUS_TAILWIND[b.status as BookingStatus] ?? ''}`}>
                     {b.status}
                   </span>
                   <Link to={`/bookings/${b.id}`} className="text-zinc-600 text-xs hover:text-white transition-colors">

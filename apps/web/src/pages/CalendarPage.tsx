@@ -10,6 +10,7 @@ import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
 import ArtistEmptyState from '../components/ArtistEmptyState';
 import { CalendarPlus2 } from 'lucide-react';
+import { BookingStatus, STATUS_HEX, hexAlpha } from '../lib/bookingStatus';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const HOUR_START  = 8;
@@ -19,15 +20,15 @@ const DAY_LABELS  = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const MONTH_NAMES = ['January','February','March','April','May','June',
                      'July','August','September','October','November','December'];
 
-// ── Colour palettes ───────────────────────────────────────────────────────────
-const STATUS_COLORS: Record<string, { bg: string; border: string; text: string }> = {
-  PENDING:     { bg: '#78350f33', border: '#92400e', text: '#fcd34d' },
-  CONFIRMED:   { bg: '#14532d33', border: '#166534', text: '#86efac' },
-  IN_PROGRESS: { bg: '#1e3a5f33', border: '#1d4ed8', text: '#93c5fd' },
-  COMPLETED:   { bg: '#1c1c1c',   border: '#333',    text: '#6b7280' },
-  CANCELLED:   { bg: '#1c0a0a',   border: '#7f1d1d', text: '#6b7280' },
-  NO_SHOW:     { bg: '#1c0a0a',   border: '#450a0a', text: '#4b5563' },
-};
+// ── Colour palette — derived from the shared canonical status hex
+// (lib/bookingStatus.ts) rather than a locally-authored copy (AUD-002).
+// Calendar blocks need a translucent bg + bright text, which a flat brand
+// hex alone doesn't give, so this derives that treatment from one shared
+// source instead of hand-picking a separate palette.
+function statusStyle(status: string) {
+  const hex = STATUS_HEX[status as BookingStatus] ?? STATUS_HEX.CONFIRMED;
+  return { bg: hexAlpha(hex, 0.16), border: hexAlpha(hex, 0.55), text: hex };
+}
 
 const ROOM_PALETTE = [
   '#C9A84C','#6366f1','#06b6d4','#10b981',
@@ -88,7 +89,7 @@ function nowPct(): number {
 // ── Booking colour by mode ─────────────────────────────────────────────────────
 function bookingColor(b: any, mode: ColorMode, rooms: any[]) {
   if (mode === 'status') {
-    return STATUS_COLORS[b.status] ?? STATUS_COLORS.CONFIRMED;
+    return statusStyle(b.status);
   }
   if (mode === 'room') {
     const idx = rooms.findIndex((r:any) => r.id === b.room_id);
@@ -99,7 +100,7 @@ function bookingColor(b: any, mode: ColorMode, rooms: any[]) {
     const c = hashColor(b.engineer.name, ENG_PALETTE);
     return { bg: c+'33', border: c, text: c };
   }
-  return STATUS_COLORS[b.status] ?? STATUS_COLORS.CONFIRMED;
+  return statusStyle(b.status);
 }
 
 // ── Booking tooltip card ───────────────────────────────────────────────────────

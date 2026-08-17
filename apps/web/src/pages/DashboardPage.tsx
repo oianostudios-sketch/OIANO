@@ -13,6 +13,7 @@ import ArtistStatusToggle from '../components/ArtistStatusToggle';
 import { fmtTime as _fmtTime, fmtDateShort as _fmtDateShort } from '../lib/fmt';
 import { CalendarDays, Compass, FolderKanban, IdCard, Mic2, Pencil } from 'lucide-react';
 import ArtistAvatar from '../components/ArtistAvatar';
+import { STATUS_HEX } from '../lib/bookingStatus';
 import NetworkExchangePanel from '../components/NetworkExchangePanel';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -824,10 +825,7 @@ export default function DashboardPage() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {recent.map((b: any, i: number) => {
-                const statusColors: Record<string, string> = {
-                  CONFIRMED: '#4ade80', PENDING: '#C9A84C',
-                  COMPLETED: '#1D9E75', CANCELLED: '#3f3f46', NO_SHOW: '#3f3f46',
-                };
+                const statusColors = STATUS_HEX as Record<string, string>;
                 const isActive = ['CONFIRMED','PENDING'].includes(b.status) && b.starts_at && new Date(b.starts_at).getTime() > Date.now();
                 return (
                   <Link key={b.id} to={`/bookings/${b.id}`} style={{ textDecoration: 'none' }}

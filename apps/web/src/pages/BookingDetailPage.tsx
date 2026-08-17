@@ -8,33 +8,7 @@ import { fmtTime, fmtDateLong, fmtDuration } from '../lib/fmt';
 import BookingMessageThread from '../components/BookingMessageThread';
 import ArtistReviewForm from '../components/ArtistReviewForm';
 import { useToast } from '../components/Toast';
-
-const STATUS_COLORS: Record<string, string> = {
-  PENDING:     'bg-yellow-900/30 text-yellow-400 border-yellow-900/30',
-  CONFIRMED:   'bg-green-900/30 text-green-400 border-green-900/30',
-  IN_PROGRESS: 'bg-blue-900/30 text-blue-400 border-blue-900/30',
-  COMPLETED:   'bg-zinc-800 text-zinc-400 border-zinc-700',
-  CANCELLED:   'bg-red-900/30 text-red-400 border-red-900/30',
-  NO_SHOW:     'bg-red-900/20 text-red-600 border-red-900/20',
-};
-
-const STATUS_DOT: Record<string, string> = {
-  PENDING:     'bg-yellow-400',
-  CONFIRMED:   'bg-green-400',
-  IN_PROGRESS: 'bg-blue-400',
-  COMPLETED:   'bg-zinc-500',
-  CANCELLED:   'bg-red-400',
-  NO_SHOW:     'bg-red-700',
-};
-
-const STATUS_MESSAGES: Record<string, string> = {
-  PENDING:     "Waiting for studio confirmation. You'll be notified once confirmed.",
-  CONFIRMED:   "Your session is confirmed. Show up on time and bring your A-game.",
-  IN_PROGRESS: "You're in session right now.",
-  COMPLETED:   'Session complete. Check your profile for updated session history.',
-  CANCELLED:   'This booking was cancelled.',
-  NO_SHOW:     'This session was marked as no-show.',
-};
+import { BookingStatus, STATUS_TAILWIND, STATUS_DOT_TAILWIND, STATUS_MESSAGE } from '../lib/bookingStatus';
 
 
 // ── Stripe pay button ─────────────────────────────────────────────────────────
@@ -273,15 +247,15 @@ export default function BookingDetailPage() {
       <main className="max-w-2xl mx-auto px-6 py-10 space-y-6">
 
         {/* Status */}
-        <div className={`rounded-xl border px-6 py-5 animate-surface ${STATUS_COLORS[booking.status] ?? 'border-studio-border'}`}>
+        <div className={`rounded-xl border px-6 py-5 animate-surface ${STATUS_TAILWIND[booking.status as BookingStatus] ?? 'border-studio-border'}`}>
           <div className="flex items-center justify-between mb-2">
             <p className="label-mono flex items-center gap-2">
-              <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[booking.status] ?? 'bg-zinc-500'}`} />
+              <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT_TAILWIND[booking.status as BookingStatus] ?? 'bg-zinc-500'}`} />
               Status
             </p>
             <span className="text-sm font-semibold font-mono">{booking.status}</span>
           </div>
-          <p className="text-sm opacity-80">{STATUS_MESSAGES[booking.status] ?? booking.status}</p>
+          <p className="text-sm opacity-80">{STATUS_MESSAGE[booking.status as BookingStatus] ?? booking.status}</p>
         </div>
 
         {/* Project context — the one connection (Booking -> Project -> Producer)
@@ -331,7 +305,7 @@ export default function BookingDetailPage() {
               { label: 'Time',     value: `${fmtTime(booking.starts_at)} → ${fmtTime(booking.ends_at)} (${fmtDuration(booking.starts_at, booking.ends_at)})` },
               { label: 'Room',     value: booking.room?.name ?? '—' },
               { label: 'Service',  value: booking.service?.name ?? '—' },
-              { label: 'Producer', value: booking.engineer?.name ?? 'Assigned by studio' },
+              { label: 'Engineer', value: booking.engineer?.name ?? 'Assigned by studio' },
             ].map((row) => (
               <div key={row.label} className="flex justify-between text-sm border-b border-studio-border pb-4 last:border-0 last:pb-0">
                 <span className="text-zinc-500">{row.label}</span>

@@ -6,6 +6,7 @@ import { useAuthStore } from '../store/auth.store';
 import { useToast } from '../components/Toast';
 import { getPersonality } from '../lib/personality';
 import OianoBrand from '../components/OianoBrand';
+import { BookingStatus, STATUS_HEX } from '../lib/bookingStatus';
 
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 
@@ -77,14 +78,9 @@ const STATUS_LABEL: Record<string, string> = {
   NO_SHOW:     'Missed session',
 };
 
-const STATUS_COLOR: Record<string, string> = {
-  PENDING:     '#C9A84C',
-  CONFIRMED:   '#1D9E75',
-  IN_PROGRESS: '#3B8BFF',
-  COMPLETED:   '#555',
-  CANCELLED:   '#e07070',
-  NO_SHOW:     '#e07070',
-};
+// Color now sourced from lib/bookingStatus.ts's STATUS_HEX (AUD-002); this
+// page keeps its own friendlier label wording above (STATUS_LABEL) rather
+// than the generic shared one — a deliberate content choice, not duplication.
 
 function fmtSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -490,7 +486,7 @@ export default function ArtistProfilePage() {
                         {b.engineer?.name && ` · ${b.engineer.name}`}
                       </p>
                     </div>
-                    <span style={{ fontSize:10, padding:'3px 10px', borderRadius:20, border:`1px solid ${STATUS_COLOR[b.status] ?? '#333'}33`, color: STATUS_COLOR[b.status] ?? '#555', background:`${STATUS_COLOR[b.status] ?? '#555'}0a`, fontFamily:"'JetBrains Mono',monospace", flexShrink:0 }}>
+                    <span style={{ fontSize:10, padding:'3px 10px', borderRadius:20, border:`1px solid ${STATUS_HEX[b.status as BookingStatus] ?? '#333'}33`, color: STATUS_HEX[b.status as BookingStatus] ?? '#555', background:`${STATUS_HEX[b.status as BookingStatus] ?? '#555'}0a`, fontFamily:"'JetBrains Mono',monospace", flexShrink:0 }}>
                       {STATUS_LABEL[b.status] ?? b.status}
                     </span>
                   </div>

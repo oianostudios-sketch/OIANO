@@ -3,11 +3,12 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import MaintenanceShell from '../components/MaintenanceShell';
+import { STATUS_HEX } from '../lib/bookingStatus';
 
 type Booking={id:string;created_at:string;starts_at:string;ends_at:string;status:string;total_usd:number;studio:{id:string;name:string};artist:{id:string;name:string;alias:string|null};room:string;service:string;engineer:string|null;payment:{status:string;amount_usd:number;provider:string}|null};
 type Response={totals:{bookings:number;paid:number;paid_volume:number;payment_exceptions:number;actionable:number};states:Record<string,number>;completion_rate:number;cancellation_rate:number;bookings:Booking[]};
 const statuses=['ALL','PENDING','CONFIRMED','IN_PROGRESS','COMPLETED','CANCELLED','NO_SHOW'];
-const statusTone:Record<string,string>={PENDING:'#f59e0b',CONFIRMED:'#5A9BCB',IN_PROGRESS:'#34d399',COMPLETED:'#a1a1aa',CANCELLED:'#ef4444',NO_SHOW:'#f97316'};
+const statusTone = STATUS_HEX as Record<string, string>;
 
 export default function MaintenanceBookingsPage(){
  const [status,setStatus]=useState('ALL');const [query,setQuery]=useState('');
