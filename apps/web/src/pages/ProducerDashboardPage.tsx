@@ -417,7 +417,7 @@ function StatsStrip({ projects, producer }: { projects: Project[]; producer: Pro
   ];
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem', marginBottom: '2rem' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.75rem', marginBottom: '2rem' }}>
       {stats.map(s => (
         <div key={s.label} style={{
           background: 'var(--surface, #141414)',
@@ -581,6 +581,10 @@ export default function ProducerDashboardPage() {
       <StatsStrip projects={activeProjects} producer={producer} />
 
       {/* Production Board — horizontal scrolling lane */}
+      <style>{'@media (max-width: 768px) { .producer-board-hint { display: block !important; } }'}</style>
+      <div className="producer-board-hint" style={{ display: 'none', fontSize: '0.7rem', color: '#5A9BCB', fontFamily: 'var(--font-mono, JetBrains Mono), monospace', marginBottom: '0.5rem' }}>
+        ← Swipe to see every phase →
+      </div>
       <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '1rem', alignItems: 'flex-start',
         // hide scrollbar on webkit while keeping scroll
         msOverflowStyle: 'none',

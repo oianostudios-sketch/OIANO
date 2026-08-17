@@ -56,6 +56,10 @@ export function ProducerNav({ passportCode }: { passportCode?: string | null }) 
             min-width: 0;
             flex: 1 1 auto;
             justify-content: flex-start !important;
+            /* Fade the trailing edge so a scrollable nav with clipped items
+               (e.g. "Passport" cut off) reads as "more this way", not broken. */
+            mask-image: linear-gradient(to right, black calc(100% - 18px), transparent);
+            -webkit-mask-image: linear-gradient(to right, black calc(100% - 18px), transparent);
           }
           .producer-nav .producer-nav-links::-webkit-scrollbar { display: none; }
           .producer-nav .producer-nav-links button { flex-shrink: 0; }
