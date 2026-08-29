@@ -2,9 +2,9 @@
 #
 # One-time setup:
 #   1. Render dashboard → New + → Blueprint → connect the oianostudios-sketch/OIANO repo.
-#   2. Render reads this file and proposes three services: oiano-api, oiano-web,
-#      and oiano-api-staging (only needed for the Phase 3 load test — safe to
-#      skip/delete if you're not running it right now).
+#   2. Render reads this file and proposes two services: oiano-api, oiano-web.
+#      A third, oiano-api-staging (standard plan, for the Phase 3 load test),
+#      is deliberately not defined here yet — see the plan note below.
 #   3. Fill in the env vars marked "sync: false" below in the Render dashboard —
 #      their real values live in apps/api/.env locally and must never be committed.
 #   4. First deploy of oiano-api will fail fast if any required var is missing
@@ -22,15 +22,16 @@ services:
   - type: web
     name: oiano-api
     runtime: node
-    # Free plan spins down after 15 minutes idle and cold-starts on the next
-    # request — for an event with a hard start time, that turns "first
-    # thousand users hit the site at once" into "first thousand users hit a
-    # sleeping dyno." Target is 4,000 peak concurrent (incl. held-open SSE
-    # connections) — Starter's ~512MB is very unlikely to hold that alongside
-    # normal request handling, so "standard" is the realistic starting point,
-    # not a guess to skip: apps/api/scripts/load-test.js's Phase 3 run against
-    # staging on this same tier is what actually confirms (or corrects) it.
-    plan: standard
+    # Temporarily on the free plan — no billing method on file yet. Free
+    # spins down after 15 minutes idle and cold-starts on the next request,
+    # which is fine for getting oianoway.com live now but is a real risk for
+    # an event with a hard start time (4,000 peak concurrent target incl.
+    # held-open SSE connections; free's ~512MB won't hold that either).
+    # Bump to `plan: standard` and re-add oiano-api-staging (see prior git
+    # history) once billing is set up and there's a firm event date —
+    # apps/api/scripts/load-test.js's Phase 3 run against staging on the
+    # `standard` tier is what actually confirms the sizing.
+    plan: free
     region: oregon
     buildCommand: npm install && npx prisma generate --schema=./prisma/schema.prisma && npm run build --workspace=apps/api
     startCommand: npm run start --workspace=apps/api
@@ -60,51 +61,6 @@ services:
         value: "false"
       - key: ANTHROPIC_API_KEY
         sync: false
-      - key: R2_ACCOUNT_ID
-        sync: false
-      - key: R2_ACCESS_KEY_ID
-        sync: false
-      - key: R2_SECRET_ACCESS_KEY
-        sync: false
-      - key: R2_BUCKET_NAME
-        sync: false
-      - key: R2_PUBLIC_URL
-        sync: false
-
-  # Disposable staging deploy for the Phase 3 load test (see
-  # apps/api/scripts/load-test.js and the "Safe Execution Plan to Launch-Day
-  # Readiness"). Deliberately its own service, not a preview/PR environment —
-  # it needs to stay up long enough to seed realistic data and run a real
-  # burst test against it. Same plan tier as oiano-api on purpose: a load
-  # test only tells you something true if it's run against the same shape
-  # you're actually launching on. Point DATABASE_URL at a separate database
-  # (e.g. a distinct Neon branch), never at the same one oiano-api or local
-  # dev use — see the Phase 1 finding about a burst degrading a shared DB
-  # pool. Safe to delete this service after the load test is done; it isn't
-  # referenced by anything else in this blueprint.
-  - type: web
-    name: oiano-api-staging
-    runtime: node
-    plan: standard
-    region: oregon
-    buildCommand: npm install && npx prisma generate --schema=./prisma/schema.prisma && npm run build --workspace=apps/api
-    startCommand: npm run start --workspace=apps/api
-    healthCheckPath: /health
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: DATABASE_URL
-        sync: false
-      - key: JWT_SECRET
-        sync: false
-      - key: FRONTEND_URL
-        sync: false
-      - key: MFA_ENCRYPTION_KEY
-        sync: false
-      - key: STRIPE_ENABLED
-        value: "false"
-      - key: OIANO_AI_ENABLED
-        value: "false"
       - key: R2_ACCOUNT_ID
         sync: false
       - key: R2_ACCESS_KEY_ID
