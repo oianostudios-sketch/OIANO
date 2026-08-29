@@ -23,11 +23,16 @@ function useNavItems(navigate: ReturnType<typeof useNavigate>, role?: string): P
   // Always available
   items.push({ id: 'book',     icon: '＋', label: 'New booking',       group: 'QUICK ACTIONS', hint: 'B', action: () => navigate('/book') });
   items.push({ id: 'calendar', icon: '◫',  label: 'Calendar',          group: 'QUICK ACTIONS', hint: 'C', action: () => navigate('/calendar') });
+  items.push({ id: 'access',   icon: '◇',  label: 'Access & responsibilities', group: 'ACCOUNT', action: () => navigate('/access') });
+  items.push({ id: 'network',  icon: '◎',  label: 'Explore the OIANO network', group: 'NETWORK', action: () => navigate('/network') });
+  items.push({ id: 'contributions', icon: '✦', label: 'Contribution inbox', group: 'NETWORK', action: () => navigate('/contributions') });
 
   if (role === 'STUDIO_ADMIN') {
     items.push({ id: 'pulse',   icon: '◉', label: 'Studio Pulse',      group: 'QUICK ACTIONS', hint: 'P', action: () => navigate('/pulse') });
     items.push({ id: 'admin',   icon: '⚙',  label: 'Operator dashboard', group: 'QUICK ACTIONS', hint: 'O', action: () => navigate('/admin') });
     items.push({ id: 'run',     icon: '◳',  label: 'Runsheet',          group: 'QUICK ACTIONS',            action: () => navigate('/runsheet') });
+    items.push({ id: 'policies', icon: '◆', label: 'Studio standards & exceptions', group: 'QUICK ACTIONS', action: () => navigate('/admin/policies') });
+    items.push({ id: 'studio-team', icon: '♙', label: 'Studio team & permissions', group: 'QUICK ACTIONS', action: () => navigate('/admin/team') });
   }
 
   if (role === 'ARTIST') {

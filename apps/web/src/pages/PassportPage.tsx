@@ -126,7 +126,7 @@ export default function PassportPage() {
       if (artworkFile) {
         const form = new FormData();
         form.append('artwork', artworkFile);
-        await api.patch(`/passport/releases/${response.data.id}/artwork`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+        await api.patch(`/passport/releases/${response.data.id}/artwork`, form, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 0 });
       }
       return response;
     },

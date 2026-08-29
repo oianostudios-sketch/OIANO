@@ -7,6 +7,8 @@ import { useAuthStore } from '../store/auth.store';
 import { fmtTime, fmtDateLong, fmtDuration } from '../lib/fmt';
 import MessageThread from '../components/MessageThread';
 import ArtistReviewForm from '../components/ArtistReviewForm';
+import SessionCompletionModal from '../components/SessionCompletionModal';
+import SessionInsightCard from '../components/SessionInsightCard';
 import { useToast } from '../components/Toast';
 import { BookingStatus, STATUS_TAILWIND, STATUS_DOT_TAILWIND, STATUS_MESSAGE } from '../lib/bookingStatus';
 
@@ -79,6 +81,7 @@ export default function BookingDetailPage() {
   const [copied, setCopied] = useState(false);
   const [dawLinked, setDawLinked] = useState(false);
   const [deliverOpen, setDeliverOpen] = useState(false);
+  const [completionOpen, setCompletionOpen] = useState(false);
   const [deliverUrls, setDeliverUrls] = useState('');
   const [deliveryNotes, setDeliveryNotes] = useState('');
   const [reviewNote, setReviewNote] = useState('');
@@ -151,7 +154,7 @@ export default function BookingDetailPage() {
       const blob = await res.blob();
       const file = new File([blob], `session-${id.slice(0, 8)}.png`, { type: 'image/png' });
       if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: 'Studio Session — OIANO', text: `${booking?.artist?.name ?? 'Session'} at Dreamz Music Lab` });
+        await navigator.share({ files: [file], title: 'Studio Session — OIANO', text: `${booking?.artist?.name ?? 'Session'} at ${booking?.studio?.name ?? 'an OIANO studio'}` });
       } else {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -257,6 +260,8 @@ export default function BookingDetailPage() {
           </div>
           <p className="text-sm opacity-80">{STATUS_MESSAGE[booking.status as BookingStatus] ?? booking.status}</p>
         </div>
+
+        <SessionInsightCard bookingId={booking.id} />
 
         {/* Project context — the one connection (Booking -> Project -> Producer)
             that already exists in the data but was invisible everywhere in the
@@ -412,8 +417,24 @@ export default function BookingDetailPage() {
           </div>
         )}
 
-        {/* ── Session file delivery (engineer/admin) ── */}
-        {canDeliver && (
+        {/* ── Complete session (engineer/admin) — deliverables, credits, rights, notes in one screen ── */}
+        {canDeliver && ['CONFIRMED', 'IN_PROGRESS'].includes(booking.status) && (
+          <div className="rounded-xl border border-dome/30 bg-dome/5 px-6 py-5 animate-surface">
+            <div className="flex items-center justify-between">
+              <p className="label-mono text-dome">Session</p>
+              <button onClick={() => setCompletionOpen(true)}
+                className="text-sm bg-dome hover:bg-dome-light text-black font-semibold px-4 py-2 rounded-lg transition-colors">
+                Complete session →
+              </button>
+            </div>
+          </div>
+        )}
+        {completionOpen && (
+          <SessionCompletionModal booking={booking} onClose={() => setCompletionOpen(false)} />
+        )}
+
+        {/* ── Session file delivery (engineer/admin) — re-delivery after completion ── */}
+        {canDeliver && booking.status === 'COMPLETED' && (
           <div className="rounded-xl border border-studio-border bg-studio-surface px-6 py-5 animate-surface">
             <div className="flex items-center justify-between mb-3">
               <p className="label-mono flex items-center gap-2"><UploadCloud size={12} strokeWidth={2} /> Deliver Files</p>

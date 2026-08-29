@@ -5,5 +5,5 @@ export {
   getBookingById,
   createBooking,
   updateBookingStatus,
-  updateSessionNotes,
 } from './bookings.controller';
+export { updateSessionNotes } from './bookings/session-management.controller';

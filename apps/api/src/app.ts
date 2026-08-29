@@ -4,8 +4,12 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { validateEnv } from './lib/env';
+import { prisma } from './lib/prisma';
+import { initSentry } from './lib/sentry';
 import { errorHandler } from './middleware/error.middleware';
 import { requestId } from './middleware/requestId.middleware';
+import { accessLog } from './middleware/accessLog.middleware';
+import { rateLimit } from './middleware/rateLimit.middleware';
 import { authRouter } from './routes/auth.routes';
 import { passportRouter } from './routes/passport.routes';
 import { studioRouter } from './routes/studio.routes';
@@ -34,23 +38,22 @@ import { maintenanceRouter } from './routes/maintenance.routes';
 import { networkExchangeRouter } from './routes/network-exchange.routes';
 import { studioCircleRouter } from './routes/studio-circle.routes';
 import { feedbackRouter } from './routes/feedback.routes';
+import { networkMetricsRouter } from './routes/network-metrics.routes';
+import { contributionsRouter } from './routes/contributions.routes';
+import { studioPolicyRouter } from './routes/studio-policy.routes';
 
-dotenv.config({ path: path.resolve(__dirname, '../.env'), override: true });
+dotenv.config({ path: path.resolve(__dirname, '../.env'), override: process.env.NODE_ENV !== 'test' });
 
 validateEnv();
+initSentry();
 
 const app = express();
-const allowedOrigins = new Set([
-  process.env.FRONTEND_URL,
-  'http://localhost:3000',
-  'http://localhost:3001',
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'http://localhost:5175',
-  'http://127.0.0.1:5173',
-  'http://127.0.0.1:5174',
-  'http://127.0.0.1:5175',
-].filter(Boolean));
+const developmentOrigins = process.env.NODE_ENV === 'production' ? [] : [
+  'http://localhost:3000', 'http://localhost:3001',
+  'http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175',
+  'http://127.0.0.1:5173', 'http://127.0.0.1:5174', 'http://127.0.0.1:5175',
+];
+const allowedOrigins = new Set([process.env.FRONTEND_URL, ...developmentOrigins].filter(Boolean));
 
 // In dev, also allow any device on the local network hitting the Vite dev
 // server ports (e.g. an iPad in the control room at http://192.168.x.x:5173).
@@ -59,6 +62,7 @@ const allowedOrigins = new Set([
 const LAN_DEV_ORIGIN = /^http:\/\/(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}):(5173|5174|5175)$/;
 
 app.use(requestId);
+app.use(accessLog);
 app.use(helmet());
 app.use(cors({
   origin: (origin, callback) => {
@@ -74,6 +78,13 @@ app.use(cors({
   },
   credentials: true,
 }));
+
+// Coarse, generous safety net for every route not already covered by its own
+// tighter limiter (e.g. bookings.routes.ts's create-booking/AI limiters) —
+// a burst of concurrent traffic (a live event, a scripted retry storm)
+// shouldn't be able to take the whole process down through an endpoint
+// nobody thought to protect individually.
+app.use(rateLimit({ max: 300, windowMs: 60_000, message: 'Too many requests — please slow down.' }));
 
 // Static uploads — local disk fallback for dev (R2 replaces this in production)
 // When R2_ACCOUNT_ID is set, files are served directly from R2's public URL
@@ -94,8 +105,16 @@ app.use('/uploads', (_req, res, next) => {
 app.use('/api/webhooks', express.raw({ type: 'application/json' }));
 app.use(express.json());
 
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString(), studio: 'dreamz-music-lab' });
+// SCALE_READINESS_ROADMAP.md Tier 0.5 — previously this was a static
+// liveness check only; it would report "ok" even with Postgres unreachable.
+// Now it actually proves the one dependency that matters most.
+app.get('/health', async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'ok', timestamp: new Date().toISOString(), service: 'oiano-api', database: 'connected' });
+  } catch {
+    res.status(503).json({ status: 'error', timestamp: new Date().toISOString(), database: 'unreachable' });
+  }
 });
 
 app.use('/api/auth',                     authRouter);
@@ -103,6 +122,7 @@ app.use('/api/passport',                 passportRouter);
 app.use('/api/passport/stats',           statsRouter);
 app.use('/api/studio/pulse',             pulseRouter);
 app.use('/api/studio',                   studioRouter);
+app.use('/api/studio-policies',          studioPolicyRouter);
 app.use('/api/availability',             availabilityRouter);
 app.use('/api/bookings',                 bookingsRouter);
 app.use('/api/bookings/:id/messages',    messagesRouter);
@@ -122,6 +142,8 @@ app.use('/api/webhooks',                 webhooksRouter);
 app.use('/api/studio-clock',             studioClockRouter);
 app.use('/api/notifications',            notificationsRouter);
 app.use('/api/network-exchange',          networkExchangeRouter);
+app.use('/api/network-metrics',           networkMetricsRouter);
+app.use('/api/contributions',             contributionsRouter);
 app.use('/api/feedback',                  feedbackRouter);
 app.use('/api/studio-circle',             studioCircleRouter);
 app.use('/api/engineers',                engineersRouter);

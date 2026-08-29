@@ -6,6 +6,7 @@ import { sendReceiptEmail } from '../services/email.service';
 import { broadcastToUser } from './notifications.routes';
 import { Prisma } from '@prisma/client';
 import { applyWalletDelta } from '../lib/walletLedger';
+import { recordBookingPayment, recordWalletTopUp, postFinancialTransaction, bookingAllocation } from '../lib/financialLedger';
 
 export const webhooksRouter = Router();
 
@@ -75,12 +76,18 @@ async function handleBookingPayment(session: Stripe.Checkout.Session) {
     include: {
       payment:  true,
       service:  true,
+      studio:   true,
       room:     true,
       engineer: true,
       artist:   { include: { wallet: true, user: true } },
     },
   });
   if (!booking) return;
+  if (!booking.payment) throw new Error(`Stripe checkout ${session.id} references a booking without a payment record`);
+  const expectedCents = Math.round(Number(booking.payment.amount_usd) * 100);
+  if (session.payment_status !== 'paid' || session.currency?.toLowerCase() !== 'usd' || session.amount_total !== expectedCents) {
+    throw new Error(`Stripe checkout ${session.id} does not match booking payment terms`);
+  }
 
   const paymentIntentId = typeof session.payment_intent === 'string'
     ? session.payment_intent
@@ -98,6 +105,7 @@ async function handleBookingPayment(session: Stripe.Checkout.Session) {
       },
     });
     if (claimed.count === 0) return false;
+    await recordBookingPayment(tx, { paymentId: booking.payment!.id, provider: 'stripe', amountUsd: Number(booking.payment!.amount_usd), platformFeeBps: booking.studio.platform_fee_bps, artistId: booking.artist_id, studioId: booking.studio_id, bookingId: booking.id });
 
     // 2. Confirm booking
     await tx.booking.update({ where: { id: bookingId }, data: { status: 'CONFIRMED' } });
@@ -132,7 +140,9 @@ async function handleWalletTopUp(session: Stripe.Checkout.Session) {
   if (!walletId) return;
 
   const amount = Number(session.amount_total ?? 0) / 100;
-  if (!amount) return;
+  if (!amount || session.payment_status !== 'paid' || session.currency?.toLowerCase() !== 'usd') {
+    throw new Error(`Stripe checkout ${session.id} is not a completed USD top-up`);
+  }
 
   const paymentIntentId = typeof session.payment_intent === 'string'
     ? session.payment_intent
@@ -140,6 +150,11 @@ async function handleWalletTopUp(session: Stripe.Checkout.Session) {
 
   // Mark top-up record paid
   const wallet = await prisma.$transaction(async (tx) => {
+    const topUp = await tx.walletTopUp.findFirst({ where: { wallet_id: walletId, provider_ref: session.id } });
+    if (!topUp) return null;
+    if (Math.round(Number(topUp.amount_usd) * 100) !== Math.round(amount * 100)) {
+      throw new Error(`Stripe checkout ${session.id} does not match the recorded top-up amount`);
+    }
     const claimed = await tx.walletTopUp.updateMany({
       where: { wallet_id: walletId, provider_ref: session.id, status: 'PENDING' },
       data: { status: 'PAID', payment_intent_id: paymentIntentId },
@@ -147,6 +162,7 @@ async function handleWalletTopUp(session: Stripe.Checkout.Session) {
     if (claimed.count === 0) return null;
 
     await applyWalletDelta(tx, walletId, amount, 'credit', `Stripe top-up ${session.id.slice(-8).toUpperCase()} - $${amount}`);
+    await recordWalletTopUp(tx, { topUpId: topUp.id, walletId, amountUsd: amount });
 
     return tx.wallet.findUniqueOrThrow({
       where: { id: walletId },
@@ -215,11 +231,29 @@ async function handleRefund(charge: Stripe.Charge) {
   if (!paymentIntentId) return;
 
   const payment = await prisma.payment.findFirst({
-    where: { payment_intent_id: paymentIntentId, status: 'PAID' },
+    where: { payment_intent_id: paymentIntentId, status: { in: ['PAID', 'PARTIALLY_REFUNDED'] } },
+    include: { booking: { include: { studio: true } } },
   });
   if (!payment) return;
-
-  await prisma.payment.update({ where: { id: payment.id }, data: { status: 'REFUNDED' } });
+  const cumulativeRefund = Number(charge.amount_refunded ?? 0) / 100;
+  const delta = Math.round((cumulativeRefund - Number(payment.refunded_usd)) * 100) / 100;
+  if (delta <= 0) return;
+  await prisma.$transaction(async tx => {
+    const claimed = await tx.payment.updateMany({
+      where: { id: payment.id, refunded_usd: payment.refunded_usd },
+      data: {
+        refunded_usd: cumulativeRefund,
+        refund_ref: charge.id,
+        status: cumulativeRefund >= Number(payment.amount_usd) ? 'REFUNDED' : 'PARTIALLY_REFUNDED',
+      },
+    });
+    if (claimed.count !== 1) return;
+    const allocation = bookingAllocation(delta, payment.booking.studio.platform_fee_bps);
+    const lines: Array<{ account_code: string; direction: 'DEBIT'|'CREDIT'; amount_usd: number; owner_type?: string; owner_id?: string }> = [{ account_code: 'CASH_CLEARING', direction: 'CREDIT', amount_usd: allocation.gross }];
+    if (allocation.studioNet > 0) lines.push({ account_code: 'STUDIO_PAYABLE', direction: 'DEBIT', amount_usd: allocation.studioNet, owner_type: 'STUDIO', owner_id: payment.booking.studio_id });
+    if (allocation.platformFee > 0) lines.push({ account_code: 'PLATFORM_REVENUE', direction: 'DEBIT', amount_usd: allocation.platformFee, owner_type: 'PLATFORM', owner_id: 'OIANO' });
+    await postFinancialTransaction(tx, { source_type: 'BOOKING_REFUND', source_id: `${payment.id}:${charge.id}:${cumulativeRefund.toFixed(2)}`, description: `Refund for booking ${payment.booking_id}`, metadata: { payment_id: payment.id, charge_id: charge.id, cumulative_refund_usd: cumulativeRefund }, lines });
+  });
 }
 
 // ── Stripe event construction ─────────────────────────────────────────────────

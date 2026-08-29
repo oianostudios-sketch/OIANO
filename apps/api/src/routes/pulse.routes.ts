@@ -7,24 +7,16 @@ import { attachStudioScope } from '../middleware/studioScope.middleware';
 export const pulseRouter = Router();
 
 // 60-second in-memory cache — pulse data changes at most every few minutes
-// and each load fires 8 DB queries, so caching is a significant win.
-interface PulseCache { data: unknown; expiresAt: number }
+// and each load fires 15 DB queries, so caching is a significant win. Caches
+// the in-flight *promise*, not just the resolved data — with only the
+// resolved value cached, N concurrent requests arriving while the cache is
+// expired/empty would each independently trigger the full fan-out (a
+// cache-miss stampede); caching the promise lets them share one computation.
+interface PulseCache { promise: Promise<unknown>; expiresAt: number }
 const pulseCache = new Map<string, PulseCache>();
 const PULSE_CACHE_TTL = 60_000; // 60 s
 
-pulseRouter.get(
-  '/',
-  authenticate,
-  requireRole('STUDIO_ADMIN'),
-  attachStudioScope,
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const studioId = (req as any).studioId as string;
-      const cached = pulseCache.get(studioId);
-      if (cached && Date.now() < cached.expiresAt) {
-        return res.json(cached.data);
-      }
-
+async function computePulseData(studioId: string, studio: any) {
       const now = new Date();
 
       const todayStart = new Date(now);
@@ -164,7 +156,7 @@ pulseRouter.get(
       const bookedMins = todayBookings.reduce((sum, b) => {
         return sum + (new Date(b.ends_at).getTime() - new Date(b.starts_at).getTime()) / 60_000;
       }, 0);
-      const operatingHours = (req as any).studio.operating_close_hour - (req as any).studio.operating_open_hour;
+      const operatingHours = studio.operating_close_hour - studio.operating_open_hour;
       const availableMins = rooms.length * operatingHours * 60;
       const today_pct = availableMins > 0 ? Math.min(100, Math.round((bookedMins / availableMins) * 100)) : 0;
 
@@ -261,11 +253,11 @@ pulseRouter.get(
         },
         studio: {
           id: studioId,
-          name: (req as any).studio.name,
-          timezone: (req as any).studio.timezone,
-          currency: (req as any).studio.currency,
-          operating_open_hour: (req as any).studio.operating_open_hour,
-          operating_close_hour: (req as any).studio.operating_close_hour,
+          name: studio.name,
+          timezone: studio.timezone,
+          currency: studio.currency,
+          operating_open_hour: studio.operating_open_hour,
+          operating_close_hour: studio.operating_close_hour,
         },
         rooms: rooms.map((room) => ({ ...room, hourly_rate: room.hourly_rate == null ? null : Number(room.hourly_rate) })),
         engineers,
@@ -281,8 +273,35 @@ pulseRouter.get(
         next_moves: next_moves.slice(0, 4),
       };
 
-      pulseCache.set(studioId, { data: responseData, expiresAt: Date.now() + PULSE_CACHE_TTL });
-      res.json(responseData);
+      return responseData;
+}
+
+pulseRouter.get(
+  '/',
+  authenticate,
+  requireRole('STUDIO_ADMIN'),
+  attachStudioScope,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const studioId = (req as any).studioId as string;
+      const cached = pulseCache.get(studioId);
+      if (cached && Date.now() < cached.expiresAt) {
+        return res.json(await cached.promise);
+      }
+
+      // Write the in-flight promise into the cache synchronously, before any
+      // await — any request that lands while this is still resolving sees
+      // this entry on its own `pulseCache.get` and awaits the same promise
+      // instead of starting a second full fan-out.
+      const promise = computePulseData(studioId, (req as any).studio).catch((err) => {
+        // Don't let a failed computation poison the cache for the full TTL —
+        // evict so the next request gets a clean retry instead of the same
+        // rejection for up to 60s.
+        pulseCache.delete(studioId);
+        throw err;
+      });
+      pulseCache.set(studioId, { promise, expiresAt: Date.now() + PULSE_CACHE_TTL });
+      res.json(await promise);
     } catch (err) {
       next(err);
     }

@@ -75,7 +75,7 @@ function LiveBanner() {
 }
 
 function AmbientTicker() {
-  const { todaySessions, roomStatus } = useStudioState();
+  const { todaySessions, roomStatus, studioName } = useStudioState();
   const [index, setIndex] = useState(0);
   const [visible, setVisible] = useState(true);
 
@@ -93,7 +93,7 @@ function AmbientTicker() {
   } else {
     items.push({ label: 'today', value: `${todaySessions.filter((s) => !['CANCELLED', 'NO_SHOW'].includes(s.status ?? '')).length} session${todaySessions.length !== 1 ? 's' : ''} booked` });
   }
-  items.push({ label: 'studio', value: 'Dreamz Music Lab' });
+  items.push({ label: 'studio', value: studioName });
 
   useEffect(() => {
     if (items.length <= 1) return;

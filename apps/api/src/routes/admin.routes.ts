@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
-import { DEFAULT_STUDIO_SLUG } from '@oiano/shared';
 import { broadcastAll } from './notifications.routes';
 import { attachStudioScope } from '../middleware/studioScope.middleware';
 import { applyWalletDelta } from '../lib/walletLedger';
@@ -39,13 +38,21 @@ creditRequestRouter.post('/credit-request', async (req, res, next) => {
 });
 
 // Artist-facing read endpoint. Posting announcements remains admin-only.
-creditRequestRouter.get('/announcements', async (_req, res, next) => {
+creditRequestRouter.get('/announcements', async (req, res, next) => {
   try {
     const db = prisma as any;
-    const studio = await prisma.studio.findUnique({ where: { slug: DEFAULT_STUDIO_SLUG } });
-    if (!studio) throw new AppError('Studio not found', 404);
+    const artist = await prisma.artist.findUnique({ where: { user_id: (req as any).userId } });
+    if (!artist) throw new AppError('Artist not found', 404);
+    const studioId = typeof req.query.studio_id === 'string'
+      ? req.query.studio_id
+      : (await prisma.booking.findFirst({
+          where: { artist_id: artist.id },
+          orderBy: { starts_at: 'desc' },
+          select: { studio_id: true },
+        }))?.studio_id;
+    if (!studioId) return res.json([]);
     const announcements = await db.studioAnnouncement.findMany({
-      where: { studio_id: studio.id },
+      where: { studio_id: studioId },
       orderBy: { created_at: 'desc' },
       take: 10,
     });

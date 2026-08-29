@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { useAuthStore } from '../../store/auth.store';
 
 const API      = import.meta.env.VITE_API_URL    ?? '';
 // WebSocket transport is optional. The API currently exposes the clock over
@@ -94,6 +95,7 @@ export function useClockData(): {
   setPhase: (sessionId: string, phase: SessionPhase) => Promise<void>;
   logOvertime: (sessionId: string, minutes: number, status?: 'pending_approval' | 'approved' | 'logged') => Promise<void>;
 } {
+  const token = useAuthStore((state) => state.token);
   const [data, setData]     = useState<ClockData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]   = useState<string | null>(null);
@@ -103,7 +105,9 @@ export function useClockData(): {
 
   const fetchRest = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/api/studio-clock`);
+      const res = await fetch(`${API}/api/studio-clock`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json: ClockData = await res.json();
       setData(json);
@@ -115,7 +119,7 @@ export function useClockData(): {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [token]);
 
   const startPolling = useCallback(() => {
     if (pollRef.current) return;
@@ -189,18 +193,21 @@ export function useClockData(): {
   }, [startPolling]);
 
   const markActivity = useCallback(async (sessionId: string) => {
-    await fetch(`${API}/api/studio-clock/sessions/${sessionId}/activity`, { method: 'POST' });
+    await fetch(`${API}/api/studio-clock/sessions/${sessionId}/activity`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     await fetchRest();
-  }, [fetchRest]);
+  }, [fetchRest, token]);
 
   const setPhase = useCallback(async (sessionId: string, phase: SessionPhase) => {
     await fetch(`${API}/api/studio-clock/sessions/${sessionId}/phase`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify({ phase }),
     });
     await fetchRest();
-  }, [fetchRest]);
+  }, [fetchRest, token]);
 
   const logOvertime = useCallback(async (
     sessionId: string,
@@ -209,11 +216,11 @@ export function useClockData(): {
   ) => {
     await fetch(`${API}/api/studio-clock/sessions/${sessionId}/overtime`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify({ minutes, status }),
     });
     await fetchRest();
-  }, [fetchRest]);
+  }, [fetchRest, token]);
 
   return { data, loading, error, lastEvent, markActivity, setPhase, logOvertime };
 }

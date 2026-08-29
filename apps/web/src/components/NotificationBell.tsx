@@ -53,7 +53,7 @@ export default function NotificationBell() {
 
   return (
     <button
-      onClick={() => navigate('/notifications')}
+      onClick={() => navigate('/communications?view=priority')}
       className={`relative text-zinc-500 hover:text-white transition-colors p-1${burst ? ' bell-burst' : ''}`}
       aria-label={label}
     >

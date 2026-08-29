@@ -80,6 +80,7 @@ export default function ProducerPassportPage() {
       form.append('avatar', file);
       return api.patch('/producer/avatar', form, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 0, // no cap — uploads can legitimately take longer than the shared instance's default
       });
     },
     onSuccess: () => {
@@ -107,6 +108,7 @@ export default function ProducerPassportPage() {
       form.append('tags', JSON.stringify(trackTags.split(',').map(s => s.trim()).filter(Boolean)));
       return api.post('/producer/tracks', form, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 0, // audio tracks are up to 30MB — no cap
       });
     },
     onSuccess: () => {

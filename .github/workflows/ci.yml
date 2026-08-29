@@ -1,0 +1,92 @@
+name: CI
+
+# SCALE_READINESS_ROADMAP.md Tier 0.4 — until now, every deploy was
+# unverified: no typecheck, no test run, no build check happened
+# automatically. Deliberately minimal: no database service, no live secrets.
+# Every test in the suite is a pure unit test (confirmed before writing this
+# workflow — none of them touch Prisma or a real network call), and neither
+# typecheck nor build executes application code at runtime (env validation
+# only runs when the compiled server actually starts), so none of that is
+# needed here. If that ever changes, this workflow needs a Postgres service
+# and secrets added alongside it — don't assume it'll keep working for free.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Scan tracked files for secrets
+        run: npm run security:secrets
+
+      - name: Validate Prisma schema
+        run: npx prisma validate
+
+      # Needed before typecheck/build/test — apps/api imports @prisma/client's
+      # generated types, and prisma generate only reads schema.prisma, it
+      # never touches a real database.
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Typecheck API
+        run: npm run typecheck --workspace=apps/api
+
+      - name: Typecheck web
+        run: npm run typecheck --workspace=apps/web
+
+      - name: API tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: oiano
+          POSTGRES_PASSWORD: integration-only
+          POSTGRES_DB: oiano_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U oiano -d oiano_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      INTEGRATION_DATABASE_URL: postgresql://oiano:integration-only@localhost:5432/oiano_test
+      JWT_SECRET: integration-only-jwt-secret-change-me
+      MFA_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      FRONTEND_URL: http://localhost:5173
+      STRIPE_ENABLED: 'false'
+      OIANO_AI_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Database-backed platform integration tests
+        run: npm run test:integration --workspace=apps/api

@@ -30,7 +30,8 @@ discoverRouter.get('/', async (req: any, res: Response, next: NextFunction) => {
 
     // All other artists with a passport. Artist has no direct studio relation
     // in the schema (Studio scoping only exists on Room/Booking/etc.) — in
-    // SINGLE_STUDIO_MODE every artist implicitly belongs to the one studio,
+    // Artist identities are network-level records rather than studio-owned
+    // records, so discovery intentionally spans the OIANO network.
     // so no studio filter is needed here.
     const artists = await prisma.artist.findMany({
       where: {

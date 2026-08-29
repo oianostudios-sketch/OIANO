@@ -206,10 +206,40 @@ export default function ArtistProfilePage() {
   const canConnect = user?.role === 'ARTIST' && !isMyProfile;
 
   const uploadFile = useMutation({
+    // Uploads straight from the browser to R2 via a presigned URL — the file
+    // never passes through our API process (SCALE_READINESS_ROADMAP.md Tier
+    // 0.3). Falls back to the old buffered multipart route only when R2
+    // isn't configured server-side (local dev without R2 credentials).
     mutationFn: async (file: File) => {
-      const form = new FormData();
-      form.append('file', file);
-      return api.post(`/artists/${id}/files`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+      let presign;
+      try {
+        presign = await api.post(`/artists/${id}/files/presign`, {
+          filename: file.name,
+          mimeType: file.type || 'application/octet-stream',
+          sizeBytes: file.size,
+        });
+      } catch (err: any) {
+        if (err.response?.status === 501) {
+          const form = new FormData();
+          form.append('file', file);
+          return api.post(`/artists/${id}/files`, form, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 0 });
+        }
+        throw err;
+      }
+
+      const { uploadUrl, key } = presign.data;
+      const putResult = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        body: file,
+      });
+      if (!putResult.ok) throw new Error('Upload to storage failed');
+
+      return api.post(`/artists/${id}/files/complete`, {
+        key,
+        name: file.name,
+        mimeType: file.type || 'application/octet-stream',
+      });
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['artist', id] }); toast.success('File uploaded'); },
     onError: () => toast.error('Upload failed'),

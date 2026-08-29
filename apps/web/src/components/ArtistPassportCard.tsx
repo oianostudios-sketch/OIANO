@@ -61,6 +61,7 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
       form.append('avatar', file);
       return api.patch('/passport/avatar', form, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 0, // no cap — larger than the shared instance's default, uploads can legitimately take longer
       });
     },
     onSuccess: (res) => {

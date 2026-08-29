@@ -83,7 +83,7 @@ export default function ProducerDiscoverPage() {
           <button onClick={() => navigate(-1)} className="text-zinc-500 hover:text-white text-sm transition-colors">← Back</button>
           <div>
             <h1 className="font-display text-xl font-semibold" style={{ color: '#5A9BCB' }}>Producers</h1>
-            <p className="text-zinc-600 text-xs font-mono">Dreamz Music Lab catalogue</p>
+            <p className="text-zinc-600 text-xs font-mono">OIANO producer catalogue</p>
           </div>
           {!isLoading && (
             <span className="ml-auto text-xs text-zinc-600 font-mono">

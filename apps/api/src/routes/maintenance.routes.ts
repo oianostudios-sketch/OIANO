@@ -3,6 +3,7 @@ import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { prisma } from '../lib/prisma';
 import { auditMaintenanceAccess } from '../lib/adminAudit';
 import { findWalletDrift } from '../lib/walletLedger';
+import { reconcileFinancialLedger } from '../lib/financialReconciliation';
 
 export const maintenanceRouter = Router();
 
@@ -230,15 +231,16 @@ maintenanceRouter.get('/bookings', async (_req, res, next) => {
 
 maintenanceRouter.get('/finance', async (_req, res, next) => {
   try {
-    const [payments, bookingValue, wallets, topUps, walletDrift] = await Promise.all([
+    const [payments, bookingValue, wallets, topUps, walletDrift, ledgerReconciliation] = await Promise.all([
       prisma.payment.findMany({ orderBy: { created_at: 'desc' }, take: 200, include: { booking: { select: { id: true, studio: { select: { id: true, name: true } }, artist: { select: { name: true, alias: true } } } } } }),
       prisma.booking.aggregate({ where: { status: { notIn: ['CANCELLED', 'NO_SHOW'] } }, _sum: { total_usd: true } }),
       prisma.wallet.aggregate({ _sum: { balance_usd: true } }),
       prisma.walletTopUp.aggregate({ where: { status: 'PAID' }, _sum: { amount_usd: true } }),
       findWalletDrift(),
+      reconcileFinancialLedger(),
     ]);
-    const paid = payments.filter((payment) => payment.status === 'PAID');
-    const collected = paid.reduce((sum, payment) => sum + Number(payment.amount_usd), 0);
+    const paid = payments.filter((payment) => ['PAID','PARTIALLY_REFUNDED','REFUNDED'].includes(payment.status));
+    const collected = paid.reduce((sum, payment) => sum + Number(payment.amount_usd) - Number(payment.refunded_usd), 0);
     const providers = Object.entries(paid.reduce<Record<string, { count:number; volume:number }>>((acc, payment) => {
       acc[payment.provider] ??= { count: 0, volume: 0 }; acc[payment.provider].count += 1; acc[payment.provider].volume += Number(payment.amount_usd); return acc;
     }, {})).map(([provider, values]) => ({ provider, ...values }));
@@ -251,14 +253,15 @@ maintenanceRouter.get('/finance', async (_req, res, next) => {
         wallet_liability: Number(wallets._sum.balance_usd ?? 0),
         wallet_topups: Number(topUps._sum.amount_usd ?? 0),
         failed: payments.filter(p => p.status === 'FAILED').length,
-        refunded: payments.filter(p => p.status === 'REFUNDED').reduce((s, p) => s + Number(p.amount_usd), 0),
+        refunded: payments.reduce((s, p) => s + Number(p.refunded_usd), 0),
         processing: payments.filter(p => p.status === 'PROCESSING').length,
         wallet_drift_count: walletDrift.length,
       },
       providers,
       studios: [...studioMap.values()].sort((a, b) => b.collected - a.collected),
-      payments: payments.map(p => ({ id: p.id, created_at: p.created_at, paid_at: p.paid_at, status: p.status, provider: p.provider, amount_usd: Number(p.amount_usd), studio: p.booking.studio.name, artist: p.booking.artist.alias ?? p.booking.artist.name, booking_id: p.booking.id })),
+      payments: payments.map(p => ({ id: p.id, created_at: p.created_at, paid_at: p.paid_at, status: p.status, provider: p.provider, amount_usd: Number(p.amount_usd), refunded_usd: Number(p.refunded_usd), studio: p.booking.studio.name, artist: p.booking.artist.alias ?? p.booking.artist.name, booking_id: p.booking.id })),
       wallet_reconciliation: walletDrift,
+      ledger_reconciliation: ledgerReconciliation,
     });
   } catch (error) { next(error); }
 });

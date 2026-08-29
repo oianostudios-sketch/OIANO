@@ -12,6 +12,7 @@ import { getAudioUpload } from '../lib/audioUpload';
 import { generatePassportCode } from '../lib/passport';
 import { auditSuccessfulMutation } from '../lib/adminAudit';
 import { ownershipSharesAreValid } from '../lib/resourceAuthorization';
+import { createNotification } from './notifications.routes';
 
 export const producerRouter = Router();
 producerRouter.use(authenticate);
@@ -85,7 +86,7 @@ producerRouter.patch('/avatar', requireRole('PRODUCER'), async (req: any, res, n
 });
 
 // ── POST /api/producer/setup — create producer profile on first login ─────────
-producerRouter.post('/setup', async (req: any, res, next) => {
+producerRouter.post('/setup', requireRole('PRODUCER'), async (req: any, res, next) => {
   try {
     const { name, alias, bio } = z.object({
       name:  z.string().min(1).max(120),
@@ -166,10 +167,10 @@ producerRouter.get('/projects', requireRole('PRODUCER'), async (req: any, res, n
           include: { room: true, service: true, deliverables: { select: { id: true, title: true, status: true, current_version: true } } },
           orderBy: { starts_at: 'desc' },
         },
-        participants: { where: { status: 'ACTIVE' }, orderBy: { created_at: 'asc' } },
+        participants: { where: { status: { not: 'REMOVED' } }, orderBy: { created_at: 'asc' } },
         credits: { orderBy: { created_at: 'asc' } },
         promotional_consents: { orderBy: { created_at: 'desc' } },
-        rights_agreements: { include: { shares: { orderBy: { percentage: 'desc' } } }, orderBy: { created_at: 'desc' } },
+        rights_agreements: { include: { shares: { orderBy: { percentage: 'desc' } }, decisions: { orderBy: { created_at: 'asc' } } }, orderBy: { created_at: 'desc' } },
       },
       orderBy: { updated_at: 'desc' },
     });
@@ -180,7 +181,7 @@ producerRouter.get('/projects', requireRole('PRODUCER'), async (req: any, res, n
 const ParticipantSchema = z.object({
   display_name: z.string().trim().min(1).max(120),
   email: z.string().trim().email().max(254).optional().or(z.literal('')),
-  role: z.enum(['FEATURED_ARTIST', 'PRODUCER', 'ENGINEER', 'SONGWRITER', 'COMPOSER', 'MIX_ENGINEER', 'MASTERING_ENGINEER', 'MANAGER', 'OTHER']),
+  role: z.enum(['FEATURED_ARTIST', 'PRODUCER', 'CO_PRODUCER', 'ENGINEER', 'RECORDING_ENGINEER', 'SONGWRITER', 'COMPOSER', 'MIX_ENGINEER', 'MASTERING_ENGINEER', 'MUSICIAN', 'VOCALS', 'MANAGER', 'OTHER']),
 });
 
 producerRouter.post('/projects/:id/participants', requireRole('PRODUCER'), async (req: any, res, next) => {
@@ -196,11 +197,14 @@ producerRouter.post('/projects/:id/participants', requireRole('PRODUCER'), async
         project_id: project.id,
         display_name: { equals: data.display_name, mode: 'insensitive' },
         role: data.role,
-        status: 'ACTIVE',
+        status: { not: 'REMOVED' },
       },
     });
     if (duplicate) throw new AppError('This participant already has that role', 409);
 
+    const matchedUser = data.email
+      ? await db.user.findFirst({ where: { email: { equals: data.email, mode: 'insensitive' } }, select: { id: true } })
+      : null;
     const participant = await db.projectParticipant.create({
       data: {
         project_id: project.id,
@@ -208,7 +212,18 @@ producerRouter.post('/projects/:id/participants', requireRole('PRODUCER'), async
         email: data.email || null,
         role: data.role,
         added_by: req.userId,
+        status: data.email ? 'INVITED' : 'ACTIVE',
+        participant_ref_id: matchedUser?.id ?? null,
+        participant_type: data.email ? 'INVITED' : 'EXTERNAL',
       },
+    });
+    if (participant.participant_ref_id) await createNotification({
+      user_id: participant.participant_ref_id,
+      type: 'CONTRIBUTION_INVITATION', category: 'PROJECT', priority: 'HIGH',
+      title: `Contribution invitation · ${project.title}`,
+      body: `You were invited as ${data.role.toLowerCase().replace(/_/g, ' ')}. Review the role before joining the project.`,
+      payload: { project_id: project.id, participant_id: participant.id },
+      action_url: '/contributions',
     });
     res.status(201).json(participant);
   } catch (err) { next(err); }
@@ -241,25 +256,21 @@ producerRouter.post('/projects/:id/credits', requireRole('PRODUCER'), async (req
     if (!producer) throw new AppError('Producer not found', 404);
     const project = await db.project.findFirst({ where: { id: req.params.id, producer_id: producer.id, is_active: true } });
     if (!project) throw new AppError('Project not found', 404);
-    if (data.participant_id) {
-      const participant = await db.projectParticipant.findFirst({ where: { id: data.participant_id, project_id: project.id, status: 'ACTIVE' } });
+    let participantId = data.participant_id;
+    if (!participantId) {
+      participantId = (await db.projectParticipant.findFirst({
+        where: { project_id: project.id, display_name: { equals: data.credited_name, mode: 'insensitive' }, status: 'ACTIVE' },
+        select: { id: true },
+      }))?.id;
+    }
+    if (participantId) {
+      const participant = await db.projectParticipant.findFirst({ where: { id: participantId, project_id: project.id, status: 'ACTIVE' } });
       if (!participant) throw new AppError('Project participant not found', 404);
     }
     const duplicate = await db.projectCredit.findFirst({ where: { project_id: project.id, credited_name: { equals: data.credited_name, mode: 'insensitive' }, role: data.role } });
     if (duplicate) throw new AppError('This credit is already listed', 409);
-    const credit = await db.projectCredit.create({ data: { ...data, scope: data.scope || null, participant_id: data.participant_id || null, project_id: project.id, added_by: req.userId } });
+    const credit = await db.projectCredit.create({ data: { ...data, scope: data.scope || null, participant_id: participantId || null, project_id: project.id, added_by: req.userId } });
     res.status(201).json(credit);
-  } catch (err) { next(err); }
-});
-
-producerRouter.patch('/projects/:id/credits/:creditId', requireRole('PRODUCER'), async (req: any, res, next) => {
-  try {
-    const data = z.object({ status: z.enum(['DRAFT', 'CONFIRMED', 'DISPUTED']) }).parse(req.body);
-    const producer = await db.producer.findUnique({ where: { user_id: req.userId } });
-    if (!producer) throw new AppError('Producer not found', 404);
-    const credit = await db.projectCredit.findFirst({ where: { id: req.params.creditId, project_id: req.params.id, project: { producer_id: producer.id } } });
-    if (!credit) throw new AppError('Project credit not found', 404);
-    res.json(await db.projectCredit.update({ where: { id: credit.id }, data }));
   } catch (err) { next(err); }
 });
 
@@ -310,8 +321,21 @@ producerRouter.post('/projects/:id/rights-agreements', requireRole('PRODUCER'), 
     if (!project) throw new AppError('Project with an artist not found', 404);
     const existing = await db.rightsAgreement.findFirst({ where: { project_id: project.id, agreement_type: data.agreement_type, status: { in: ['PROPOSED','APPROVED'] } } });
     if (existing) throw new AppError(`An active ${data.agreement_type.toLowerCase()} agreement already exists`, 409);
-    const agreement = await db.rightsAgreement.create({ data: { project_id: project.id, agreement_type: data.agreement_type, title: data.title, terms_note: data.terms_note, created_by: req.userId, shares: { create: data.shares } }, include: { shares: true } });
-    await db.notification.create({ data: { user_id: project.artist!.user_id, type: 'RIGHTS_PROPOSAL', title: `${data.agreement_type === 'MASTER' ? 'Master' : 'Publishing'} split proposed`, body: `Review the ownership proposal for ${project.title}.`, payload: { project_id: project.id, agreement_id: agreement.id } } });
+    const normalizedShares = await Promise.all(data.shares.map(async share => {
+      let holderUserId: string | null = null;
+      if (share.holder_type === 'ARTIST' && share.holder_ref_id === project.artist!.id) holderUserId = project.artist!.user_id;
+      if (share.holder_type === 'PRODUCER' && share.holder_ref_id === producer.id) holderUserId = producer.user_id;
+      if (share.holder_type === 'PARTICIPANT' && share.holder_ref_id) holderUserId = (await db.projectParticipant.findFirst({ where: { id: share.holder_ref_id, project_id: project.id, status: 'ACTIVE' }, select: { participant_ref_id: true } }))?.participant_ref_id ?? null;
+      return { ...share, holder_ref_id: holderUserId ?? share.holder_ref_id, holderUserId };
+    }));
+    if (normalizedShares.some(share => !share.holderUserId)) throw new AppError('Every rights holder must be linked to an accepted OIANO identity before this proposal can be sent', 400);
+    const decisionHolders = normalizedShares.filter(share => share.holderUserId).filter((share, index, all) => all.findIndex(item => item.holderUserId === share.holderUserId) === index);
+    const agreement = await db.rightsAgreement.create({ data: {
+      project_id: project.id, agreement_type: data.agreement_type, title: data.title, terms_note: data.terms_note, created_by: req.userId,
+      shares: { create: normalizedShares.map(({ holderUserId: _holderUserId, ...share }) => share) },
+      decisions: { create: decisionHolders.map(holder => ({ holder_user_id: holder.holderUserId!, holder_name: holder.holder_name, status: holder.holderUserId === req.userId ? 'APPROVED' : 'PENDING', responded_at: holder.holderUserId === req.userId ? new Date() : null, evidence: holder.holderUserId === req.userId ? { method: 'PROPOSAL_AUTHORSHIP' } : undefined })) },
+    }, include: { shares: true, decisions: true } });
+    for (const holder of decisionHolders.filter(holder => holder.holderUserId !== req.userId)) await createNotification({ user_id: holder.holderUserId!, type: 'RIGHTS_PROPOSAL', category: 'PROJECT', priority: 'HIGH', title: `${data.agreement_type === 'MASTER' ? 'Master' : 'Publishing'} split proposed`, body: `Review your named share for ${project.title}.`, payload: { project_id: project.id, agreement_id: agreement.id }, action_url: holder.holderUserId === project.artist!.user_id ? '/projects' : '/contributions' });
     res.status(201).json(agreement);
   } catch (err) { next(err); }
 });

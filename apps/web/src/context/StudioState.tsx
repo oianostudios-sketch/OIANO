@@ -41,6 +41,7 @@ function computeSunArc(date: Date) {
 }
 
 interface StudioStateValue {
+  studioName: string;
   isLive: boolean;
   activeSession: any | null;
   todaySessions: any[];
@@ -49,6 +50,7 @@ interface StudioStateValue {
 }
 
 const Ctx = createContext<StudioStateValue>({
+  studioName: 'OIANO Studio Network',
   isLive: false,
   activeSession: null,
   todaySessions: [],
@@ -76,7 +78,7 @@ export function StudioStateProvider({ children }: { children: React.ReactNode })
 
   const { data: studio } = useQuery({
     queryKey: ['studio'],
-    queryFn: async () => (await api.get('/studio')).data,
+    queryFn: async () => (await api.get('/studio/current')).data,
     enabled: !!token,
     staleTime: 5 * 60_000,
   });
@@ -154,12 +156,12 @@ export function StudioStateProvider({ children }: { children: React.ReactNode })
     const liveStr = activeSession
       ? `● LIVE · ${activeSession.artist?.name ?? 'Session'} · ${activeSession.room?.name ?? 'Studio'}`
       : 'STUDIO ONLINE';
-    return `${liveStr}   ·   ${rooms}   ·   ${nextStr}   ·   DREAMZ MUSIC LAB`;
-  }, [roomStatus, todaySessions, activeSession, now]);
+    return `${liveStr}   ·   ${rooms}   ·   ${nextStr}   ·   ${(studio?.name ?? 'OIANO STUDIO NETWORK').toUpperCase()}`;
+  }, [roomStatus, todaySessions, activeSession, now, studio?.name]);
 
   const value = useMemo(() => ({
-    isLive, activeSession, todaySessions, roomStatus, tickerText,
-  }), [isLive, activeSession, todaySessions, roomStatus, tickerText]);
+    studioName: studio?.name ?? 'OIANO Studio Network', isLive, activeSession, todaySessions, roomStatus, tickerText,
+  }), [studio?.name, isLive, activeSession, todaySessions, roomStatus, tickerText]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

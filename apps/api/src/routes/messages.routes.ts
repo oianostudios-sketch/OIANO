@@ -19,8 +19,11 @@ type MessageBookingAccess = {
 };
 
 async function hasBookingMessageAccess(booking: MessageBookingAccess, userId: string, userRole: string) {
+  // Checked against the booking's own studio, not the admin's currently-active
+  // one — a STUDIO_ADMIN staffing multiple studios can access messages for
+  // any booking at any studio they're a member of.
   const staff = userRole === 'STUDIO_ADMIN'
-    ? await prisma.studioStaff.findUnique({ where: { user_id: userId } })
+    ? await prisma.studioStaff.findUnique({ where: { user_id_studio_id: { user_id: userId, studio_id: booking.studio_id } } })
     : null;
   return canAccessBookingMessages({
     artistUserId: booking.artist?.user_id ?? null,

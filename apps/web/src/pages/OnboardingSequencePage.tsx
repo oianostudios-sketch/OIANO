@@ -9,6 +9,8 @@ import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
+import { refreshMe } from '../lib/refreshMe';
+import { useToast } from '../components/Toast';
 
 // Dome (Aegean blue) is the everyday primary — selection states, confirm
 // actions. Sunset (warm amber, matches --amber/--live-accent) is reserved for
@@ -35,53 +37,44 @@ function IdentityStep({ onAdvance }: { onAdvance: (s: Partial<SharedState>) => v
   const [genre, setGenre] = useState<string | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [showAllGenres, setShowAllGenres] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const toast = useToast();
 
   const visibleGenres = showAllGenres ? GENRES : GENRES.slice(0, 6);
 
   function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Local blob preview only proves the browser read the file — it says
+    // nothing about whether the upload actually reached the server, so it's
+    // shown alongside real upload state below, not instead of it.
     setAvatarPreview(URL.createObjectURL(file));
+    setUploadingPhoto(true);
     const form = new FormData();
     form.append('avatar', file);
-    api.patch('/passport/avatar', form, { headers: { 'Content-Type': 'multipart/form-data' } })
-      .then((res) => {
-        // Same class of bug as the name field below: the local blob preview
-        // makes this screen look correct, but the Zustand auth store never
-        // hears about the new avatar_url, so it reverts to blank everywhere
-        // else in the app (Passport, Dashboard, Discover...) the moment this
-        // screen unmounts.
-        const { user, token } = useAuthStore.getState();
-        if (user?.artist && token) {
-          useAuthStore.getState().setAuth(token, {
-            ...user,
-            artist: { ...user.artist, avatar_url: res.data.avatar_url },
-          });
-        }
+    const { token, setAuth } = useAuthStore.getState();
+    api.patch('/passport/avatar', form, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 0 })
+      .then(() => refreshMe(setAuth, token))
+      .catch((err) => {
+        console.error('[onboarding] avatar upload failed:', err?.message);
+        setAvatarPreview(null);
+        toast.error("Your photo didn't upload — try again.");
       })
-      .catch((err) => console.error('[onboarding] avatar upload failed:', err?.message));
+      .finally(() => setUploadingPhoto(false));
   }
 
   function selectGenre(g: string) {
     setGenre(g);
     const trimmedName = name.trim();
+    const { token, setAuth } = useAuthStore.getState();
     // Auto-advance the moment a genre is picked — name/photo can be filled
     // later, this isn't gated on completeness.
     api.patch('/passport/profile', {
       name: trimmedName || undefined,
       creative_dna: { genres: [g] },
-    }).then(() => {
-      // The auth store's cached user snapshot is never refetched after
-      // signup — update it locally so PassportPage etc. don't show the
-      // pre-onboarding placeholder name right after the user just set it.
-      const { user, token } = useAuthStore.getState();
-      if (user?.artist && token) {
-        useAuthStore.getState().setAuth(token, {
-          ...user,
-          artist: { ...user.artist, name: trimmedName || user.artist.name },
-        });
-      }
-    }).catch((err) => console.error('[onboarding] profile save failed:', err?.message));
+    })
+      .then(() => refreshMe(setAuth, token))
+      .catch((err) => console.error('[onboarding] profile save failed:', err?.message));
     onAdvance({ name: trimmedName || undefined, genre: g });
   }
 
@@ -95,13 +88,25 @@ function IdentityStep({ onAdvance }: { onAdvance: (s: Partial<SharedState>) => v
           border: '1px solid #2a2a2a',
         }}>
           {avatarPreview && (
-            <img src={avatarPreview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <img src={avatarPreview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: uploadingPhoto ? 0.5 : 1 }} />
           )}
           {!avatarPreview && (
             <span style={{
               position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
               justifyContent: 'center', color: DOME, fontSize: 22, opacity: 0.6,
             }}>+</span>
+          )}
+          {uploadingPhoto && (
+            <span style={{
+              position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <span style={{
+                width: 20, height: 20, borderRadius: '50%',
+                border: '2px solid rgba(90,155,203,0.25)', borderTopColor: DOME,
+                animation: 'onb-spin 0.7s linear infinite',
+              }} />
+            </span>
           )}
           <input type="file" accept="image/*" onChange={handlePhoto} style={{ display: 'none' }} />
         </label>

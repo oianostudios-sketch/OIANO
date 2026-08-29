@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/auth.store';
 import { api } from '../lib/api';
@@ -11,10 +11,9 @@ import SessionStats from '../components/SessionStats';
 import OianoBrand from '../components/OianoBrand';
 import ArtistStatusToggle from '../components/ArtistStatusToggle';
 import { fmtTime as _fmtTime, fmtDateShort as _fmtDateShort } from '../lib/fmt';
-import { CalendarDays, Compass, FolderKanban, IdCard, Mic2, Pencil } from 'lucide-react';
+import { CalendarDays, Compass, Mic2, Pencil } from 'lucide-react';
 import ArtistAvatar from '../components/ArtistAvatar';
 import { STATUS_HEX } from '../lib/bookingStatus';
-import NetworkExchangePanel from '../components/NetworkExchangePanel';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -48,12 +47,6 @@ function totalHours(bookings: any[]) {
   }, 0);
 }
 
-function dominantRoom(bookings: any[]) {
-  const counts: Record<string, number> = {};
-  bookings.forEach(b => { if (b.room?.name) counts[b.room.name] = (counts[b.room.name] ?? 0) + 1; });
-  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
-}
-
 // ── Animated counter ──────────────────────────────────────────────────────────
 
 function useCounter(target: number, duration = 1000) {
@@ -77,7 +70,7 @@ function useCounter(target: number, duration = 1000) {
 
 // ── Countdown to next session ─────────────────────────────────────────────────
 
-function SessionCountdown({ session }: { session: any }) {
+export function SessionCountdown({ session }: { session: any }) {
   const [label, setLabel] = useState('');
   const [progress, setProgress] = useState(0);
 
@@ -182,7 +175,7 @@ function StudioBar() {
     : next
       ? { label: `Next session ${minsUntil(next.starts_at)} · ${fmtTime(next.starts_at)}`, color: '#6aa9d2', href: (next as any).id ? `/bookings/${(next as any).id}` : '/calendar' }
       : { label: 'Studio ready', color: '#4fa98a', href: '/calendar' };
-  const messages = [studioMessage, ...tickerNotifications.filter((notification: any) => !notification.read_at).slice(0, 4).map((notification: any) => ({ label: notification.title, color: '#d3b35c', href: notification.payload?.booking_id ? `/bookings/${notification.payload.booking_id}` : '/notifications' }))];
+  const messages = [studioMessage, ...tickerNotifications.filter((notification: any) => !notification.read_at).slice(0, 4).map((notification: any) => ({ label: notification.title, color: '#d3b35c', href: notification.payload?.booking_id ? `/bookings/${notification.payload.booking_id}` : '/communications?view=priority' }))];
   const current = messages[messageIndex % messages.length] ?? studioMessage;
 
   useEffect(() => {
@@ -265,13 +258,7 @@ export default function DashboardPage() {
 
   const { data: studio } = useQuery({
     queryKey: ['studio'],
-    queryFn: async () => (await api.get('/studio')).data,
-  });
-
-  const requestCredit = useMutation({
-    mutationFn: () => api.post('/admin/credit-request', {}),
-    onSuccess: () => toast.success('Credit request sent — the studio will top you up'),
-    onError: () => toast.error('Failed to send request'),
+    queryFn: async () => (await api.get('/studio/current')).data,
   });
 
   async function handleTopUp() {
@@ -292,10 +279,6 @@ export default function DashboardPage() {
   const balance  = Number(artist?.wallet?.balance_usd ?? 0);
 
   const profileScore = portfolioData?.score ?? (passport as any)?.profile_strength ?? 0;
-  const missingFields = (portfolioData?.score_breakdown ?? [])
-    .filter((item: any) => item.earned < item.max)
-    .map((item: any) => ({ label: item.label, done: false }));
-
   const allBookings = Array.isArray(bookings) ? bookings : (bookings as any)?.data ?? [];
 
   const upcoming = useMemo(() =>
@@ -324,7 +307,6 @@ export default function DashboardPage() {
   const cHours     = useCounter(Math.round(totalHours(completed)));
   const cCompleted = useCounter(completed.length);
 
-  const favRoom = dominantRoom(allBookings);
   const creativeDNA  = (passport as any)?.creative_dna ?? {};
   const genres       = creativeDNA.genres ?? [];
   const vocalType    = creativeDNA.vocal_type ?? null;
@@ -350,11 +332,12 @@ export default function DashboardPage() {
         .db-focus-card:hover { border-color: rgba(106,169,210,.34) !important; transform: translateY(-2px); }
         .db-signal-card:hover { border-color: rgba(255,255,255,.13) !important; transform: translateY(-1px); }
         .db-action-tile:hover { color: #f3f1eb !important; background: rgba(106,169,210,.08) !important; border-color: rgba(106,169,210,.2) !important; }
-        .db-legacy-actions, .db-legacy-profile, .db-legacy-wallet, .db-legacy-session, .db-legacy-presence, .db-legacy-discover, .db-legacy-profile-nudge, .db-legacy-session-history { display: none !important; }
+        .db-legacy-session-history, .db-legacy-profile-nudge { display: none !important; }
         .db-two-col { grid-template-columns: 1fr !important; }
         .db-col-left { min-height: 0; }
         .db-insights summary::-webkit-details-marker { display: none; }
         .db-mobile-status { display: none; }
+        .db-header { display: flex; }
         @media (max-width: 768px) {
           .db-header { display: none; }
           .db-main { padding: 20px 16px 100px !important; }
@@ -370,18 +353,18 @@ export default function DashboardPage() {
           .db-mobile-status { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
           .db-briefing { grid-template-columns: 1fr 1fr !important; }
           .db-focus-card { grid-column: 1 / -1; min-height: 210px !important; }
-          .db-action-dock { grid-template-columns: repeat(3, 1fr) !important; }
+          .db-action-dock { grid-template-columns: repeat(2, 1fr) !important; }
         }
         @media (max-width: 520px) {
           .db-briefing { grid-template-columns: 1fr !important; }
           .db-focus-card { grid-column: auto; }
           .db-hero-stats { width: 100%; justify-content: space-between; }
-          .db-action-dock { grid-template-columns: repeat(3, 1fr) !important; }
+          .db-action-dock { grid-template-columns: repeat(2, 1fr) !important; }
         }
       `}</style>
 
       {/* Nav */}
-      <header className="db-header" style={{ borderBottom: '1px solid #141414', padding: '14px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <header className="db-header" style={{ borderBottom: '1px solid #141414', padding: '14px 24px', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <OianoBrand variant="compact" size={20} />
           <span style={{ color: '#2a2a2a', fontSize: 11, fontFamily: 'monospace' }}>StudioOS</span>
@@ -460,13 +443,11 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <NetworkExchangePanel compact />
-
         {/* ── Two-column grid ── */}
         <section className="db-fade db-fade-1" aria-labelledby="today-heading">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
             <p id="today-heading" style={{ fontSize: 10, color: '#777', fontFamily: 'monospace', letterSpacing: '0.14em', textTransform: 'uppercase' }}>Today at OIANO</p>
-            <span style={{ fontSize: 10, color: '#3f454a', fontFamily: 'monospace' }}>{studio?.name ?? 'Dreamz Music Lab'}</span>
+            <span style={{ fontSize: 10, color: '#3f454a', fontFamily: 'monospace' }}>{studio?.name ?? 'OIANO Network'}</span>
           </div>
           <div className="db-briefing" style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 1.65fr) repeat(4, minmax(0, 1fr))', gap: 12 }}>
             <Link className="db-focus-card" to={primaryAction.to} style={{ minHeight: 180, position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: 22, borderRadius: 16, textDecoration: 'none', background: '#0a0f13', border: '1px solid rgba(106,169,210,.2)', boxShadow: '0 24px 70px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.04)' }}>
@@ -506,12 +487,10 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <nav className="db-action-dock db-fade db-fade-1" aria-label="Artist shortcuts" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 8, padding: 8, borderRadius: 16, background: 'rgba(14,17,19,.72)', border: '1px solid rgba(255,255,255,.07)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.025)' }}>
+        <nav className="db-action-dock db-fade db-fade-1" aria-label="Artist shortcuts" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, padding: 8, borderRadius: 16, background: 'rgba(14,17,19,.72)', border: '1px solid rgba(255,255,255,.07)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.025)' }}>
           {[
             { label: 'Book studio', to: '/book', Icon: Mic2 },
             { label: 'My schedule', to: '/calendar', Icon: CalendarDays },
-            { label: 'Artist Passport', to: '/artist/passport', Icon: IdCard },
-            { label: 'Projects', to: '/projects', Icon: FolderKanban },
             { label: 'Producers', to: '/producers', Icon: Compass },
           ].map(({ label, to, Icon }) => (
             <Link key={label} className="db-action-tile" to={to} style={{ minHeight: 66, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 7, color: '#898d90', textDecoration: 'none', border: '1px solid transparent', borderRadius: 11, fontSize: 10 }}>
@@ -529,89 +508,6 @@ export default function DashboardPage() {
 
           {/* LEFT: Account actions */}
           <div className="db-col-left" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {/* Quick actions */}
-            <div className="db-legacy-actions" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div className="db-inner-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <Link to="/artist/passport" style={{ display: 'block', textAlign: 'center', fontSize: 11, color: '#5A9BCB', border: '1px solid rgba(90,155,203,0.3)', background: 'rgba(90,155,203,0.06)', padding: '9px 0', borderRadius: 7, textDecoration: 'none' }}>
-                  Open my passport
-                </Link>
-                <button onClick={() => setEditOpen(true)} style={{ fontSize: 11, color: '#888', border: '1px solid #1e1e1e', padding: '9px 0', borderRadius: 7, background: 'none', cursor: 'pointer' }}>
-                  Edit profile
-                </button>
-              </div>
-              {artist?.id && (
-                <Link to={`/artists/${artist.id}`} style={{ display: 'block', textAlign: 'center', fontSize: 11, color: '#555', border: '1px solid #141414', padding: '8px 0', borderRadius: 7, textDecoration: 'none' }}>
-                  Full artist profile
-                </Link>
-              )}
-            </div>
-
-            {/* Profile completion nudge */}
-            <div className="db-legacy-profile" style={{ background: '#0f0f0f', border: '1px solid #1a1200', borderRadius: 10, padding: '14px 16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <p style={{ fontSize: 10, color: '#5A9BCB', fontFamily: 'monospace', letterSpacing: '0.1em', margin: 0 }}>PASSPORT STRENGTH</p>
-                <span style={{ fontSize: 12, fontWeight: 700, color: profileScore >= 80 ? '#4ade80' : '#C9A84C' }}>{profileScore}%</span>
-              </div>
-              <div style={{ height: 4, background: '#1a1a1a', borderRadius: 2, overflow: 'hidden', marginBottom: 10 }}>
-                <div style={{ height: '100%', width: `${profileScore}%`, background: profileScore >= 80 ? '#4ade80' : '#C9A84C', borderRadius: 2, transition: 'width 0.6s ease' }} />
-              </div>
-              {profileScore < 100 && missingFields.length > 0 && (
-                <p style={{ fontSize: 11, color: '#555', margin: '0 0 8px' }}>
-                  Missing: {missingFields.map((f: { label: string }) => f.label).join(', ')}
-                </p>
-              )}
-              {/* Profile view count — shows when someone has looked */}
-              {(passport as any)?.profile_views > 0 && (
-                <p style={{ fontSize: 11, color: '#3a6a3a', margin: '0 0 8px', fontFamily: 'monospace' }}>
-                  👁 Viewed {(passport as any).profile_views} time{(passport as any).profile_views !== 1 ? 's' : ''} by engineers
-                </p>
-              )}
-              <button onClick={() => setEditOpen(true)} style={{ fontSize: 11, color: '#5A9BCB', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-                {profileScore < 100 ? 'Complete profile →' : 'Edit profile →'}
-              </button>
-            </div>
-
-            {/* Wallet — framed as studio investment, not a gate */}
-            <div className="db-legacy-wallet" style={{ background: '#111', border: `1px solid ${balance > 0 ? '#1e1e0a' : '#1a1a1a'}`, borderRadius: 10, padding: '14px 16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <p style={{ fontSize: 10, color: '#3a3a3a', fontFamily: 'monospace', letterSpacing: '0.1em', margin: 0 }}>STUDIO CREDIT</p>
-                {balance > 0 && (
-                  <span style={{ fontSize: 9, color: '#2a4a2a', fontFamily: 'monospace', background: '#1a2a1a', padding: '2px 7px', borderRadius: 99 }}>
-                    ~{Math.floor(balance / 50)} session{Math.floor(balance / 50) !== 1 ? 's' : ''} available
-                  </span>
-                )}
-              </div>
-              {balance > 0 ? (
-                <p style={{ fontFamily: "'Playfair Display', serif", fontSize: 26, color: '#5A9BCB', fontWeight: 600, margin: 0 }}>
-                  ${balance.toFixed(2)}
-                </p>
-              ) : (
-                <div>
-                  <p style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, color: '#443', fontWeight: 600, margin: '0 0 2px' }}>
-                    {completed.length > 0
-                      ? `${completed.length} session${completed.length !== 1 ? 's' : ''} recorded here`
-                      : 'Ready when you are'}
-                  </p>
-                  <p style={{ fontSize: 11, color: '#333', margin: 0 }}>
-                    {completed.length > 0
-                      ? 'Add credits to book your next session →'
-                      : 'Add credits to book your first session'}
-                  </p>
-                </div>
-              )}
-              <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                <button onClick={() => setTopUpOpen(true)}
-                  style={{ flex: 1, fontSize: 11, fontWeight: 600, color: '#000', background: '#5A9BCB', border: 'none', padding: '8px 0', borderRadius: 6, cursor: 'pointer' }}>
-                  + Add credits
-                </button>
-                <button onClick={() => requestCredit.mutate()}
-                  disabled={requestCredit.isPending || requestCredit.isSuccess}
-                  style={{ flex: 1, fontSize: 11, color: '#666', background: 'none', border: '1px solid #222', padding: '8px 0', borderRadius: 6, cursor: 'pointer' }}>
-                  {requestCredit.isSuccess ? '✓ Requested' : 'Request free'}
-                </button>
-              </div>
-            </div>
-
             {/* Top-up modal */}
             {topUpOpen && (
               <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
@@ -667,20 +563,6 @@ export default function DashboardPage() {
           {/* RIGHT: Next session + creative identity */}
           <div className="db-col-right" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-            {/* Next session countdown */}
-            <div className="db-legacy-session">{nextSession ? (
-              <SessionCountdown session={nextSession} />
-            ) : (
-              <div style={{ background: '#0f0f0f', border: '1px solid #141414', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
-                <p style={{ fontSize: 10, color: '#2a2a2a', fontFamily: 'monospace', letterSpacing: '0.1em', marginBottom: 8 }}>NEXT SESSION</p>
-                <p style={{ fontSize: 12, color: '#3a3a3a' }}>No upcoming sessions</p>
-                <p style={{ fontSize: 11, color: '#2a2a2a', marginTop: 4 }}>The studio is ready when you are</p>
-                <Link to="/book" style={{ display: 'inline-block', marginTop: 10, fontSize: 11, color: '#5A9BCB', border: '1px solid #5A9BCB30', padding: '6px 14px', borderRadius: 6, textDecoration: 'none' }}>
-                  Book now →
-                </Link>
-              </div>
-            )}</div>
-
             {/* Creative identity */}
             <div style={{ background: '#111', border: '1px solid #1a1a1a', borderRadius: 12, padding: '16px 20px' }}>
               <p style={{ fontSize: 10, color: '#3a3a3a', fontFamily: 'monospace', letterSpacing: '0.1em', marginBottom: 14 }}>CREATIVE IDENTITY</p>
@@ -724,23 +606,6 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Studio presence */}
-            <div className="db-legacy-presence" style={{ background: '#111', border: '1px solid #1a1a1a', borderRadius: 12, padding: '14px 16px' }}>
-              <p style={{ fontSize: 10, color: '#3a3a3a', fontFamily: 'monospace', letterSpacing: '0.1em', marginBottom: 12 }}>YOUR OIANO PRESENCE</p>
-              <div className="db-inner-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                {[
-                  { label: 'Fav room', value: favRoom ?? '—' },
-                  { label: 'Studio', value: studio?.name ?? 'Dreamz Music Lab' },
-                  { label: 'Profile', value: passport ? `${profileScore}%` : '—' },
-                  { label: 'Code', value: (passport as any)?.passport_code ?? '—' },
-                ].map(item => (
-                  <div key={item.label}>
-                    <p style={{ fontSize: 9, color: '#3a3a3a', fontFamily: 'monospace' }}>{item.label.toUpperCase()}</p>
-                    <p style={{ fontSize: 12, color: '#888', marginTop: 2, fontFamily: 'monospace' }}>{item.value}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         </div>
 
@@ -763,30 +628,11 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* ── D: Discover CTA ── */}
-        <div className="db-legacy-discover" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#111', border: '1px solid #1a1a1a', borderRadius: 10, padding: '14px 18px', marginTop: 8 }}>
-          <div>
-            <p style={{ fontSize: 11, color: '#888', fontWeight: 500 }}>Find artists to collaborate with</p>
-            <p style={{ fontSize: 10, color: '#3a3a3a', marginTop: 2 }}>Browse the Dreamz Music Lab roster by creative DNA match</p>
-          </div>
-          <Link to="/discover" style={{ fontSize: 11, color: '#5A9BCB', border: '1px solid #5A9BCB30', padding: '7px 14px', borderRadius: 7, textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0, marginLeft: 12 }}>
-            Discover →
-          </Link>
-        </div>
-
-        {/* ── D2: Browse producers CTA ── */}
-        <div className="db-legacy-discover" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#111', border: '1px solid #1a1a1a', borderRadius: 10, padding: '14px 18px', marginTop: 8 }}>
-          <div>
-            <p style={{ fontSize: 11, color: '#888', fontWeight: 500 }}>Find a producer for your next session</p>
-            <p style={{ fontSize: 10, color: '#3a3a3a', marginTop: 2 }}>Browse profiles and preview their beat catalogue</p>
-          </div>
-          <Link to="/producers" style={{ fontSize: 11, color: '#5A9BCB', border: '1px solid rgba(90,155,203,0.3)', padding: '7px 14px', borderRadius: 7, textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0, marginLeft: 12 }}>
-            Producers →
-          </Link>
-        </div>
-
-        {/* ── Session history timeline ── */}
-        <section className="db-fade db-fade-2" aria-labelledby="career-activity-heading">
+        {/* The home answers what matters now. Historical proof remains one
+            deliberate disclosure away instead of competing with today's work. */}
+        <details className="db-fade db-fade-2" style={{ borderRadius: 14, border: '1px solid rgba(255,255,255,.07)', background: 'rgba(12,15,17,.55)', padding: '0 16px 16px' }}>
+          <summary style={{ cursor: 'pointer', padding: '15px 0', color: '#8a8f92', fontSize: 10, fontFamily: 'monospace', letterSpacing: '.14em' }}>VIEW FULL CREATIVE RECORD</summary>
+        <section aria-labelledby="career-activity-heading">
           <div style={{ display: 'flex', alignItems: 'end', justifyContent: 'space-between', gap: 14, marginBottom: 12 }}>
             <div><p id="career-activity-heading" style={{ margin: 0, fontSize: 10, color: '#8a8f92', fontFamily: 'monospace', letterSpacing: '.14em' }}>CAREER ACTIVITY</p><p style={{ margin: '4px 0 0', fontSize: 11, color: '#50565a' }}>The work, proof, and connections building your artist story.</p></div>
             <Link to="/artist/passport" style={{ fontSize: 10, color: '#d3b35c', textDecoration: 'none' }}>Open professional identity →</Link>
@@ -803,6 +649,7 @@ export default function DashboardPage() {
             }) : <div style={{ padding: '26px 18px', textAlign: 'center' }}><p style={{ margin: 0, color: '#777d80', fontSize: 12 }}>Your career timeline starts with real activity.</p><Link to="/book" style={{ display: 'inline-block', marginTop: 8, color: '#6aa9d2', fontSize: 10, textDecoration: 'none' }}>Plan your first studio session →</Link></div>}
           </div>
         </section>
+        </details>
 
         <div className="db-legacy-session-history db-fade db-fade-2">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
@@ -909,7 +756,7 @@ export default function DashboardPage() {
       </main>
 
       <footer className="db-desktop-footer" style={{ textAlign: 'center', padding: '24px', fontSize: 10, color: '#1a1a1a', fontFamily: 'monospace', letterSpacing: '0.1em' }}>
-        OIANO STUDIOOS · DREAMZ MUSIC LAB
+        OIANO · DISCOVER · CONNECT · CREATE
       </footer>
 
       <ProfileEditDrawer

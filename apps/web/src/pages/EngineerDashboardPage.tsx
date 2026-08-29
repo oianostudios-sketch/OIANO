@@ -128,7 +128,7 @@ export default function EngineerDashboardPage() {
         {/* Today's sessions */}
         <div>
           <div className="flex items-center gap-3 mb-4">
-            <h2 className="font-display text-xl text-white">Today</h2>
+            <h1 className="font-display text-xl text-white">Today</h1>
             <span className="text-xs font-mono text-zinc-500">
               {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
             </span>

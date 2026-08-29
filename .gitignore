@@ -2,6 +2,14 @@ node_modules
 # Keep environment variables out of version control
 .env
 
+# Local AI-assistant state can contain command history, bearer tokens, and
+# machine-specific permissions. Never commit it.
+.claude/settings.local.json
+
+# Temporary Claude scratch exports occasionally arrive with a flattened
+# Windows path as the filename at repository root.
+/*scratchpad*.txt
+
 /generated/prisma
 
 # Local-disk fallback for avatar/track uploads when R2 isn't configured —
@@ -18,6 +26,7 @@ packages/shared/src/*.d.ts
 packages/shared/src/*.js.map
 packages/shared/src/*.d.ts.map
 packages/shared/tsconfig.tsbuildinfo
+packages/shared/dist/
 *.log
 *.pid
 

@@ -245,7 +245,7 @@ export default function ReceiptPage() {
           >
             <div>
               <p style={{ fontSize: 12, color: '#5A9BCB', fontFamily: "'Playfair Display', serif", margin: 0 }}>
-                Dreamz Music Lab
+                {booking.studio?.name ?? 'OIANO Studio Network'}
               </p>
               <p style={{ fontSize: 11, color: '#bbb', margin: '4px 0 0' }}>
                 Thank you for creating with us.

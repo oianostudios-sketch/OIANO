@@ -4,15 +4,7 @@ import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
 import { useToast } from './Toast';
 import { PERSONALITIES, getPersonality, type PersonalityKey } from '../lib/personality';
-
-// Refresh auth store after profile save
-async function refreshMe(setAuth: (token: string, user: any) => void, token: string | null) {
-  if (!token) return;
-  try {
-    const { data } = await api.get('/auth/me');
-    setAuth(token, data);
-  } catch (_) { /* non-fatal */ }
-}
+import { refreshMe } from '../lib/refreshMe';
 
 // ── ChipInput ────────────────────────────────────────────────────────────────
 

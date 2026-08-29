@@ -1,5 +1,16 @@
 // apps/api/src/lib/prisma.ts
+import path from 'path';
+import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
+
+// This module is imported while app.ts's dependency graph is still being
+// evaluated, before app.ts can execute its dotenv.config() call. Load the API
+// environment here so Prisma is always constructed with the final datasource
+// URL (dev, compiled production, scripts and ts-node all resolve to apps/api/.env).
+dotenv.config({
+  path: path.resolve(__dirname, '../../.env'),
+  override: process.env.NODE_ENV !== 'test',
+});
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 

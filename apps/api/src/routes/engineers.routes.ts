@@ -2,16 +2,22 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
-import { DEFAULT_STUDIO_SLUG } from '@oiano/shared';
 import { AppError } from '../lib/errors';
+import { resolveStaffStudio } from '../middleware/studioScope.middleware';
 
 export const engineersRouter = Router();
 
 // GET /api/engineers — list all engineers for this studio (auth required)
 engineersRouter.get('/', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const role = (req as any).userRole as string;
+    const requestedStudioId = typeof req.query.studio_id === 'string' ? req.query.studio_id : undefined;
+    const studioId = role === 'STUDIO_ADMIN' || role === 'ENGINEER'
+      ? (await resolveStaffStudio((req as any).userId)).id
+      : requestedStudioId;
+    if (!studioId) throw new AppError('studio_id is required', 400);
     const engineers = await prisma.engineer.findMany({
-      where: { studio: { slug: DEFAULT_STUDIO_SLUG } },
+      where: { studio_id: studioId },
       select: {
         id: true,
         name: true,
@@ -56,10 +62,19 @@ engineersRouter.get('/me', authenticate, requireRole('ENGINEER'), async (req: an
 // GET /api/engineers/:id — single engineer profile (auth required)
 engineersRouter.get('/:id', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
+    // Keep the named endpoint reachable even though this legacy parameter
+    // route is declared first.
+    if (req.params.id === 'runsheet') return next();
+    const role = (req as any).userRole as string;
+    const requestedStudioId = typeof req.query.studio_id === 'string' ? req.query.studio_id : undefined;
+    const studioId = role === 'STUDIO_ADMIN' || role === 'ENGINEER'
+      ? (await resolveStaffStudio((req as any).userId)).id
+      : requestedStudioId;
+    if (!studioId) throw new AppError('studio_id is required', 400);
     const engineer = await prisma.engineer.findFirst({
       where: {
         id: req.params.id,
-        studio: { slug: DEFAULT_STUDIO_SLUG },
+        studio_id: studioId,
       },
       select: {
         id: true,
@@ -91,8 +106,7 @@ engineersRouter.get('/runsheet', authenticate, requireRole('ENGINEER', 'STUDIO_A
     const dayEnd = new Date(target);
     dayEnd.setHours(23, 59, 59, 999);
 
-    const studio = await prisma.studio.findUnique({ where: { slug: DEFAULT_STUDIO_SLUG } });
-    if (!studio) throw new AppError('Studio not found', 404);
+    const studio = await resolveStaffStudio((req as any).userId);
 
     // Engineers see all sessions for the day (no per-engineer filter since Engineer
     // model isn't linked to User in schema; engineer is matched by name at booking time)

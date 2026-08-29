@@ -5,15 +5,20 @@ import QRCode from 'qrcode';
 import { prisma } from '../lib/prisma';
 import { authenticate } from '../middleware/auth.middleware';
 import { AppError } from '../lib/errors';
-import { DEFAULT_STUDIO_SLUG } from '@oiano/shared/constants';
 import { fmtTime, fmtDateLong } from '../lib/fmt';
+import { resolveStaffStudio } from '../middleware/studioScope.middleware';
 
 export const cardRouter = Router();
 
 cardRouter.get('/:id/card.png', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const userId = (req as any).userId as string;
+    const role = (req as any).userRole as string;
+    const accessWhere = role === 'ARTIST'
+      ? { artist: { user_id: userId } }
+      : { studio_id: (await resolveStaffStudio(userId)).id };
     const booking = await prisma.booking.findFirst({
-      where: { id: req.params.id, studio: { slug: DEFAULT_STUDIO_SLUG } },
+      where: { id: req.params.id, ...accessWhere },
       include: {
         artist:   { select: { name: true, alias: true } },
         room:     { select: { name: true } },

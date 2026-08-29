@@ -7,6 +7,7 @@ import { emitActivityEvent } from '../lib/activityEvents';
 import { computeArtistTier } from '../lib/artistTier';
 import { broadcastAll } from './notifications.routes';
 import { writeAdminAudit } from '../lib/adminAudit';
+import { resolveStaffStudio } from '../middleware/studioScope.middleware';
 
 export const artistsRouter = Router();
 artistsRouter.use(authenticate);
@@ -16,7 +17,7 @@ const StatusSchema = z.object({
   status: z.enum(['AVAILABLE_FOR_BOOKING', 'IN_SESSION', 'UNAVAILABLE']),
 });
 
-artistsRouter.patch('/me/status', async (req: any, res, next) => {
+artistsRouter.patch('/me/status', requireRole('ARTIST'), async (req: any, res, next) => {
   try {
     const artist = await prisma.artist.findUnique({ where: { user_id: req.userId } });
     if (!artist) throw new AppError('Artist profile not found', 404);
@@ -41,6 +42,7 @@ artistsRouter.patch('/me/status', async (req: any, res, next) => {
 
 artistsRouter.get('/', requireRole('STUDIO_ADMIN'), async (req, res, next) => {
   try {
+    const studio = await resolveStaffStudio((req as any).userId);
     const take = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? '100'))));
     const page = Math.max(1, parseInt(String(req.query.page ?? '1')));
     const skip = (page - 1) * take;
@@ -49,15 +51,16 @@ artistsRouter.get('/', requireRole('STUDIO_ADMIN'), async (req, res, next) => {
     // substring match — clearing the query (empty/absent `q`) restores the
     // full roster since the where-clause is only added when q is present.
     const q = (req.query.q as string | undefined)?.trim();
-    const where = q
-      ? {
+    const where = {
+      bookings: { some: { studio_id: studio.id } },
+      ...(q ? {
           OR: [
             { name: { contains: q, mode: 'insensitive' as const } },
             { alias: { contains: q, mode: 'insensitive' as const } },
             { user: { email: { contains: q, mode: 'insensitive' as const } } },
           ],
-        }
-      : {};
+      } : {}),
+    };
 
     const [artists, total] = await Promise.all([
       prisma.artist.findMany({
@@ -82,8 +85,9 @@ artistsRouter.get('/', requireRole('STUDIO_ADMIN'), async (req, res, next) => {
 // would be a far worse bug than the missing delete button.
 artistsRouter.delete('/:id', requireRole('STUDIO_ADMIN'), async (req: any, res, next) => {
   try {
-    const artist = await prisma.artist.findUnique({
-      where: { id: req.params.id },
+    const studio = await resolveStaffStudio(req.userId);
+    const artist = await prisma.artist.findFirst({
+      where: { id: req.params.id, bookings: { some: { studio_id: studio.id } } },
       include: {
         user: { select: { id: true, email: true } },
         _count: { select: { bookings: true, files: true, session_logs: true, releases: true } },
@@ -136,6 +140,13 @@ artistsRouter.get('/:id', async (req: any, res, next) => {
 
     const isOwner = artist.user?.id === userId;
     const isAdmin = userRole === 'STUDIO_ADMIN';
+
+    if (isAdmin) {
+      const studio = await resolveStaffStudio(userId);
+      if (!artist.bookings.some((booking) => booking.studio_id === studio.id)) {
+        throw new AppError('Artist not found', 404);
+      }
+    }
 
     // Increment profile_views for non-owner viewers (fire-and-forget)
     if (!isOwner && artist.passport) {

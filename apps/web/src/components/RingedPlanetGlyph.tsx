@@ -8,7 +8,7 @@ import { useEffect, useRef } from 'react';
 // OIANO's own miniature sun -- actually travels. Motion sells "circled by
 // the sun" far better than a static ring, so this animates via rAF (and
 // respects prefers-reduced-motion by holding one static frame).
-export default function RingedPlanetGlyph({ size = 220 }: { size?: number }) {
+export default function RingedPlanetGlyph({ size = 220, showPlanet = true }: { size?: number; showPlanet?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -166,7 +166,7 @@ export default function RingedPlanetGlyph({ size = 220 }: { size?: number }) {
       drawRing('back');
       const spark = sparkPosition(t);
       if (spark.behind) drawSpark(spark.x, spark.y);
-      drawPlanet();
+      if (showPlanet) drawPlanet();
       drawRing('front');
       if (!spark.behind) drawSpark(spark.x, spark.y);
     }

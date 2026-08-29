@@ -4,6 +4,7 @@ import { authenticate } from '../middleware/auth.middleware';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
 import { z } from 'zod';
+import { resolveStaffStudio } from '../middleware/studioScope.middleware';
 
 export const paymentsRouter = Router();
 paymentsRouter.use(authenticate);
@@ -34,13 +35,16 @@ paymentsRouter.post('/stripe/checkout-session', async (req: any, res, next) => {
 
     const booking = await prisma.booking.findUnique({
       where: { id: booking_id },
-      include: { service: true, artist: { include: { user: true } }, payment: true },
+      include: { service: true, studio: { select: { name: true } }, artist: { include: { user: true } }, payment: true },
     });
     if (!booking) throw new AppError('Booking not found', 404);
 
     // Artists may only initiate payment for their own bookings. Studio admins
     // can assist with a checkout, but every other role is denied.
-    if (req.userRole !== 'STUDIO_ADMIN') {
+    if (req.userRole === 'STUDIO_ADMIN') {
+      const studio = await resolveStaffStudio(req.userId);
+      if (booking.studio_id !== studio.id) throw new AppError('Booking not found', 404);
+    } else {
       if (req.userRole !== 'ARTIST' || booking.artist?.user_id !== req.userId) {
         throw new AppError('Booking not found', 404);
       }
@@ -50,6 +54,7 @@ paymentsRouter.post('/stripe/checkout-session', async (req: any, res, next) => {
     const stripe = getStripe();
     const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
     const amountCents = Math.round(Number(booking.total_usd) * 100);
+    if (!Number.isSafeInteger(amountCents) || amountCents <= 0) throw new AppError('Booking amount is invalid', 409);
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -62,7 +67,7 @@ paymentsRouter.post('/stripe/checkout-session', async (req: any, res, next) => {
             unit_amount: amountCents,
             product_data: {
               name: booking.service?.name ?? 'Studio Session',
-              description: `Booking ${booking.id.slice(0, 8).toUpperCase()} — Dreamz Music Lab`,
+              description: `Booking ${booking.id.slice(0, 8).toUpperCase()} — ${booking.studio.name}`,
             },
           },
           quantity: 1,
@@ -128,8 +133,8 @@ paymentsRouter.post('/wallet/top-up', async (req: any, res, next) => {
             currency:   'usd',
             unit_amount: amt * 100,
             product_data: {
-              name:        `Dreamz Music Lab — Studio Credits`,
-              description: `$${amt} added to your studio wallet`,
+              name:        'OIANO Studio Credits',
+              description: `$${amt} added to your OIANO wallet`,
             },
           },
           quantity: 1,

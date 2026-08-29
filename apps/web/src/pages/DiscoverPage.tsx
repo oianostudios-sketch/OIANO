@@ -103,7 +103,7 @@ export default function DiscoverPage() {
           <button onClick={() => navigate(-1)} className="text-zinc-500 hover:text-white text-sm transition-colors">← Back</button>
           <div>
             <h1 className="font-display text-xl text-gold font-semibold">Discover</h1>
-            <p className="text-zinc-600 text-xs font-mono">Dreamz Music Lab roster</p>
+            <p className="text-zinc-600 text-xs font-mono">OIANO creator network</p>
           </div>
           {!isLoading && (
             <span className="ml-auto text-xs text-zinc-600 font-mono">

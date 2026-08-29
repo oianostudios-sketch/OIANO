@@ -2,7 +2,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
-import { DEFAULT_STUDIO_SLUG } from '@oiano/shared';
 import { AppError } from '../lib/errors';
 
 const AvailabilityQuery = z.object({
@@ -10,7 +9,7 @@ const AvailabilityQuery = z.object({
   // Room ids are plain strings, not enforced-UUID — seeded rooms use
   // human-readable ids like "room-studio-a" (see prisma/seed.ts).
   room_id: z.string().min(1).optional(),
-  studio_id: z.string().min(1).optional(),
+  studio_id: z.string().min(1),
 });
 
 export const availabilityRouter = Router();
@@ -21,9 +20,7 @@ availabilityRouter.get('/', async (req, res, next) => {
     const { date, room_id, studio_id } = AvailabilityQuery.parse(req.query);
     const roomFilter = room_id ? { room_id } : {};
 
-    const studio = studio_id
-      ? await prisma.studio.findUnique({ where: { id: studio_id } })
-      : await prisma.studio.findUnique({ where: { slug: DEFAULT_STUDIO_SLUG } });
+    const studio = await prisma.studio.findUnique({ where: { id: studio_id } });
     if (!studio) throw new AppError('Studio not found', 404);
     if (room_id) {
       const room = await prisma.room.findFirst({ where: { id: room_id, studio_id: studio.id } });

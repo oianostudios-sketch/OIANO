@@ -1,12 +1,13 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowRight, CalendarDays, Check, Eye, EyeOff, ShieldCheck, Sparkles } from 'lucide-react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { ArrowRight, Building2, CalendarDays, Check, Eye, EyeOff, ShieldCheck, Sparkles, UserRound, Wrench } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
 
 const SignatureUniverse3D = lazy(() => import('../components/SignatureUniverse3D'));
 import OianoBrand from '../components/OianoBrand';
-import RingedPlanetGlyph from '../components/RingedPlanetGlyph';
+import EnterBrandLockup from '../components/EnterBrandLockup';
+import { ACCOUNT_PROFILES, homePathForRole } from '../lib/accountArchitecture';
 
 function UniverseFallback() {
   return <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle at 48% 42%, rgba(58,111,142,.18), transparent 24%), radial-gradient(circle at 52% 48%, rgba(201,168,76,.08), transparent 44%), #020304' }} />;
@@ -42,6 +43,7 @@ export default function EnterPage() {
   const [converging, setConverging] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [signupRole, setSignupRole] = useState<'ARTIST' | 'PRODUCER'>('ARTIST');
   const [mfa, setMfa] = useState<{challenge:string;setup:boolean;secret?:string;uri?:string}|null>(null);
   const [mfaCode, setMfaCode] = useState('');
   const requestedNext = searchParams.get('next');
@@ -54,7 +56,7 @@ export default function EnterPage() {
       const { data } = await api.post(mode === 'signup' ? '/auth/signup' : '/auth/login', {
         email,
         password,
-        ...(mode === 'signup' ? { role: 'ARTIST' } : {}),
+        ...(mode === 'signup' ? { role: signupRole } : {}),
       });
       if (data.mfa_required) { setMfa({challenge:data.challenge,setup:data.mfa_setup,secret:data.secret,uri:data.otpauth_uri}); setLoading(false); return; }
       completeLogin(data);
@@ -68,12 +70,10 @@ export default function EnterPage() {
       setAuth(data.token, data.user);
       setConverging(true);
       setTimeout(() => {
-        if (data.user.role === 'STUDIO_ADMIN') navigate('/admin');
-        else if (data.user.role === 'OIANO_ADMIN') navigate('/maintenance');
-        else if (mode === 'signup') navigate(`/onboarding${safeNext ? `?next=${encodeURIComponent(safeNext)}` : ''}`);
+        if (mode === 'signup' && data.user.role === 'ARTIST') navigate(`/onboarding${safeNext ? `?next=${encodeURIComponent(safeNext)}` : ''}`);
         else if (data.user.role === 'ARTIST' && safeNext) navigate(safeNext);
         else if (data.user.role === 'ARTIST') navigate('/calendar');
-        else navigate('/dashboard');
+        else navigate(homePathForRole(data.user.role));
       }, 850);
   }
 
@@ -92,6 +92,7 @@ export default function EnterPage() {
         /* Final O orbital model: one tilted 3D plane, split at the letter for real occlusion. */
         .enter-master-lockup{perspective:900px}.enter-master-lockup .enter-realistic-wordmark{clip-path:polygon(0 0,73% 0,73% 100%,0 100%)}.enter-final-o-image{position:absolute;z-index:2;right:6.65%;top:10.2%;width:20.1%;height:auto;filter:drop-shadow(-3px 7px 5px rgba(0,0,0,.62)) drop-shadow(0 0 2px rgba(255,224,135,.28))}.enter-orbit-depth{right:-.15%;top:5.5%;width:29.25%;height:85%;transform:rotateZ(-13deg) rotateX(62deg);transform-origin:50% 50%;transform-style:preserve-3d}.enter-orbit-depth.back{clip-path:inset(0 0 50% 0);opacity:.34}.enter-orbit-depth.front{clip-path:inset(50% 0 0 0)}.enter-orbit-depth:after{display:block;border:1.25px solid rgba(235,185,75,.78);box-shadow:inset 0 0 2px rgba(255,248,204,.52),0 0 4px rgba(121,72,10,.3)}.enter-orbit-depth.back:after{border-color:rgba(114,72,20,.48);filter:brightness(.7)}.enter-orbit-depth.front:after{border-color:rgba(255,220,130,.92)}.enter-orbit-planet:before{top:-2.7%;width:5.4%;transform:translateZ(8px) scaleY(2.12);background:radial-gradient(circle at 31% 25%,#fff8d3 0 7%,#f3cb68 17%,#bd7d24 48%,#5a310c 72%,#190b02 100%);border:1px solid rgba(255,223,143,.78);box-shadow:-2px 3px 5px rgba(0,0,0,.62),0 0 6px rgba(255,235,171,.7),0 0 16px rgba(213,147,31,.46)}.enter-orbit-depth.back .enter-orbit-planet:before{opacity:.42;filter:brightness(.5);box-shadow:0 0 3px rgba(170,108,20,.18)}
         .enter-mode{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;margin-bottom:22px;border:1px solid #202020;border-radius:12px;background:#0b0b0b}.enter-mode button{border:0;border-radius:8px;padding:10px;background:transparent;color:#666;font-size:11px;font-weight:650;cursor:pointer;transition:.18s}.enter-mode button.active{background:#191919;color:#f0ede8;box-shadow:0 1px 5px rgba(0,0,0,.35)}
+        .enter-account-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px}.enter-account-card{display:flex;gap:10px;align-items:flex-start;text-align:left;padding:11px;border:1px solid #242424;border-radius:10px;background:#0d0d0d;color:#777;cursor:pointer;transition:.18s}.enter-account-card:hover{border-color:#343434;color:#aaa}.enter-account-card.active{border-color:rgba(90,155,203,.58);background:rgba(90,155,203,.08);color:#e9eef1;box-shadow:0 0 0 2px rgba(90,155,203,.07)}.enter-account-card strong{display:block;font-size:10px;margin-bottom:3px}.enter-account-card span{display:block;font-size:8px;line-height:1.35;color:#606060}.enter-account-note{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:-8px 0 18px}.enter-account-note div{display:flex;gap:7px;align-items:center;color:#4b4b4b;font-size:8px;line-height:1.35}.enter-account-note svg{flex:none;color:#66552b}
         .enter-master-lockup{position:relative;width:min(88%,900px);isolation:isolate}.enter-master-lockup .enter-realistic-wordmark{width:100%;height:auto;object-fit:contain;filter:drop-shadow(0 18px 30px rgba(0,0,0,.48));position:relative;z-index:2}.enter-solar-motion{position:absolute;z-index:3;left:1.6%;top:10.5%;width:23.4%;aspect-ratio:1;border-radius:50%;pointer-events:none;overflow:hidden}.enter-solar-motion:before{content:'';position:absolute;inset:7.5%;border-radius:50%;background:conic-gradient(from 0deg,transparent 0 72%,rgba(255,238,174,0) 78%,rgba(255,238,174,.72) 88%,transparent 96%);-webkit-mask:radial-gradient(circle,transparent 0 39%,#000 42% 48%,transparent 51%);mask:radial-gradient(circle,transparent 0 39%,#000 42% 48%,transparent 51%);animation:enter-solar-sweep 7.8s cubic-bezier(.45,.05,.55,.95) infinite}.enter-solar-motion:after{content:'';position:absolute;inset:45%;border-radius:50%;background:#f7d77f;box-shadow:0 0 8px rgba(255,224,145,.85),0 0 25px rgba(215,153,43,.4);animation:enter-solar-breathe 4.8s ease-in-out infinite}.enter-orbit-depth{position:absolute;right:.6%;top:7%;width:28%;height:82%;pointer-events:none;transform:rotate(-13deg) scaleY(.55)}.enter-orbit-depth.back{z-index:1;clip-path:inset(0 0 49% 0);opacity:.28}.enter-orbit-depth.front{z-index:4;clip-path:inset(49% 0 0 0)}.enter-orbit-depth:after{content:'';position:absolute;inset:0;border-radius:50%;border:1px solid rgba(244,211,127,.2)}.enter-orbit-planet{position:absolute;inset:0;border-radius:50%;animation:enter-orbit-circuit 15.5s linear infinite}.enter-orbit-planet:before{content:'';position:absolute;left:47.8%;top:-2.2%;width:4.4%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 34% 28%,#fff4c6 0 9%,#e9bd55 25%,#9a641b 62%,#2f1907 100%);border:1px solid rgba(255,221,139,.72);box-shadow:0 0 5px rgba(255,236,177,.78),0 0 13px rgba(211,151,39,.55);transform:scaleY(1.82);animation:enter-planet-glint 15.5s ease-in-out infinite}.enter-orbit-depth.back .enter-orbit-planet:before{filter:brightness(.42);box-shadow:0 0 4px rgba(181,129,37,.22)}.enter-master-lockup.is-loading .enter-solar-motion:before{animation-duration:1.7s}.enter-master-lockup.is-loading .enter-orbit-planet{animation-duration:3.6s}.enter-master-lockup.is-loading .enter-orbit-planet:before{animation-duration:3.6s}.enter-master-lockup.is-loading .enter-solar-motion:after{animation-duration:1.25s}@keyframes enter-solar-sweep{0%{transform:rotate(0deg);opacity:.42}45%{opacity:.72}100%{transform:rotate(-360deg);opacity:.42}}@keyframes enter-solar-breathe{0%,100%{opacity:.36;transform:scale(.86)}50%{opacity:.82;transform:scale(1.08)}}@keyframes enter-orbit-circuit{to{transform:rotate(360deg)}}@keyframes enter-planet-glint{0%,76%,100%{filter:brightness(.88);box-shadow:0 0 4px rgba(255,236,177,.52),0 0 10px rgba(211,151,39,.38)}86%{filter:brightness(1.55);box-shadow:0 0 8px #fff2b8,0 0 20px rgba(222,161,44,.74)}}@media(prefers-reduced-motion:reduce){.enter-solar-motion:before,.enter-solar-motion:after,.enter-orbit-planet,.enter-orbit-planet:before{animation:none!important}.enter-orbit-planet{transform:rotate(42deg)}.enter-solar-motion:before{opacity:.5}}
         /* Final cascade: calibrated to the cleaned jewelry-grade O. */
         .enter-orbit-depth{right:2.05%;top:.8%;width:29.25%;height:85%;transform:rotateZ(-13deg) rotateX(62deg);transform-origin:50% 50%;transform-style:preserve-3d}.enter-orbit-depth.back{clip-path:inset(0 0 50% 0);opacity:.3}.enter-orbit-depth.front{clip-path:inset(50% 0 0 0)}.enter-orbit-depth:after{display:block;border:1.2px solid rgba(225,173,65,.76);box-shadow:inset 0 0 1px rgba(255,248,204,.55),0 0 3px rgba(117,67,8,.28)}.enter-orbit-depth.back:after{border-color:rgba(102,64,18,.46);filter:brightness(.66)}.enter-orbit-depth.front:after{border-color:rgba(255,218,123,.9);box-shadow:inset 0 0 1px rgba(255,255,225,.72),0 0 3px rgba(223,155,32,.22)}.enter-orbit-planet{animation-duration:17.2s}.enter-orbit-planet:before{top:-2.6%;width:5%;transform:translateZ(8px) scaleY(2.12);background:radial-gradient(circle at 31% 25%,#fff8d3 0 6%,#f1c762 17%,#b87521 49%,#53300d 73%,#170a02 100%);border:1px solid rgba(255,220,136,.74);box-shadow:-2px 3px 5px rgba(0,0,0,.6),0 0 5px rgba(255,232,163,.62),0 0 12px rgba(205,137,26,.38);animation-duration:17.2s}.enter-orbit-depth.back .enter-orbit-planet:before{opacity:.38;filter:brightness(.46);box-shadow:0 0 2px rgba(159,99,17,.16)}.enter-master-lockup.is-loading .enter-orbit-planet,.enter-master-lockup.is-loading .enter-orbit-planet:before{animation-duration:4.1s}@keyframes enter-planet-glint{0%,78%,100%{filter:brightness(.9);box-shadow:-2px 3px 5px rgba(0,0,0,.6),0 0 4px rgba(255,232,163,.48),0 0 10px rgba(205,137,26,.3)}88%{filter:brightness(1.38);box-shadow:-2px 3px 5px rgba(0,0,0,.55),0 0 7px rgba(255,245,199,.82),0 0 16px rgba(218,152,34,.54)}}
@@ -118,20 +119,10 @@ export default function EnterPage() {
       <section className="login-brand-panel" style={{ position: 'relative', overflow: 'hidden', background: '#020101' }} aria-label="OIANO artist workspace">
         <AdaptiveUniverse intensified={focused} />
         <div className="enter-brand-copy">
-          <div className={loading ? 'enter-master-lockup is-loading' : 'enter-master-lockup'}>
-            <img
-              src="/brand/oiano-wordmark-master-v7.png"
-              alt="Oiano"
-              className="enter-realistic-wordmark"
-            />
-            <span className="enter-solar-motion" aria-hidden="true" />
-            <div className="enter-ringed-o-slot" aria-hidden="true">
-              <RingedPlanetGlyph size={70} />
-            </div>
-          </div>
+          <EnterBrandLockup active={loading} />
           <div className="enter-wordmark-ground" />
           <div className="enter-wordmark-rule" />
-          <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:'clamp(.52rem,1.1vw,.68rem)',letterSpacing:'.28em',color:'rgba(201,168,76,.4)',textTransform:'uppercase',margin:'16px 0 0'}}>Studio access · Artist identity · Creative work</p>
+          <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:'clamp(.52rem,1.1vw,.68rem)',letterSpacing:'.24em',color:'rgba(201,168,76,.46)',textTransform:'uppercase',margin:'16px 0 0'}}>Africa's new way to do music</p>
         </div>
         <div className="enter-trust">
           <div className="enter-trust-item"><CalendarDays size={15} color="#C9A84C"/><strong>Create together</strong><span>Find the right studio, room and creative team.</span></div>
@@ -147,7 +138,7 @@ export default function EnterPage() {
           <header style={{marginBottom:28}}>
             <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,letterSpacing:'.22em',color:'#5a5a60',textTransform:'uppercase',marginBottom:12}}>{returningToBooking ? 'Continue your booking' : 'Secure access portal'}</p>
             <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:28,fontWeight:600,color:'#f0ede8',letterSpacing:'-.01em',lineHeight:1.18,margin:0}}>{mfa ? <>Protecting OIANO<br/>starts here</> : returningToBooking ? <>Your session is<br/>waiting</> : <>Welcome back<br/>to your work</>}</h1>
-            <p style={{color:'#707070',fontSize:12,lineHeight:1.6,margin:'12px 0 0'}}>{mfa ? (mfa.setup?'Add this account to your authenticator app, then enter the current six-digit code.':'Enter the current code from your authenticator app.') : returningToBooking ? 'Sign in and return directly to your studio selection.' : 'One account for sessions, projects and your professional artist identity.'}</p>
+            <p style={{color:'#707070',fontSize:12,lineHeight:1.6,margin:'12px 0 0'}}>{mfa ? (mfa.setup?'Add this account to your authenticator app, then enter the current six-digit code.':'Enter the current code from your authenticator app.') : returningToBooking ? 'Sign in and return directly to your studio selection.' : mode === 'signup' ? 'Choose how you enter the ecosystem. Your creative roles can grow with every project.' : 'One identity for studios, sessions, projects and every contribution you help create.'}</p>
           </header>
           {mfa ? <>
             {mfa.setup&&<div style={{padding:14,border:'1px solid #272727',borderRadius:11,background:'#0d0d0d',marginBottom:16}}><p style={{fontSize:9,color:'#666',textTransform:'uppercase',letterSpacing:'.12em',margin:'0 0 8px'}}>Authenticator setup key</p><code style={{fontSize:13,color:'#C9A84C',wordBreak:'break-all',letterSpacing:'.08em'}}>{mfa.secret}</code><p style={{fontSize:9,color:'#444',lineHeight:1.5,margin:'9px 0 0'}}>In Google Authenticator, Microsoft Authenticator or 1Password, choose “enter setup key”.</p></div>}
@@ -159,15 +150,30 @@ export default function EnterPage() {
             <button type="button" role="tab" aria-selected={mode === 'signup'} className={mode === 'signup' ? 'active' : ''} onClick={() => { setMode('signup'); setError(''); }}>Create account</button>
           </div>
           {error && <div role="alert" aria-live="polite" style={{background:'#1a0808',border:'1px solid #3a1010',color:'#f87171',fontSize:12,padding:'11px 14px',borderRadius:9,marginBottom:20}}>{error}</div>}
+          {mode === 'signup' && <>
+            <div className="enter-account-grid" role="radiogroup" aria-label="Choose account type">
+              <button type="button" role="radio" aria-checked={signupRole === 'ARTIST'} className={`enter-account-card ${signupRole === 'ARTIST' ? 'active' : ''}`} onClick={() => setSignupRole('ARTIST')}>
+                <UserRound size={16}/><span><strong>{ACCOUNT_PROFILES.ARTIST.label}</strong><span>{ACCOUNT_PROFILES.ARTIST.purpose}</span></span>
+              </button>
+              <button type="button" role="radio" aria-checked={signupRole === 'PRODUCER'} className={`enter-account-card ${signupRole === 'PRODUCER' ? 'active' : ''}`} onClick={() => setSignupRole('PRODUCER')}>
+                <Sparkles size={16}/><span><strong>{ACCOUNT_PROFILES.CREATIVE_PROFESSIONAL.label}</strong><span>Produce, engineer, write, perform and receive credit.</span></span>
+              </button>
+            </div>
+            <div className="enter-account-note" aria-label="Managed account access">
+              <div><Building2 size={13}/><span><b>Studio</b><br/>Verified operator onboarding</span></div>
+              <div><Wrench size={13}/><span><b>OIANO Platform</b><br/>Invite-only system access</span></div>
+            </div>
+          </>}
           <form onSubmit={(event) => { event.preventDefault(); if (!loading && email && password) handleEnter(); }}>
             <div style={{display:'flex',flexDirection:'column',gap:15,marginBottom:20}}>
               <div className="enter-field"><label htmlFor="enter-email">Email address</label><input id="enter-email" className="enter-input" type="email" placeholder="you@example.com" value={email} autoComplete="email" required onChange={(event)=>setEmail(event.target.value)} onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)}/></div>
               <div className="enter-field"><label htmlFor="enter-password">Password</label><input id="enter-password" className="enter-input" style={{paddingRight:48}} type={showPassword?'text':'password'} placeholder={mode === 'signup' ? 'At least 8 characters' : 'Your password'} value={password} minLength={mode === 'signup' ? 8 : undefined} required autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} onChange={(event)=>setPassword(event.target.value)} onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)}/><button type="button" className="enter-eye" onClick={()=>setShowPassword(value=>!value)} aria-label={showPassword?'Hide password':'Show password'}>{showPassword?<EyeOff size={16}/>:<Eye size={16}/>}</button></div>
+              {mode === 'signin' && <Link to="/forgot-password" style={{alignSelf:'flex-end',marginTop:-7,color:'#666',fontSize:10,textDecoration:'none'}}>Forgot password?</Link>}
             </div>
-            <button type="submit" className="enter-submit" disabled={loading||!email||!password||(mode === 'signup' && password.length < 8)}>{loading?<span className="animate-pulse">Preparing your workspace…</span>:<>{mode === 'signup' ? (returningToBooking ? 'Create account and continue' : 'Create artist account') : (returningToBooking ? 'Sign in and continue' : 'Sign in')}<ArrowRight size={16}/></>}</button>
+            <button type="submit" className="enter-submit" disabled={loading||!email||!password||(mode === 'signup' && password.length < 8)}>{loading?<span className="animate-pulse">Preparing your workspace…</span>:<>{mode === 'signup' ? (returningToBooking ? 'Create account and continue' : `Create ${signupRole === 'ARTIST' ? 'artist' : 'creative professional'} account`) : (returningToBooking ? 'Sign in and continue' : 'Sign in')}<ArrowRight size={16}/></>}</button>
           </form>
-          <div className="enter-status"><Check size={13} color="#79966f" style={{marginTop:1,flexShrink:0}}/><span>{mode === 'signup' ? 'Your artist account includes a professional Passport and secure project workspace.' : 'Use the email and password connected to your OIANO account.'}</span></div>
-          <p style={{margin:'24px 0 0',color:'#3f3f46',fontSize:9,lineHeight:1.6,textAlign:'center'}}>By continuing, you agree to keep your account credentials private.</p>
+          <div className="enter-status"><Check size={13} color="#79966f" style={{marginTop:1,flexShrink:0}}/><span>{mode === 'signup' ? (signupRole === 'ARTIST' ? 'Includes your Artist Passport, studio access and secure project workspace.' : 'Includes your professional Passport, projects, credits and collaboration workspace.') : 'OIANO opens the home experience assigned to your account and responsibilities.'}</span></div>
+          <p style={{margin:'24px 0 0',color:'#3f3f46',fontSize:9,lineHeight:1.6,textAlign:'center'}}>By continuing, you agree to the <Link to="/legal/terms" style={{color:'#71717a'}}>Terms</Link> and acknowledge the <Link to="/legal/privacy" style={{color:'#71717a'}}>Privacy Policy</Link>. <Link to="/legal/cancellations" style={{color:'#71717a'}}>Refunds</Link> · <Link to="/legal/rights" style={{color:'#71717a'}}>Rights notice</Link>.</p>
           </>}
         </div>
       </section>

@@ -886,7 +886,7 @@ export default function BookingPage() {
                     { label: 'Studio',   value: studio?.name ?? '—' },
                     { label: 'Service',  value: selectedService?.name ?? '—' },
                     { label: 'Room',     value: selectedRoom?.name ?? '—' },
-                    { label: 'Engineer', value: 'Assigned by Dreamz Music Lab' },
+                    { label: 'Engineer', value: `Assigned by ${studio?.name ?? 'the studio'}` },
                     { label: 'Project',  value: selectedProject?.title ?? 'Standalone session' },
                     {
                       label: 'Date',

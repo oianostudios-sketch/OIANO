@@ -4,8 +4,8 @@
  * All functions are no-ops when SENDGRID_API_KEY is not set.
  */
 
-const FROM      = process.env.SENDGRID_FROM_EMAIL ?? 'noreply@dreamzmusiclab.com';
-const FROM_NAME = 'Dreamz Music Lab';
+const FROM      = process.env.SENDGRID_FROM_EMAIL ?? 'noreply@oiano.net';
+const FROM_NAME = 'OIANO';
 
 function getSendGrid() {
   const key = process.env.SENDGRID_API_KEY;
@@ -25,9 +25,21 @@ async function send(to: string, subject: string, html: string) {
   await sg.send({ to, from: { email: FROM, name: FROM_NAME }, subject, html });
 }
 
+export async function sendStudioInvitationEmail(toEmail: string, studioName: string, position: string, acceptUrl: string) {
+  const html = `<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;background:#0b0b0b;color:#eee;padding:36px;border-radius:14px">
+    <p style="font-family:Georgia,serif;font-size:24px;color:#C9A84C;letter-spacing:3px">OIANO</p>
+    <h1 style="font-size:20px">Join ${studioName}</h1>
+    <p style="color:#aaa;line-height:1.6">You have been invited to work as <strong style="color:#fff">${position.replace(/_/g, ' ')}</strong>. Your access will be limited to the capabilities assigned by the studio.</p>
+    <a href="${acceptUrl}" style="display:inline-block;margin-top:18px;background:#C9A84C;color:#080808;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700">Review invitation</a>
+    <p style="margin-top:28px;color:#666;font-size:11px">This invitation expires in seven days. Ignore it if you do not recognize the studio.</p>
+  </div>`;
+  await send(toEmail, `Join ${studioName} on OIANO`, html);
+}
+
 // ── Receipt email — fired by Stripe webhook on checkout.session.completed ─────
 
 export async function sendReceiptEmail(toEmail: string, booking: any) {
+  const studioName  = booking.studio?.name ?? 'OIANO Studio Network';
   const startsAt    = new Date(booking.starts_at);
   const endsAt      = new Date(booking.ends_at);
   const durationHrs = (endsAt.getTime() - startsAt.getTime()) / 3_600_000;
@@ -51,7 +63,7 @@ export async function sendReceiptEmail(toEmail: string, booking: any) {
             <table width="100%" cellpadding="0" cellspacing="0"><tr>
               <td>
                 <p style="font-family:Georgia,serif;font-size:26px;color:#C9A84C;margin:0;letter-spacing:3px;">OIANO</p>
-                <p style="color:#666;font-size:11px;margin:4px 0 0;letter-spacing:1px;text-transform:uppercase;">Dreamz Music Lab · Studio Receipt</p>
+                <p style="color:#666;font-size:11px;margin:4px 0 0;letter-spacing:1px;text-transform:uppercase;">${studioName} · Studio Receipt</p>
               </td>
               <td align="right" style="vertical-align:top;">
                 <p style="color:#888;font-size:11px;margin:0;font-family:monospace;">Receipt #${receiptNum}</p>
@@ -108,7 +120,7 @@ export async function sendReceiptEmail(toEmail: string, booking: any) {
             </div>
 
             <div style="margin-top:36px;padding-top:20px;border-top:1px solid #f0f0f0;">
-              <p style="font-size:12px;color:#C9A84C;font-family:Georgia,serif;margin:0;">Dreamz Music Lab</p>
+              <p style="font-size:12px;color:#C9A84C;font-family:Georgia,serif;margin:0;">${studioName}</p>
               <p style="font-size:10px;color:#ccc;margin:4px 0 0;font-family:monospace;">Powered by OIANO StudioOS</p>
             </div>
           </td>
@@ -119,7 +131,7 @@ export async function sendReceiptEmail(toEmail: string, booking: any) {
 </body>
 </html>`;
 
-  await send(toEmail, `Receipt #${receiptNum} — Dreamz Music Lab`, html);
+  await send(toEmail, `Receipt #${receiptNum} — ${studioName}`, html);
 }
 
 // ── Session file delivery email ───────────────────────────────────────────────
@@ -143,7 +155,7 @@ export async function sendDeliveryEmail(
   <div style="max-width:580px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;">
     <div style="background:#0a0a0a;padding:28px 36px;">
       <p style="font-family:Georgia,serif;font-size:24px;color:#C9A84C;margin:0;letter-spacing:3px;">OIANO</p>
-      <p style="color:#666;font-size:11px;margin:4px 0 0;letter-spacing:1px;text-transform:uppercase;">Dreamz Music Lab · Your Files Are Ready</p>
+      <p style="color:#666;font-size:11px;margin:4px 0 0;letter-spacing:1px;text-transform:uppercase;">OIANO · Your Files Are Ready</p>
     </div>
     <div style="height:3px;background:linear-gradient(90deg,#C9A84C,#E2C97E,#C9A84C);"></div>
     <div style="padding:36px;">
@@ -154,7 +166,7 @@ export async function sendDeliveryEmail(
          style="display:inline-block;background:#C9A84C;color:#000;font-weight:600;font-size:13px;padding:12px 28px;border-radius:8px;text-decoration:none;">
         View & Download →
       </a>
-      <p style="margin-top:32px;font-size:11px;color:#bbb;font-family:monospace;">Dreamz Music Lab · Powered by OIANO StudioOS</p>
+      <p style="margin-top:32px;font-size:11px;color:#bbb;font-family:monospace;">OIANO · Discover · Connect · Create</p>
     </div>
   </div>
 </body>
@@ -185,14 +197,46 @@ export async function sendTopUpEmail(toEmail: string, amount: number, newBalance
          style="display:inline-block;background:#C9A84C;color:#000;font-weight:600;font-size:13px;padding:12px 28px;border-radius:8px;text-decoration:none;">
         Book a session →
       </a>
-      <p style="margin-top:28px;font-size:11px;color:#ccc;font-family:monospace;">Dreamz Music Lab · Powered by OIANO StudioOS</p>
+      <p style="margin-top:28px;font-size:11px;color:#ccc;font-family:monospace;">OIANO · Studio Network</p>
     </div>
   </div>
 </body>
 </html>`;
 
-  await send(toEmail, `$${amount.toFixed(2)} added to your Dreamz Music Lab wallet`, html);
+  await send(toEmail, `$${amount.toFixed(2)} added to your OIANO wallet`, html);
 }
+
+// ── Password reset ─────────────────────────────────────────────────────────
+
+export async function sendPasswordResetEmail(toEmail: string, resetUrl: string) {
+  const html = `
+<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:40px;background:#f4f4f4;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;">
+    <div style="background:#0a0a0a;padding:28px 36px;">
+      <p style="font-family:Georgia,serif;font-size:24px;color:#C9A84C;margin:0;letter-spacing:3px;">OIANO</p>
+    </div>
+    <div style="height:3px;background:linear-gradient(90deg,#C9A84C,#E2C97E,#C9A84C);"></div>
+    <div style="padding:36px;">
+      <p style="font-size:18px;font-weight:600;color:#111;margin:0 0 12px;">Reset your password</p>
+      <p style="font-size:14px;color:#555;line-height:1.5;margin:0 0 24px;">
+        We received a request to reset the password on your OIANO account. This link expires in 30 minutes.
+        If you didn't ask for this, you can safely ignore this email — your password won't change.
+      </p>
+      <a href="${resetUrl}"
+         style="display:inline-block;background:#C9A84C;color:#000;font-weight:600;font-size:13px;padding:12px 28px;border-radius:8px;text-decoration:none;">
+        Reset password →
+      </a>
+      <p style="margin-top:28px;font-size:11px;color:#ccc;font-family:monospace;">OIANO · Secure account access</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  await send(toEmail, 'Reset your OIANO password', html);
+}
+
 // ── Booking status emails (used by bookings.controller.ts) ───────────────────
 
 interface BookingEmailArgs {
@@ -218,7 +262,7 @@ export async function sendBookingConfirmed(args: BookingEmailArgs) {
 <div style="font-family:sans-serif;max-width:520px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden;">
   <div style="background:#0a0a0a;padding:24px 32px;">
     <p style="font-family:Georgia,serif;font-size:22px;color:#C9A84C;margin:0;letter-spacing:2px;">OIANO</p>
-    <p style="color:#666;font-size:10px;margin:4px 0 0;text-transform:uppercase;letter-spacing:1px;">Dreamz Music Lab</p>
+    <p style="color:#666;font-size:10px;margin:4px 0 0;text-transform:uppercase;letter-spacing:1px;">OIANO Studio Network</p>
   </div>
   <div style="height:3px;background:linear-gradient(90deg,#C9A84C,#E2C97E,#C9A84C);"></div>
   <div style="padding:28px 32px;">
@@ -229,7 +273,7 @@ export async function sendBookingConfirmed(args: BookingEmailArgs) {
     <div style="margin-top:24px;">
       <a href="${frontendUrl}/bookings/${bookingId}" style="background:#C9A84C;color:#000;font-weight:600;font-size:12px;padding:10px 22px;border-radius:6px;text-decoration:none;display:inline-block;">View Booking →</a>
     </div>
-    <p style="margin-top:24px;font-size:10px;color:#bbb;font-family:monospace;">Dreamz Music Lab · Powered by OIANO StudioOS</p>
+    <p style="margin-top:24px;font-size:10px;color:#bbb;font-family:monospace;">OIANO · Discover · Connect · Create</p>
   </div>
 </div>`;
 
@@ -253,7 +297,7 @@ export async function sendSessionComplete(args: BookingEmailArgs) {
     <p style="font-size:13px;color:#555;margin:0 0 20px;">${service} · ${fmtDate(start)}</p>
     <p style="font-size:13px;color:#555;margin:0 0 20px;">Your session log and any delivered files are on your booking page.</p>
     <a href="${frontendUrl}/bookings/${bookingId}" style="background:#C9A84C;color:#000;font-weight:600;font-size:12px;padding:10px 22px;border-radius:6px;text-decoration:none;display:inline-block;">View Session →</a>
-    <p style="margin-top:24px;font-size:10px;color:#bbb;font-family:monospace;">Dreamz Music Lab · Powered by OIANO StudioOS</p>
+    <p style="margin-top:24px;font-size:10px;color:#bbb;font-family:monospace;">OIANO · Discover · Connect · Create</p>
   </div>
 </div>`;
 
@@ -277,7 +321,7 @@ export async function sendBookingCancelled(args: BookingEmailArgs) {
     <p style="font-size:13px;color:#555;margin:0 0 20px;">${service} · ${fmtDate(start)} has been cancelled.</p>
     <p style="font-size:13px;color:#555;margin:0 0 20px;">Contact the studio if you have questions, or book a new session below.</p>
     <a href="${frontendUrl}/book" style="background:#C9A84C;color:#000;font-weight:600;font-size:12px;padding:10px 22px;border-radius:6px;text-decoration:none;display:inline-block;">Book another session →</a>
-    <p style="margin-top:24px;font-size:10px;color:#bbb;font-family:monospace;">Dreamz Music Lab · Powered by OIANO StudioOS</p>
+    <p style="margin-top:24px;font-size:10px;color:#bbb;font-family:monospace;">OIANO · Discover · Connect · Create</p>
   </div>
 </div>`;
 

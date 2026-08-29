@@ -17,14 +17,19 @@ async function accessibleProject(projectId: string, userId: string, role: string
       artist: { select: { user_id: true } },
       producer: { select: { user_id: true } },
       bookings: { select: { studio_id: true, engineer: { select: { user_id: true } } } },
+      participants: { where: { status: 'ACTIVE' }, select: { participant_ref_id: true } },
     },
   });
   if (!project) return null;
   if (role === 'OIANO_ADMIN' || project.artist?.user_id === userId || project.producer.user_id === userId) return project;
+  if (project.participants.some(participant => participant.participant_ref_id === userId)) return project;
   if (role === 'ENGINEER' && project.bookings.some(booking => booking.engineer?.user_id === userId)) return project;
   if (role === 'STUDIO_ADMIN') {
-    const staff = await prisma.studioStaff.findUnique({ where: { user_id: userId }, select: { studio_id: true } });
-    if (staff && project.bookings.some(booking => booking.studio_id === staff.studio_id)) return project;
+    // Checked against every studio this admin is a member of, not just one —
+    // a STUDIO_ADMIN can staff more than one studio.
+    const memberships = await prisma.studioStaff.findMany({ where: { user_id: userId }, select: { studio_id: true } });
+    const studioIds = new Set(memberships.map(m => m.studio_id));
+    if (project.bookings.some(booking => studioIds.has(booking.studio_id))) return project;
   }
   return null;
 }

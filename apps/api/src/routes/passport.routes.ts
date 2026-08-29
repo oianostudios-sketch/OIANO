@@ -2,7 +2,7 @@ import { Router } from 'express';
 import path from 'path';
 import fs from 'fs';
 import { z } from 'zod';
-import { authenticate } from '../middleware/auth.middleware';
+import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
 import { isR2Configured, uploadToR2, deleteFromR2 } from '../lib/r2';
@@ -172,7 +172,7 @@ passportRouter.get('/public/:code/qr.png', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-passportRouter.use(authenticate);
+passportRouter.use(authenticate, requireRole('ARTIST'));
 
 passportRouter.get('/analytics', async (req: any, res, next) => {
   try {

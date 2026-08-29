@@ -4,10 +4,17 @@ const { Client } = require('pg');
 require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
 
 const schema = `oiano_baseline_verify_${Date.now()}`;
-const baseline = path.resolve(__dirname, '..', 'prisma', 'baseline', '20260814_current_schema.sql');
+// Points at the real migration Prisma applies, not a separate hand-maintained
+// snapshot — the previous version of this script pointed at
+// prisma/baseline/20260814_current_schema.sql, which drifted stale within
+// days (still had oiano_payments/ledger_entries months after that stack was
+// retired, and was missing every collaboration table added after 8/14).
+// Checking the actual migration file means this can't drift from reality
+// the same way again — see docs/DATABASE_BASELINE.md.
+const baseline = path.resolve(__dirname, '..', 'prisma', 'migrations', '20260819000000_baseline', 'migration.sql');
 const requiredTables = [
   'users', 'artists', 'artist_files', 'producers', 'tracks', 'bookings',
-  'oiano_payments', 'ledger_entries',
+  'deliverables', 'project_credits', 'rights_agreements',
 ];
 
 if (!/^oiano_baseline_verify_\d+$/.test(schema)) throw new Error('Unsafe verification schema');

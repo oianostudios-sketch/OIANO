@@ -1,13 +1,17 @@
 /**
- * MobileBottomNav — sticky bottom tab bar for ARTIST role on mobile (<768px)
- * Tabs: Home · Book · Passport · Inbox
- * Hidden on desktop via CSS media query.
+ * MobileBottomNav — sticky bottom tab bar, one set per role (<768px).
+ * ARTIST: Home · Book · Passport · Workrooms (original, hand-drawn icons — unchanged)
+ * STUDIO_ADMIN: Home · Calendar · Runsheet · Pulse (mirrors AdminDashboardPage's own quick links)
+ * ENGINEER: Home · Calendar · Runsheet · Workrooms (mirrors EngineerDashboardPage's own top nav)
+ * PRODUCER: Home · Discover · Producers · Passport (mirrors ProducerNav's own links)
+ * Hidden on desktop via CSS media query. Not shown for OIANO_ADMIN (internal ops role).
  */
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
+import { Calendar, ClipboardList, Activity, Compass, Handshake, Users, Home as HomeIcon } from 'lucide-react';
 import { useAuthStore } from '../store/auth.store';
 
-const TABS = [
+const ARTIST_TABS = [
   {
     id: 'home',
     label: 'Home',
@@ -49,8 +53,8 @@ const TABS = [
   },
   {
     id: 'inbox',
-    label: 'Workrooms',
-    path: '/workrooms',
+    label: 'Comms',
+    path: '/communications',
     icon: (active: boolean) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
         stroke={active ? '#5A9BCB' : '#555'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -60,7 +64,54 @@ const TABS = [
     ),
     badge: true,
   },
+  {
+    id: 'contributions',
+    label: 'Contribute',
+    path: '/contributions',
+    icon: (active: boolean) => <Handshake size={22} strokeWidth={1.8} color={active ? '#5A9BCB' : '#555'} />,
+  },
 ];
+
+// Lucide-backed icon factory for the newer role tab sets — kept visually
+// consistent with the artist tabs' stroke weight/active color without
+// hand-rolling more raw SVG paths.
+function lucideIcon(Icon: typeof Calendar) {
+  return (active: boolean) => <Icon size={22} strokeWidth={1.8} color={active ? '#5A9BCB' : '#555'} />;
+}
+
+const HOME_TAB = { id: 'home', label: 'Home', path: '/dashboard', icon: lucideIcon(HomeIcon) };
+const CONTRIBUTIONS_TAB = { id: 'contributions', label: 'Contribute', path: '/contributions', icon: lucideIcon(Handshake) };
+
+const STUDIO_ADMIN_TABS = [
+  HOME_TAB,
+  { id: 'calendar', label: 'Calendar', path: '/calendar', icon: lucideIcon(Calendar) },
+  { id: 'runsheet', label: 'Runsheet', path: '/runsheet', icon: lucideIcon(ClipboardList) },
+  { id: 'pulse', label: 'Pulse', path: '/pulse', icon: lucideIcon(Activity) },
+  CONTRIBUTIONS_TAB,
+];
+
+const ENGINEER_TABS = [
+  HOME_TAB,
+  { id: 'calendar', label: 'Calendar', path: '/calendar', icon: lucideIcon(Calendar) },
+  { id: 'runsheet', label: 'Runsheet', path: '/runsheet', icon: lucideIcon(ClipboardList) },
+  { id: 'communications', label: 'Comms', path: '/communications', icon: lucideIcon(Users) },
+  CONTRIBUTIONS_TAB,
+];
+
+const PRODUCER_TABS = [
+  HOME_TAB,
+  { id: 'discover', label: 'Discover', path: '/discover', icon: lucideIcon(Compass) },
+  { id: 'producers', label: 'Producers', path: '/producers', icon: lucideIcon(Users) },
+  { id: 'passport', label: 'Passport', path: '/producer/passport', icon: lucideIcon(ClipboardList) },
+  CONTRIBUTIONS_TAB,
+];
+
+const TABS_BY_ROLE: Record<string, typeof ARTIST_TABS> = {
+  ARTIST: ARTIST_TABS,
+  STUDIO_ADMIN: STUDIO_ADMIN_TABS,
+  ENGINEER: ENGINEER_TABS,
+  PRODUCER: PRODUCER_TABS,
+};
 
 export default function MobileBottomNav() {
   const { user } = useAuthStore();
@@ -68,8 +119,8 @@ export default function MobileBottomNav() {
   const navigate = useNavigate();
   const qc = useQueryClient();
 
-  // Only show for artists
-  if (user?.role !== 'ARTIST') return null;
+  const TABS = user?.role ? TABS_BY_ROLE[user.role] : undefined;
+  if (!TABS) return null;
 
   // Pull notification count from shared React Query cache — no extra fetch
   const notifs: any[] = qc.getQueryData(['notifications']) ?? [];
@@ -98,7 +149,7 @@ export default function MobileBottomNav() {
             >
               <div style={{ position: 'relative', display: 'inline-flex' }}>
                 {tab.icon(active)}
-                {tab.badge && unread > 0 && (
+                {'badge' in tab && tab.badge && unread > 0 && (
                   <span style={{
                     position: 'absolute', top: -4, right: -6,
                     minWidth: 16, height: 16, borderRadius: 8,

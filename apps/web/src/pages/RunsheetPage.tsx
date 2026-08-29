@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
 import { fmtTime } from '../lib/fmt';
 import OianoBrand from '../components/OianoBrand';
+import SessionCompletionModal from '../components/SessionCompletionModal';
 import { BookingStatus, STATUS_HEX } from '../lib/bookingStatus';
 
 interface RunsheetBooking {
@@ -101,6 +102,7 @@ type ViewMode = 'chrono' | 'byRoom';
 export default function RunsheetPage() {
   const [params, setParams] = useSearchParams();
   const [viewMode, setViewMode] = useState<ViewMode>('chrono');
+  const [completingBooking, setCompletingBooking] = useState<RunsheetBooking | null>(null);
   const qc = useQueryClient();
   const user = useAuthStore(s => s.user);
   const isAdmin = user?.role === 'STUDIO_ADMIN';
@@ -171,7 +173,7 @@ export default function RunsheetPage() {
 
     if (b.status === 'CONFIRMED') return (
       <div style={{ marginTop: 2 }}>
-        <button className="no-print" onClick={() => updateStatus.mutate({ id: b.id, status: 'COMPLETED' })}
+        <button className="no-print" onClick={() => setCompletingBooking(b)}
           style={{ ...btnBase, color: '#6b7280', borderColor: '#6b728044' }}>✓ Done</button>
         <button className="no-print" onClick={() => updateStatus.mutate({ id: b.id, status: 'NO_SHOW' })}
           style={{ ...btnBase, color: '#ef4444', borderColor: '#ef444444' }}>✗ No-show</button>
@@ -281,7 +283,7 @@ export default function RunsheetPage() {
 
           <div className="rs-nav">
             <button className="rs-nav-btn" onClick={() => shift(-1)}>‹ Prev</button>
-            <input type="date" className="rs-date-input" value={date}
+            <input type="date" className="rs-date-input" value={date} aria-label="Runsheet date"
               onChange={e => setParams({ date: e.target.value })} />
             <button className="rs-nav-btn" onClick={() => shift(1)}>Next ›</button>
           </div>
@@ -446,7 +448,7 @@ export default function RunsheetPage() {
         <div className="rs-footer" style={{ marginTop: 32 }}>
           <OianoBrand variant="mono" size={11} subtitle="StudioOS" />
           <span className="rs-footer-sep">·</span>
-          <span>Dreamz Music Lab</span>
+          <span>{data?.studio_name ?? 'OIANO Studio Network'}</span>
           <span className="rs-footer-sep">·</span>
           <span>Confidential</span>
         </div>
@@ -459,6 +461,27 @@ export default function RunsheetPage() {
           .rs-sheet { box-shadow: none; border-radius: 0; }
         }
       `}</style>
+
+      {completingBooking && (
+        <SessionCompletionModal
+          booking={{
+            id: completingBooking.id,
+            status: completingBooking.status,
+            starts_at: completingBooking.starts_at,
+            ends_at: completingBooking.ends_at,
+            project_id: null,
+            artist: { name: completingBooking.artist_name },
+            room: { name: completingBooking.room },
+            engineer: { name: completingBooking.engineer },
+            service: { name: completingBooking.service },
+          }}
+          onClose={() => {
+            setCompletingBooking(null);
+            qc.invalidateQueries({ queryKey: ['runsheet', date] });
+            qc.invalidateQueries({ queryKey: ['bookings'] });
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -4,7 +4,8 @@ import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
 import { z } from 'zod';
 import { auditSuccessfulMutation } from '../lib/adminAudit';
-import { isConsentTransitionAllowed, isRightsTransitionAllowed } from '../lib/resourceAuthorization';
+import { isConsentTransitionAllowed } from '../lib/resourceAuthorization';
+import { respondToNamedRightsShare } from '../lib/rightsDecision';
 
 export const artistProjectsRouter = Router();
 artistProjectsRouter.use(authenticate, requireRole('ARTIST'));
@@ -25,7 +26,7 @@ artistProjectsRouter.get('/', async (req: any, res, next) => {
         participants: { where: { status: 'ACTIVE' }, orderBy: { created_at: 'asc' } },
         credits: { orderBy: { created_at: 'asc' } },
         promotional_consents: { orderBy: { created_at: 'desc' } },
-        rights_agreements: { include: { shares: { orderBy: { percentage: 'desc' } } }, orderBy: { created_at: 'desc' } },
+        rights_agreements: { include: { shares: { orderBy: { percentage: 'desc' } }, decisions: { orderBy: { created_at: 'asc' } } }, orderBy: { created_at: 'desc' } },
         bookings: {
           include: {
             room: { select: { name: true } },
@@ -109,9 +110,7 @@ artistProjectsRouter.patch('/:id/rights-agreements/:agreementId', async (req: an
     if (!artist) throw new AppError('Artist not found', 404);
     const agreement = await prisma.rightsAgreement.findFirst({ where: { id: req.params.agreementId, project_id: req.params.id, project: { artist_id: artist.id } } });
     if (!agreement) throw new AppError('Rights agreement not found', 404);
-    if (!isRightsTransitionAllowed(agreement.status, data.action)) throw new AppError('This proposal has already been answered', 409);
-    const now = new Date();
-    const updated = await prisma.rightsAgreement.update({ where: { id: agreement.id }, data: { status: data.action === 'APPROVE' ? 'APPROVED' : 'DISPUTED', responded_by: req.userId, response_note: data.note, responded_at: now, effective_at: data.action === 'APPROVE' ? now : null }, include: { shares: true } });
+    const updated = await respondToNamedRightsShare({ agreementId: agreement.id, userId: req.userId, action: data.action, note: data.note, requestId: req.requestId });
     res.json(updated);
   } catch (error) { next(error); }
 });

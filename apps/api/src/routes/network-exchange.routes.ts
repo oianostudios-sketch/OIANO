@@ -1,6 +1,7 @@
 import { Router, NextFunction, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { authenticate } from '../middleware/auth.middleware';
+import { resolveStaffStudio } from '../middleware/studioScope.middleware';
 
 export const networkExchangeRouter=Router();
 networkExchangeRouter.use(authenticate);
@@ -9,11 +10,11 @@ networkExchangeRouter.get('/',async(req:any,res:Response,next:NextFunction)=>{
   try{
     const role=req.userRole;
     if(role==='STUDIO_ADMIN'){
-      const staff=await prisma.studioStaff.findUnique({where:{user_id:req.userId},include:{studio:true}});
-      if(!staff)return res.status(403).json({error:'Forbidden'});
+      const studio=await resolveStaffStudio(req.userId).catch(()=>null);
+      if(!studio)return res.status(403).json({error:'Forbidden'});
       const since=new Date(Date.now()-30*86400000);
       const artists=await prisma.artist.findMany({where:{status:'AVAILABLE_FOR_BOOKING'},select:{created_at:true,passport:{select:{creative_dna:true,location:true,profile_strength:true}}}});
-      const recentBookings=await prisma.booking.findMany({where:{studio_id:staff.studio_id,created_at:{gte:since}},select:{artist_id:true,starts_at:true,service:{select:{name:true}},artist:{select:{passport:{select:{creative_dna:true}}}}}});
+      const recentBookings=await prisma.booking.findMany({where:{studio_id:studio.id,created_at:{gte:since}},select:{artist_id:true,starts_at:true,service:{select:{name:true}},artist:{select:{passport:{select:{creative_dna:true}}}}}});
       const availableGenres:Record<string,number>={},bookedGenres:Record<string,number>={},services:Record<string,number>={};
       for(const a of artists){const dna=(a.passport?.creative_dna as any)??{};for(const genre of Array.isArray(dna.genres)?dna.genres:[])availableGenres[genre]=(availableGenres[genre]??0)+1}
       for(const b of recentBookings){services[b.service.name]=(services[b.service.name]??0)+1;const dna=(b.artist.passport?.creative_dna as any)??{};for(const genre of Array.isArray(dna.genres)?dna.genres:[])bookedGenres[genre]=(bookedGenres[genre]??0)+1;}

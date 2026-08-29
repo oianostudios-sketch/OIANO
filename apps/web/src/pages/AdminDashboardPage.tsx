@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { Filter, Megaphone, Wallet, Zap, Activity, Calendar, ClipboardList, LogOut, Command, Plus, ArrowRight } from 'lucide-react';
+import { Filter, Megaphone, Wallet, Zap, Activity, Calendar, ClipboardList, LogOut, Command, Plus, ArrowRight, ShieldCheck, Users } from 'lucide-react';
 import { useAuthStore } from '../store/auth.store';
 import { api } from '../lib/api';
 import { useToast } from '../components/Toast';
@@ -11,6 +11,8 @@ import { fmtDate } from '../lib/fmt';
 import { BookingStatus, STATUS_TAILWIND } from '../lib/bookingStatus';
 import NetworkExchangePanel from '../components/NetworkExchangePanel';
 import NotificationBell from '../components/NotificationBell';
+import SessionCompletionModal from '../components/SessionCompletionModal';
+import StudioSwitcher from '../components/StudioSwitcher';
 
 // ── Engagement badge ──────────────────────────────────────────────────────────
 function engagementLevel(lastDate: string | null): 'HOT' | 'WARM' | 'COLD' | null {
@@ -92,6 +94,7 @@ export default function AdminDashboardPage() {
   const [creditTarget, setCreditTarget] = useState<{ id: string; name: string } | null>(null);
   const [creditAmount, setCreditAmount] = useState<number>(100);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [completingBooking, setCompletingBooking] = useState<any>(null);
 
   // Walk-in state
   const [showAnnounce, setShowAnnounce] = useState(false);
@@ -138,7 +141,7 @@ export default function AdminDashboardPage() {
 
   const { data: studio } = useQuery({
     queryKey: ['studio'],
-    queryFn: async () => (await api.get('/studio')).data,
+    queryFn: async () => (await api.get('/studio/current')).data,
   });
 
   // ── Mutations ─────────────────────────────────────────────────────────────────
@@ -249,11 +252,17 @@ export default function AdminDashboardPage() {
           </span>
         </div>
 
-        <nav className="flex items-center gap-1 overflow-x-auto">
+        {/* shrink-0: this nav's flex-item width was coming in a few px short
+            of its own content width (a normal flexbox default-shrink
+            artifact), triggering overflow-x-auto's scrollbar even though the
+            header has hundreds of px of unused space to its left — nothing
+            here actually needs to shrink. */}
+        <nav className="flex items-center gap-1 overflow-x-auto shrink-0">
           {[
             { to: '/pulse',     label: 'Pulse', icon: Activity },
             { to: '/calendar',  label: 'Calendar',     icon: Calendar },
             { to: '/runsheet',  label: 'Runsheet',      icon: ClipboardList },
+            { to: '/admin/team', label: 'Team', icon: Users },
           ].map(({ to, label, icon: Icon }) => (
             <Link
               key={to}
@@ -283,20 +292,21 @@ export default function AdminDashboardPage() {
 
         <section className="flex flex-wrap items-end justify-between gap-5">
           <div>
-            <p className="mb-3 flex items-center gap-2 text-[9px] font-mono uppercase tracking-[.28em] text-dome"><Command size={11}/> Studio command centre</p>
-            <h1 className="font-display text-3xl text-white md:text-5xl">Run today with clarity.</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-500">The floor, people and decisions that need your attention—before the reporting.</p>
+            <p className="mb-3 flex items-center gap-2 text-[9px] font-mono uppercase tracking-[.28em] text-dome"><Command size={11}/> Studio business workspace</p>
+            <h1 className="font-display text-3xl text-white md:text-5xl">Control the business. Protect the work.</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-500">Bookings, customers, team access, policies and commercial decisions in one accountable workspace.</p>
           </div>
           <Link to="/pulse" className="flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/[.055] px-3 py-1.5 text-[9px] font-mono uppercase tracking-wider text-emerald-400 hover:bg-emerald-500/[.09]">
             <Activity size={10}/>Live floor status is in Pulse <ArrowRight size={10}/>
           </Link>
         </section>
 
-        <section aria-label="Operator shortcuts" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        <section aria-label="Operator shortcuts" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
           <button onClick={()=>setShowWalkIn(true)} className="group flex items-center gap-3 rounded-xl border border-dome/20 bg-dome/[.055] p-4 text-left hover:bg-dome/[.09]"><span className="grid h-9 w-9 place-items-center rounded-lg bg-dome/10 text-dome"><Plus size={16}/></span><span><b className="block text-xs">Add walk-in</b><small className="text-[9px] text-zinc-600">Fast booking</small></span><ArrowRight size={13} className="ml-auto text-zinc-700 group-hover:text-dome"/></button>
           <Link to="/calendar" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-[#0b0d0f] p-4 hover:border-white/[.12]"><Calendar size={16} className="text-blue-400"/><span><b className="block text-xs">Calendar</b><small className="text-[9px] text-zinc-600">Capacity & conflicts</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
-          <Link to="/runsheet" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-[#0b0d0f] p-4 hover:border-white/[.12]"><ClipboardList size={16} className="text-violet-400"/><span><b className="block text-xs">Runsheet</b><small className="text-[9px] text-zinc-600">Session execution</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
-          <Link to="/pulse" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-[#0b0d0f] p-4 hover:border-white/[.12]"><Activity size={16} className="text-emerald-400"/><span><b className="block text-xs">Studio Pulse</b><small className="text-[9px] text-zinc-600">Live intelligence</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
+          <Link to="/admin/team" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-[#0b0d0f] p-4 hover:border-white/[.12]"><Users size={16} className="text-violet-400"/><span><b className="block text-xs">Team access</b><small className="text-[9px] text-zinc-600">People & permissions</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
+          <Link to="/runsheet" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-[#0b0d0f] p-4 hover:border-white/[.12]"><ClipboardList size={16} className="text-emerald-400"/><span><b className="block text-xs">Session records</b><small className="text-[9px] text-zinc-600">Execution history</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
+          <Link to="/admin/policies" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-[#0b0d0f] p-4 hover:border-white/[.12]"><ShieldCheck size={16} className="text-dome"/><span><b className="block text-xs">Standards</b><small className="text-[9px] text-zinc-600">Rules & exceptions</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
           <button onClick={()=>setShowAnnounce(true)} className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-[#0b0d0f] p-4 text-left hover:border-white/[.12]"><Megaphone size={16} className="text-amber-400"/><span><b className="block text-xs">Broadcast</b><small className="text-[9px] text-zinc-600">Message artists</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></button>
         </section>
 
@@ -421,6 +431,7 @@ export default function AdminDashboardPage() {
             </div>
               <input
                 type="text"
+                aria-label="Search artist roster"
                 value={artistSearch}
                 onChange={(e) => setArtistSearch(e.target.value)}
                 placeholder="Search by name, alias, or email…"
@@ -441,7 +452,8 @@ export default function AdminDashboardPage() {
                       <div key={a.id} className="bg-studio-surface border border-studio-border rounded-xl px-4 py-3">
                         <div className="flex items-center justify-between">
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
+          <StudioSwitcher />
                               <Link
                                 to={`/artists/${a.id}`}
                                 className="text-white text-sm font-medium hover:text-dome transition-colors truncate"
@@ -496,7 +508,7 @@ export default function AdminDashboardPage() {
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-1 border-b border-studio-border mb-4">
+          <div className="flex gap-1 overflow-x-auto border-b border-studio-border mb-4" aria-label="Booking status filters">
             {BOOKING_TABS.map((tab) => {
               const count = tab === 'All'
                 ? allBookings.length
@@ -567,7 +579,7 @@ export default function AdminDashboardPage() {
                         )}
                         {b.status === 'CONFIRMED' && (
                           <>
-                            <button onClick={() => mutate(b.id, 'COMPLETED')}
+                            <button onClick={() => setCompletingBooking(b)}
                               className="text-xs bg-zinc-800 border border-zinc-700 text-zinc-300 px-2.5 py-1 rounded-lg hover:bg-zinc-700 transition-colors">Complete</button>
                             <button onClick={() => mutate(b.id, 'NO_SHOW')}
                               className="text-xs bg-orange-900/20 border border-orange-800 text-orange-400 px-2.5 py-1 rounded-lg hover:bg-orange-900/30 transition-colors">No show</button>
@@ -761,6 +773,26 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
+      {completingBooking && (
+        <SessionCompletionModal
+          booking={{
+            id: completingBooking.id,
+            status: completingBooking.status,
+            starts_at: completingBooking.starts_at,
+            ends_at: completingBooking.ends_at,
+            project_id: completingBooking.project?.id ?? null,
+            artist: completingBooking.artist ?? null,
+            room: completingBooking.room ?? null,
+            engineer: completingBooking.engineer ?? null,
+            service: completingBooking.service ?? null,
+          }}
+          onClose={() => {
+            setCompletingBooking(null);
+            qc.invalidateQueries({ queryKey: ['all-bookings'] });
+            qc.invalidateQueries({ queryKey: ['analytics'] });
+          }}
+        />
+      )}
     </div>
   );
 }

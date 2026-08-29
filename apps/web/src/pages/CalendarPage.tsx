@@ -199,7 +199,7 @@ export default function CalendarPage() {
 
   const { data: studio } = useQuery({
     queryKey: ['studio'],
-    queryFn: async () => (await api.get('/studio')).data,
+    queryFn: async () => (await api.get('/studio/current')).data,
     staleTime: 300_000,
   });
   const rooms: any[] = studio?.rooms ?? [];

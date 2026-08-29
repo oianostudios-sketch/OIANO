@@ -9,10 +9,12 @@ import VUMeter from '../components/VUMeter';
 import SmartClock from '../components/SmartClock/SmartClock';
 import StudioIntelligencePanel, { PulseData, Insight } from '../components/StudioIntelligencePanel';
 import OianoBrand from '../components/OianoBrand';
+import SessionCompletionModal from '../components/SessionCompletionModal';
 import { Activity, LayoutDashboard, Calendar, ClipboardList, DollarSign, Gauge, Wallet } from 'lucide-react';
 import { useToast } from '../components/Toast';
 import ArtistAvatar, { initials } from '../components/ArtistAvatar';
 import { BookingStatus, STATUS_HEX } from '../lib/bookingStatus';
+import PulseDial from '../components/pulse/PulseDial';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -30,6 +32,7 @@ interface Session {
   room?: { id: string; name: string; room_type: string; status: string } | null;
   engineer?: { id?: string; name?: string } | null;
   notes?: string | null;
+  project_id?: string | null;
 }
 
 interface CircleMember {
@@ -137,100 +140,6 @@ function LiveClock({ timeZone }: { timeZone?: string }) {
 // ── Pulse dial — the hero centrepiece. A ring showing real elapsed % while a
 // session is live, a slow breathing ring otherwise, with the state/countdown
 // text set inside it rather than beside it. ────────────────────────────────
-
-function PulseDial({ activeSession, nextSession, nextCountdown, studioName }: {
-  activeSession?: Session; nextSession?: Session | null; nextCountdown?: string | null; studioName?: string;
-}) {
-  const size = 148, r = 62, cx = size / 2, cy = size / 2, sw = 5;
-  const isLive = !!activeSession;
-
-  const [pct, setPct] = useState(0);
-  useEffect(() => {
-    if (!activeSession?.starts_at || !activeSession?.ends_at) { setPct(0); return; }
-    function calc() {
-      const start = new Date(activeSession!.starts_at!).getTime();
-      const end   = new Date(activeSession!.ends_at!).getTime();
-      const now   = Date.now();
-      setPct(Math.min(100, Math.max(0, ((now - start) / (end - start)) * 100)));
-    }
-    calc();
-    const id = setInterval(calc, 10_000);
-    return () => clearInterval(id);
-  }, [activeSession]);
-
-  const accent = isLive ? '#E8823A' : nextSession ? '#5A9BCB' : '#1D9E75';
-  const angle = Math.min(359.99, (pct / 100) * 360);
-  const rad = (angle - 90) * (Math.PI / 180);
-  const startRad = -Math.PI / 2;
-  const sx = cx + r * Math.cos(startRad), sy = cy + r * Math.sin(startRad);
-  const ex = cx + r * Math.cos(rad), ey = cy + r * Math.sin(rad);
-  const large = angle > 180 ? 1 : 0;
-
-  const minsLeft = isLive && activeSession?.ends_at
-    ? Math.max(0, Math.round((new Date(activeSession.ends_at).getTime() - Date.now()) / 60_000))
-    : null;
-
-  const stateLabel = isLive ? 'In session' : nextSession ? 'Studio ready' : 'Studio open';
-  const bigText = isLive ? fmtMins(minsLeft ?? 0) : nextSession ? (nextCountdown ?? '—') : '—';
-  const bigSub  = isLive ? 'remaining' : nextSession ? 'until next session' : '';
-
-  // Sweep segment — a short arc that continuously rotates around the track,
-  // independent of the real progress arc. Gives the ring an "always scanning"
-  // read even when idle, instead of only animating via the slow breath.
-  const sweepDeg = 34;
-  const sw0 = -Math.PI / 2;
-  const sw1 = (sweepDeg - 90) * (Math.PI / 180);
-  const swSx = cx + r * Math.cos(sw0), swSy = cy + r * Math.sin(sw0);
-  const swEx = cx + r * Math.cos(sw1), swEy = cy + r * Math.sin(sw1);
-  const sweepPath = `M${swSx.toFixed(2)},${swSy.toFixed(2)} A${r},${r},0,0,1,${swEx.toFixed(2)},${swEy.toFixed(2)}`;
-
-  return (
-    <div className={`pulse-dial${isLive ? ' pulse-dial-live' : ''}`}>
-      <svg className="pulse-vinyl" width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-label={`${studioName ?? 'Oiano Studio'} vinyl status`}>
-        <defs>
-          <radialGradient id="vinylFace" cx="38%" cy="30%">
-            <stop offset="0" stopColor="#24282d"/><stop offset=".42" stopColor="#111316"/><stop offset="1" stopColor="#030405"/>
-          </radialGradient>
-          <radialGradient id="vinylLabel" cx="38%" cy="32%">
-            <stop offset="0" stopColor="#e1c86f"/><stop offset="1" stopColor="#8d7130"/>
-          </radialGradient>
-        </defs>
-        <g className="pulse-vinyl-rotor">
-          <circle cx={cx} cy={cy} r="58" fill="url(#vinylFace)" stroke="#ffffff12" strokeWidth="1"/>
-          {[52,48,43,38].map(groove=><circle key={groove} cx={cx} cy={cy} r={groove} fill="none" stroke="#ffffff10" strokeWidth=".7"/>)}
-          <path d="M34 47 A48 48 0 0 1 96 31" fill="none" stroke="#ffffff16" strokeWidth="2" strokeLinecap="round"/>
-          <circle cx={cx} cy={cy} r="22" fill="url(#vinylLabel)" stroke="#f4dea050" strokeWidth="1"/>
-          <circle cx={cx} cy={cy} r="3" fill="#08090a" stroke="#fff4c755" strokeWidth="1"/>
-        </g>
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#1a1a1a" strokeWidth={sw} />
-        <g className="pulse-dial-sweep-rotor" style={{ color: accent }}>
-          <path d={sweepPath} fill="none" stroke={accent} strokeWidth={sw * 0.55} strokeLinecap="round" opacity={0.5} />
-        </g>
-        {isLive && pct > 0 && (
-          <path
-            d={`M${sx.toFixed(2)},${sy.toFixed(2)} A${r},${r},0,${large},1,${ex.toFixed(2)},${ey.toFixed(2)}`}
-            fill="none" stroke={accent} strokeWidth={sw} strokeLinecap="round"
-          />
-        )}
-        {!isLive && (
-          <circle className="pulse-dial-breathe" cx={cx} cy={cy} r={r} fill="none" stroke={accent} strokeWidth={sw} />
-        )}
-      </svg>
-      <div className="pulse-vinyl-brand" aria-hidden="true">
-        <span>{studioName ?? 'OIANO STUDIO'}</span>
-        <i>OIANO · PULSE</i>
-      </div>
-      <div className="pulse-dial-center">
-        <span className="pulse-dial-state" style={{ color: accent }}>{stateLabel}</span>
-        <span className="pulse-dial-big">{bigText}</span>
-        {bigSub && <span className="pulse-dial-sub">{bigSub}</span>}
-        {nextSession?.room?.name && !isLive && (
-          <span className="pulse-dial-room">{nextSession.room.name}</span>
-        )}
-      </div>
-    </div>
-  );
-}
 
 // ── Session progress bar ──────────────────────────────────────────────────────
 
@@ -440,8 +349,8 @@ function DynamicRoomCard({ room, sessions }: { room: { id: string; name: string 
 
 // ── Command Hub Panel — the wave IS the studio ────────────────────────────────
 
-function CommandHubPanel({ todaySessions, utilizationPct, studioOnline }: {
-  todaySessions: Session[]; utilizationPct: number; studioOnline: boolean;
+function CommandHubPanel({ todaySessions, utilizationPct, studioOnline, studioName }: {
+  todaySessions: Session[]; utilizationPct: number; studioOnline: boolean; studioName?: string;
 }) {
   const info = resolveHubState(todaySessions, utilizationPct, studioOnline);
   const { state, activeSession, nextSession, minsUntil, minsOver, minsLeft } = info;
@@ -469,7 +378,7 @@ function CommandHubPanel({ todaySessions, utilizationPct, studioOnline }: {
 
       {/* Studio ID + state pill */}
       <div className="chp-top">
-        <span className="chp-studio-id">Dreamz Music Lab</span>
+        <span className="chp-studio-id">{studioName ?? 'OIANO Studio Network'}</span>
         <span className="chp-pill" style={{
           color: c.accentColor, background: `${c.accentColor}12`,
           border: `1px solid ${c.accentColor}30`,
@@ -588,6 +497,7 @@ export default function PulseDashboard() {
   const [error, setError]         = useState('');
   const [tick, setTick]           = useState(0);
   const [updatingBooking, setUpdatingBooking] = useState<string | null>(null);
+  const [completingSession, setCompletingSession] = useState<Session | null>(null);
   const [assigningBooking, setAssigningBooking] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
@@ -916,8 +826,8 @@ export default function PulseDashboard() {
 
           <nav className="cmd-nav">
             {[
-              { label: 'Pulse',       to: null,          icon: Activity },
-              { label: 'Operator',    to: '/admin',       icon: LayoutDashboard },
+              { label: 'Live Pulse',   to: null,           icon: Activity },
+              { label: 'Business',     to: '/admin',       icon: LayoutDashboard },
               { label: 'Calendar',    to: '/calendar',    icon: Calendar },
               { label: 'Runsheet',    to: '/runsheet',    icon: ClipboardList },
             ].map(n => (
@@ -977,7 +887,7 @@ export default function PulseDashboard() {
             </div>
             <div className="cmd-topbar-right">
               <button className="cmd-btn" onClick={() => { loadData(); loadPulse(); loadCircle(); loadCurrentWork(); }}>↻ Refresh</button>
-              <button className="cmd-btn primary" onClick={() => navigate('/admin')}>Operator desk</button>
+              <button className="cmd-btn primary" onClick={() => navigate('/admin')}>Business workspace</button>
             </div>
           </header>
 
@@ -992,7 +902,7 @@ export default function PulseDashboard() {
             {activeSession ? <div className="hero-glow" /> : null}
             <div className="hero-left">
               <div className="hero-identity">
-                <span className="hero-identity-overline">OIANO CONTROL INSTRUMENT</span>
+                <span className="hero-identity-overline">LIVE OPERATIONS · NOT BUSINESS REPORTING</span>
                 <strong>STUDIO <i>PULSE</i></strong>
                 <span className="hero-identity-rule"/>
               </div>
@@ -1077,6 +987,7 @@ export default function PulseDashboard() {
                 todaySessions={todaySessions}
                 utilizationPct={utilizationPct}
                 studioOnline={!error}
+                studioName={pulseData?.studio?.name}
               />
             </div>
 
@@ -1188,7 +1099,7 @@ export default function PulseDashboard() {
                           {assigningBooking === s.id && <div className="pulse-engineer-menu" onClick={event => event.stopPropagation()}><button onClick={()=>assignEngineer(s,'')}>Unassigned</button>{(pulseData?.engineers ?? []).map(engineer=><button key={engineer.id} onClick={()=>assignEngineer(s,engineer.id)}>{engineer.name}</button>)}</div>}
                           {s.status === 'PENDING' && <button disabled={updatingBooking === s.id} className="pulse-row-action confirm" onClick={event => { event.stopPropagation(); changeBookingStatus(s, 'CONFIRMED'); }}>{updatingBooking === s.id ? 'Saving…' : 'Confirm'}</button>}
                           {s.status === 'CONFIRMED' && !isActive && <button disabled={updatingBooking === s.id} className="pulse-row-action start" onClick={event => { event.stopPropagation(); changeBookingStatus(s, 'IN_PROGRESS'); }}>{updatingBooking === s.id ? 'Starting…' : 'Start'}</button>}
-                          {(s.status === 'IN_PROGRESS' || isActive) && <button disabled={updatingBooking === s.id} className="pulse-row-action complete" onClick={event => { event.stopPropagation(); changeBookingStatus(s, 'COMPLETED'); }}>{updatingBooking === s.id ? 'Saving…' : 'Complete'}</button>}
+                          {(s.status === 'IN_PROGRESS' || isActive) && <button disabled={updatingBooking === s.id} className="pulse-row-action complete" onClick={event => { event.stopPropagation(); setCompletingSession(s); }}>Complete</button>}
                           <span className={`csr-pill ${isActive ? 'pill-live' : s.status === 'CONFIRMED' ? 'pill-green' : s.status === 'PENDING' ? 'pill-gold' : 'pill-grey'}`}>
                             {isActive ? '● LIVE' : s.status?.toLowerCase()}
                           </span>
@@ -1274,6 +1185,25 @@ export default function PulseDashboard() {
           </div>
         </main>
       </div>
+      {completingSession && (
+        <SessionCompletionModal
+          booking={{
+            id: completingSession.id,
+            status: completingSession.status ?? 'IN_PROGRESS',
+            starts_at: completingSession.starts_at ?? '',
+            ends_at: completingSession.ends_at ?? '',
+            project_id: completingSession.project_id ?? null,
+            artist: completingSession.artist ?? null,
+            room: completingSession.room ?? null,
+            engineer: completingSession.engineer ?? null,
+            service: completingSession.service ?? null,
+          }}
+          onClose={() => {
+            setCompletingSession(null);
+            loadData(); loadPulse(); loadCurrentWork();
+          }}
+        />
+      )}
     </>
   );
 }

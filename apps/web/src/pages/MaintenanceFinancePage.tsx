@@ -6,7 +6,7 @@ import { api } from '../lib/api';
 
 type Provider = { provider: string; count: number; volume: number };
 type StudioRow = { id: string; name: string; payments: number; collected: number };
-type Payment = { id: string; created_at: string; paid_at: string | null; status: string; provider: string; amount_usd: number; studio: string; artist: string; booking_id: string };
+type Payment = { id: string; created_at: string; paid_at: string | null; status: string; provider: string; amount_usd: number; refunded_usd: number; studio: string; artist: string; booking_id: string };
 type WalletDrift = { wallet_id: string; artist: string; stored_balance: number; computed_balance: number; drift: number };
 type Finance = {
   totals: { booked_value: number; collected: number; wallet_liability: number; wallet_topups: number; failed: number; refunded: number; processing: number; wallet_drift_count: number };
@@ -14,11 +14,13 @@ type Finance = {
   studios: StudioRow[];
   payments: Payment[];
   wallet_reconciliation: WalletDrift[];
+  ledger_reconciliation: { healthy: boolean; unbalanced_transactions: Array<{id:string;source_type:string;source_id:string;debit:number;credit:number}>; missing_payment_entries: string[]; missing_topup_entries: string[]; accounts: Array<{account_code:string;debit:number;credit:number;balance:number;entries:number}> };
 };
 
 const usd = (n: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(n);
 const tone = (status: string) =>
   status === 'PAID' ? 'text-emerald-400 bg-emerald-500/10'
+  : status === 'PARTIALLY_REFUNDED' ? 'text-sky-300 bg-sky-500/10'
   : status === 'FAILED' ? 'text-red-400 bg-red-500/10'
   : status === 'REFUNDED' ? 'text-violet-300 bg-violet-500/10'
   : 'text-amber-300 bg-amber-500/10';
@@ -65,6 +67,12 @@ export default function MaintenanceFinancePage() {
                 </article>
               ))}
             </div>
+
+            <article className={`mt-5 rounded-2xl border p-5 ${data.ledger_reconciliation.healthy ? 'border-emerald-500/15 bg-emerald-500/[.035]' : 'border-red-500/20 bg-red-500/[.04]'}`}>
+              <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2">{data.ledger_reconciliation.healthy?<CheckCircle2 size={14} className="text-emerald-400"/>:<AlertTriangle size={14} className="text-red-400"/>}<h2 className="text-sm font-semibold">Double-entry reconciliation</h2></div><span className={`text-[9px] font-mono uppercase ${data.ledger_reconciliation.healthy?'text-emerald-400':'text-red-400'}`}>{data.ledger_reconciliation.healthy?'Balanced':'Exceptions found'}</span></div>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">{data.ledger_reconciliation.accounts.map(account=><div key={account.account_code} className="rounded-xl border border-white/[.05] bg-black/20 p-3"><p className="text-[8px] font-mono uppercase text-zinc-600">{account.account_code.replaceAll('_',' ')}</p><p className="mt-2 text-sm">{usd(Math.abs(account.balance))}</p><p className="mt-1 text-[8px] text-zinc-700">{account.entries} entries · {account.balance>=0?'debit':'credit'} balance</p></div>)}</div>
+              {!data.ledger_reconciliation.healthy&&<p className="mt-4 text-[10px] text-red-300">{data.ledger_reconciliation.unbalanced_transactions.length} unbalanced · {data.ledger_reconciliation.missing_payment_entries.length} payments missing · {data.ledger_reconciliation.missing_topup_entries.length} top-ups missing</p>}
+            </article>
 
             {data.totals.wallet_drift_count > 0 && (
               <article className="mt-5 rounded-2xl border border-amber-500/20 bg-amber-500/[.04] p-5">
@@ -116,7 +124,7 @@ export default function MaintenanceFinancePage() {
                     <tr key={p.id} className="border-b border-white/[.04] text-[10px]">
                       <td className="py-4"><b>{p.artist}</b><p className="mt-1 text-[8px] text-zinc-700">{p.studio}</p></td>
                       <td className="text-zinc-500">{p.provider}</td>
-                      <td>{usd(p.amount_usd)}</td>
+                      <td>{usd(p.amount_usd)}{p.refunded_usd>0&&<p className="mt-1 text-[8px] text-violet-300">{usd(p.refunded_usd)} refunded</p>}</td>
                       <td><span className={'rounded-full px-2 py-1 text-[8px] ' + tone(p.status)}>{p.status}</span></td>
                       <td className="text-zinc-600">{new Date(p.created_at).toLocaleDateString()}</td>
                     </tr>

@@ -13,7 +13,7 @@ async function main() {
   // ── Studio ──────────────────────────────────────────────────────────────────
   const studio = await prisma.studio.upsert({
     where: { slug: 'dreamz-music-lab' },
-    update: { timezone: 'Asia/Nicosia', currency: 'EUR', address: 'Lefkoşa, TRNC' },
+    update: { timezone: 'Asia/Nicosia', currency: 'EUR', address: 'Lefkoşa, TRNC', hero_image_url: '/images/studios/dreamz-hero-v1.webp', amenities: ['Main recording room', 'Studio-assigned producer', 'Wi-Fi', 'Lefkoşa location'] },
     create: {
       slug: 'dreamz-music-lab',
       name: 'Dreamz Music Lab',
@@ -22,6 +22,8 @@ async function main() {
       address: 'Lefkoşa, TRNC',
       email: 'hello@dreamzmusiclab.com',
       phone: '+1 (555) 000-0000',
+      hero_image_url: '/images/studios/dreamz-hero-v1.webp',
+      amenities: ['Main recording room', 'Studio-assigned producer', 'Wi-Fi', 'Lefkoşa location'],
     },
   });
 
@@ -31,7 +33,7 @@ async function main() {
   const rooms = await Promise.all([
     prisma.room.upsert({
       where: { id: 'room-studio-a' },
-      update: { name: 'Main Studio', capacity: 8, description: 'Dreamz Music Lab main recording and production room', hourly_rate: 45 },
+      update: { name: 'Main Studio', capacity: 8, description: 'Dreamz Music Lab main recording and production room', hourly_rate: 45, image_url: '/images/studios/dreamz-studio-a-v1.webp', amenities: ['Recording setup', 'Production workstation', 'Monitoring', 'Studio-assigned producer'] },
       create: {
         id: 'room-studio-a',
         studio_id: studio.id,
@@ -39,6 +41,8 @@ async function main() {
         capacity: 8,
         description: 'Main tracking room — SSL console, full live room',
         hourly_rate: 45,
+        image_url: '/images/studios/dreamz-studio-a-v1.webp',
+        amenities: ['Recording setup', 'Production workstation', 'Monitoring', 'Studio-assigned producer'],
       },
     }),
     prisma.room.upsert({
@@ -215,17 +219,17 @@ async function main() {
   // A complete alternative catalogue for multi-studio booking tests.
   const secondStudio = await prisma.studio.upsert({
     where: { slug: 'northlight-sound-house' },
-    update: { name: 'Northlight Sound House', address: '88 Wythe Avenue, Brooklyn, NY 11249', email: 'sessions@northlightsound.com' },
+    update: { name: 'Northlight Sound House', address: '88 Wythe Avenue, Brooklyn, NY 11249', email: 'sessions@northlightsound.com', hero_image_url: '/images/studios/northlight-hero-v1.webp', amenities: ['Daylight rooms', 'Artist lounge', 'Wi-Fi', 'Freight elevator'] },
     create: {
       slug: 'northlight-sound-house', name: 'Northlight Sound House',
       timezone: 'America/New_York', currency: 'USD',
       address: '88 Wythe Avenue, Brooklyn, NY 11249',
-      email: 'sessions@northlightsound.com', phone: '+1 (555) 014-2026', mint_letter: 'N',
+      email: 'sessions@northlightsound.com', phone: '+1 (555) 014-2026', mint_letter: 'N', hero_image_url: '/images/studios/northlight-hero-v1.webp', amenities: ['Daylight rooms', 'Artist lounge', 'Wi-Fi', 'Freight elevator'],
     },
   });
   await Promise.all([
-    prisma.room.upsert({ where: { id: 'northlight-live-room' }, update: { studio_id: secondStudio.id }, create: { id: 'northlight-live-room', studio_id: secondStudio.id, name: 'Live Room', capacity: 10, description: 'Warm live room for bands, drums and ensemble tracking', hourly_rate: 60 } }),
-    prisma.room.upsert({ where: { id: 'northlight-writing-suite' }, update: { studio_id: secondStudio.id }, create: { id: 'northlight-writing-suite', studio_id: secondStudio.id, name: 'Writing Suite', capacity: 4, description: 'Private writing and vocal production suite', hourly_rate: 38 } }),
+    prisma.room.upsert({ where: { id: 'northlight-live-room' }, update: { studio_id: secondStudio.id, image_url: '/images/studios/northlight-live-room-v1.webp', amenities: ['Grand piano','Drum kit','Guitar amps','Acoustic gobos'] }, create: { id: 'northlight-live-room', studio_id: secondStudio.id, name: 'Live Room', capacity: 10, description: 'Warm live room for bands, drums and ensemble tracking', hourly_rate: 60, image_url: '/images/studios/northlight-live-room-v1.webp', amenities: ['Grand piano','Drum kit','Guitar amps','Acoustic gobos'] } }),
+    prisma.room.upsert({ where: { id: 'northlight-writing-suite' }, update: { studio_id: secondStudio.id, image_url: '/images/studios/northlight-writing-suite-v1.webp', amenities: ['Vocal corner','Modular synth','Production desk','Writing lounge'] }, create: { id: 'northlight-writing-suite', studio_id: secondStudio.id, name: 'Writing Suite', capacity: 4, description: 'Private writing and vocal production suite', hourly_rate: 38, image_url: '/images/studios/northlight-writing-suite-v1.webp', amenities: ['Vocal corner','Modular synth','Production desk','Writing lounge'] } }),
     prisma.engineer.upsert({ where: { id: 'eng-amara-northlight' }, update: { studio_id: secondStudio.id, avatar_url: '/images/engineers/amara-cole-v1.webp' }, create: { id: 'eng-amara-northlight', studio_id: secondStudio.id, name: 'Amara Cole', specialties: ['Afro-pop', 'Vocal Production', 'Songwriting'], hourly_rate_usd: 48, bio: 'Vocal producer and tracking engineer focused on expressive modern records.', avatar_url: '/images/engineers/amara-cole-v1.webp' } }),
     prisma.engineer.upsert({ where: { id: 'eng-eli-northlight' }, update: { studio_id: secondStudio.id, avatar_url: '/images/engineers/eli-mercer-v1.webp' }, create: { id: 'eng-eli-northlight', studio_id: secondStudio.id, name: 'Eli Mercer', specialties: ['Live Bands', 'Alternative', 'Mixing'], hourly_rate_usd: 52, bio: 'Live-room specialist known for detailed band tracking and textured mixes.', avatar_url: '/images/engineers/eli-mercer-v1.webp' } }),
     prisma.serviceOffering.upsert({ where: { id: 'northlight-recording' }, update: { studio_id: secondStudio.id }, create: { id: 'northlight-recording', studio_id: secondStudio.id, category: ServiceCategory.RECORDING, name: 'Recording Session', description: 'Hourly recording with the Northlight team', min_price_usd: 38, max_price_usd: 60, unit: 'hour' } }),
@@ -234,11 +238,20 @@ async function main() {
   ]);
   console.log('Second test studio created:', secondStudio.name);
 
-  const ADMIN_PASSWORD    = process.env.SEED_ADMIN_PASSWORD    ?? 'admin123';
-  const ARTIST_PASSWORD   = process.env.SEED_ARTIST_PASSWORD   ?? 'artist123';
-  const ENGINEER_PASSWORD = process.env.SEED_ENGINEER_PASSWORD ?? 'engineer123';
-  const PRODUCER_PASSWORD = process.env.SEED_PRODUCER_PASSWORD ?? 'producer123';
-  const OIANO_ADMIN_PASSWORD = process.env.SEED_OIANO_ADMIN_PASSWORD ?? 'maintenance123';
+  const seedPassword = (name: string, developmentFallback: string) => {
+    const configured = process.env[name];
+    if (configured) return configured;
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(`${name} is required when seeding a production environment`);
+    }
+    return developmentFallback;
+  };
+
+  const ADMIN_PASSWORD       = seedPassword('SEED_ADMIN_PASSWORD', 'admin123');
+  const ARTIST_PASSWORD      = seedPassword('SEED_ARTIST_PASSWORD', 'artist123');
+  const ENGINEER_PASSWORD    = seedPassword('SEED_ENGINEER_PASSWORD', 'engineer123');
+  const PRODUCER_PASSWORD    = seedPassword('SEED_PRODUCER_PASSWORD', 'producer123');
+  const OIANO_ADMIN_PASSWORD = seedPassword('SEED_OIANO_ADMIN_PASSWORD', 'maintenance123');
 
   // ── OIANO Maintenance User ─────────────────────────────────────────────────
   // Private platform-owner account. It has no studio_staff or creator profile

@@ -2,6 +2,13 @@
   "name": "@oiano/shared",
   "version": "0.1.0",
   "private": true,
+  "scripts": {
+    "build": "rimraf dist && tsc -b --force"
+  },
   "main": "src/index.ts",
-  "types": "src/index.ts"
+  "types": "src/index.ts",
+  "devDependencies": {
+    "rimraf": "^5.0.7",
+    "typescript": "^5.4.5"
+  }
 }

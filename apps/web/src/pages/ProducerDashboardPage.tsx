@@ -532,7 +532,7 @@ export default function ProducerDashboardPage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg, #0a0a0a)', fontFamily: 'var(--font-body, DM Sans), sans-serif' }}>
       <ProducerNav passportCode={producer.passport?.passport_code} />
-      <div style={{ padding: '2rem 2rem 4rem', maxWidth: 1600, margin: '0 auto' }}>
+      <main style={{ padding: '2rem 2rem 4rem', maxWidth: 1600, margin: '0 auto' }}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '2rem', gap: '1rem', flexWrap: 'wrap' }}>
@@ -624,7 +624,7 @@ export default function ProducerDashboardPage() {
           }}
         />
       )}
-      </div>
+      </main>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
-import { authenticate } from '../middleware/auth.middleware';
-import { DEFAULT_STUDIO_SLUG } from '@oiano/shared';
+import { authenticate, requireRole } from '../middleware/auth.middleware';
+import { attachStudioScope, resolveStaffStudio } from '../middleware/studioScope.middleware';
 
 type SessionStatus = 'active' | 'ending_soon' | 'overtime' | 'idle';
 
@@ -13,18 +13,18 @@ export const studioClockRouter = Router();
 // is invisible to users but avoids duplicate DB round-trips when several
 // clocks (or several open tabs) are polling at once.
 interface ClockCache { data: unknown; expiresAt: number }
-let clockCache: ClockCache | null = null;
+const clockCache = new Map<string, ClockCache>();
 const CLOCK_CACHE_TTL = 5_000; // 5 s
 
-// GET /api/studio-clock — public; no auth required (clock reads are safe)
-studioClockRouter.get('/', async (_req, res, next) => {
+// GET /api/studio-clock — the operational clock belongs to the staff user's
+// active studio. Session names and schedules are not public tenant data.
+studioClockRouter.get('/', authenticate, requireRole('STUDIO_ADMIN', 'ENGINEER'), attachStudioScope, async (req, res, next) => {
   try {
-    if (clockCache && Date.now() < clockCache.expiresAt) {
-      return res.json(clockCache.data);
+    const studio = (req as any).studio;
+    const cached = clockCache.get(studio.id);
+    if (cached && Date.now() < cached.expiresAt) {
+      return res.json(cached.data);
     }
-
-    const studio = await prisma.studio.findUnique({ where: { slug: DEFAULT_STUDIO_SLUG } });
-    if (!studio) return res.json(idleClockData());
 
     const now = new Date();
     const dayStart = new Date(now);
@@ -127,7 +127,7 @@ studioClockRouter.get('/', async (_req, res, next) => {
       bestRecordingWindows: [10, 14, 19],
     };
 
-    clockCache = { data: responseData, expiresAt: Date.now() + CLOCK_CACHE_TTL };
+    clockCache.set(studio.id, { data: responseData, expiresAt: Date.now() + CLOCK_CACHE_TTL });
     return res.json(responseData);
   } catch (err) {
     next(err);
@@ -138,12 +138,13 @@ studioClockRouter.get('/', async (_req, res, next) => {
 // POST /api/studio-clock/sessions/:id/activity
 // Called by apps/watcher whenever the artist saves a file in their DAW.
 // Records the save as a session log note so the studio clock stays live.
-studioClockRouter.post('/sessions/:id/activity', authenticate, async (req, res, next) => {
+studioClockRouter.post('/sessions/:id/activity', authenticate, requireRole('STUDIO_ADMIN', 'ENGINEER'), async (req, res, next) => {
   try {
     const { note, source } = req.body as { note?: string; source?: string };
     const bookingId = req.params.id;
 
-    const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+    const studio = await resolveStaffStudio((req as any).userId);
+    const booking = await prisma.booking.findFirst({ where: { id: bookingId, studio_id: studio.id } });
     if (!booking) return res.status(404).json({ error: 'Session not found' });
 
     // Upsert a session log — ensures the log exists, then appends a note entry

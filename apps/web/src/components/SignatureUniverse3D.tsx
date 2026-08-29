@@ -1,34 +1,39 @@
-import { Canvas, useFrame } from '@react-three/fiber';
-import { Float, Stars } from '@react-three/drei';
-import { useMemo, useRef } from 'react';
-import * as THREE from 'three';
+import { useMemo } from 'react';
 
-function World({intensified,reduced}:{intensified:boolean;reduced:boolean}){
-  const globe=useRef<THREE.Group>(null),orbit=useRef<THREE.Points>(null);
-  const particles=useMemo(()=>{const count=reduced?120:420,a=new Float32Array(count*3);for(let i=0;i<count;i++){const angle=Math.random()*Math.PI*2,r=3.3+Math.random()*1.8;a[i*3]=Math.cos(angle)*r;a[i*3+1]=(Math.random()-.5)*1.2;a[i*3+2]=Math.sin(angle)*r;}return a},[reduced]);
-  useFrame((_,delta)=>{if(reduced)return;if(globe.current)globe.current.rotation.y+=delta*(intensified?.11:.055);if(orbit.current)orbit.current.rotation.y-=delta*(intensified?.18:.07)});
-  return <group position={[0,-3.4,0]}>
-    <ambientLight intensity={.14}/>
-    <pointLight position={[1.5,3.2,3]} color="#ffd778" intensity={intensified?95:62} distance={12}/>
-    <pointLight position={[-4,1,-2]} color="#5A9BCB" intensity={22} distance={10}/>
-    <group ref={globe}>
-      <mesh><sphereGeometry args={[4.8,96,96]}/><meshStandardMaterial color="#080502" roughness={.72} metalness={.25}/></mesh>
-      <mesh scale={1.012}><sphereGeometry args={[4.8,96,96]}/><meshBasicMaterial color="#d79b36" transparent opacity={.035} side={THREE.BackSide}/></mesh>
-      <mesh rotation={[Math.PI/2.18,0,0]}><torusGeometry args={[4.82,.022,10,180]}/><meshBasicMaterial color="#ffe29a" toneMapped={false}/></mesh>
-    </group>
-    <points ref={orbit} position={[0,4.2,0]}><bufferGeometry><bufferAttribute attach="attributes-position" args={[particles,3]}/></bufferGeometry><pointsMaterial color={intensified?'#ffe6a4':'#c9a84c'} size={intensified?.035:.022} transparent opacity={intensified?.9:.58} sizeAttenuation/></points>
-  </group>
+type SignatureUniverseProps = { intensified?: boolean };
+
+function seededStars(count: number) {
+  let seed = 0x0a1a0;
+  return Array.from({ length: count }, (_, index) => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    const x = (seed % 10000) / 100;
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    const y = (seed % 7200) / 100;
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    const size = 0.7 + (seed % 18) / 10;
+    return { index, x, y, size, delay: -((seed % 9000) / 1000) };
+  });
 }
 
-export default function SignatureUniverse3D({intensified=false}:{intensified?:boolean}){
-  const reduced=typeof window!=='undefined'&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  return <div className="absolute inset-0" aria-hidden="true">
-    <Canvas dpr={[1,1.6]} camera={{position:[0,0,9],fov:42}} gl={{antialias:true,alpha:false,powerPreference:'high-performance'}} fallback={<div className="absolute inset-0 bg-black"/>}>
-      <color attach="background" args={['#010102']}/>
-      <fog attach="fog" args={['#010102',7,18]}/>
-      <Stars radius={45} depth={28} count={reduced?280:900} factor={1.4} saturation={.32} fade speed={reduced?0:.18}/>
-      <Float speed={reduced?0:.35} rotationIntensity={reduced?0:.06} floatIntensity={reduced?0:.12}><World intensified={intensified} reduced={reduced}/></Float>
-    </Canvas>
-    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_78%,rgba(201,168,76,.12),transparent_34%),linear-gradient(180deg,transparent_52%,rgba(0,0,0,.55))]"/>
-  </div>
+/** CSS-only depth keeps the access page atmospheric without shipping WebGL. */
+export default function SignatureUniverse3D({ intensified = false }: SignatureUniverseProps) {
+  const stars = useMemo(() => seededStars(96), []);
+  return (
+    <div className={`signature-universe${intensified ? ' is-intensified' : ''}`} aria-hidden="true">
+      <div className="signature-universe__stars">
+        {stars.map((star) => <i key={star.index} style={{ left: `${star.x}%`, top: `${star.y}%`, width: star.size, height: star.size, animationDelay: `${star.delay}s` }} />)}
+      </div>
+      <div className="signature-universe__horizon" />
+      <div className="signature-universe__orbit" />
+      <div className="signature-universe__veil" />
+      <style>{`
+        .signature-universe{position:absolute;inset:0;overflow:hidden;background:radial-gradient(circle at 50% 78%,rgba(201,168,76,.095),transparent 31%),radial-gradient(circle at 54% 76%,rgba(90,155,203,.065),transparent 37%),#010102;contain:strict}
+        .signature-universe__stars{position:absolute;inset:0;opacity:.72;transition:opacity .4s ease}.signature-universe__stars i{position:absolute;border-radius:50%;background:#e4ca83;box-shadow:0 0 5px rgba(226,201,126,.38);animation:universe-star-breathe 7s ease-in-out infinite}
+        .signature-universe__horizon{position:absolute;left:50%;bottom:-64%;width:118%;aspect-ratio:1;border-radius:50%;transform:translateX(-50%);background:radial-gradient(circle at 49% 14%,rgba(55,38,13,.2),#080502 37%,#020202 62%);box-shadow:inset 0 0 80px rgba(0,0,0,.9),0 -1px 0 rgba(226,201,126,.14),0 -22px 65px rgba(201,168,76,.055)}
+        .signature-universe__orbit{position:absolute;left:50%;bottom:-3%;width:92%;height:27%;border:1px solid rgba(226,201,126,.09);border-radius:50%;transform:translateX(-50%) rotate(-7deg);box-shadow:0 0 28px rgba(201,168,76,.025);transition:border-color .4s ease,box-shadow .4s ease}
+        .signature-universe__veil{position:absolute;inset:0;background:linear-gradient(180deg,transparent 48%,rgba(0,0,0,.5))}.signature-universe.is-intensified .signature-universe__stars{opacity:.95}.signature-universe.is-intensified .signature-universe__orbit{border-color:rgba(226,201,126,.19);box-shadow:0 0 42px rgba(201,168,76,.07)}
+        @keyframes universe-star-breathe{0%,100%{opacity:.34;transform:scale(.78)}50%{opacity:.88;transform:scale(1.08)}}@media(prefers-reduced-motion:reduce){.signature-universe__stars i{animation:none;opacity:.58}}
+      `}</style>
+    </div>
+  );
 }

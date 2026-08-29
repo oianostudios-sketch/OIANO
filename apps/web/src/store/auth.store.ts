@@ -1,10 +1,13 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { UserRole } from '../lib/accountArchitecture';
 
 interface User {
   id: string;
   email: string;
-  role: 'ARTIST' | 'STUDIO_ADMIN' | 'ENGINEER' | 'PRODUCER' | 'OIANO_ADMIN';
+  role: UserRole;
+  mfa_enabled?: boolean;
+  studio_staff?: Array<{ id: string; studio_id: string; role: UserRole; position?: string; capabilities?: string[] }>;
   artist?: {
     id: string;
     name: string;

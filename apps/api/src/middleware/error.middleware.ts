@@ -2,6 +2,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import { AppError } from '../lib/errors';
+import { captureError } from '../lib/sentry';
 
 // One structured JSON line per error, covering every branch below (not just
 // the unhandled-500 case) — DIAG-01/03: a failed request should be
@@ -22,6 +23,9 @@ function logError(req: Request, statusCode: number, message: string, err: unknow
     stack: statusCode >= 500 && err instanceof Error ? err.stack : undefined,
   };
   console.error(JSON.stringify(line));
+  // Only genuine 5xx failures — a validation error or a 404 isn't an
+  // incident, it's normal request handling and would just be noise.
+  if (statusCode >= 500) captureError(err);
 }
 
 export function errorHandler(
