@@ -37,8 +37,14 @@ services:
     startCommand: npm run start --workspace=apps/api
     healthCheckPath: /health
     envVars:
+      # Deliberately NOT "production" yet: env.ts's production branch
+      # (lib/env.ts:22) hard-requires a tested backup-restore within 35
+      # days, legal entity info, and support/security/on-call contacts —
+      # none of which exist yet. This is a soft/free-tier deploy to get
+      # oianoway.com live, not the real event launch; flip this to
+      # "production" only once that checklist is genuinely done.
       - key: NODE_ENV
-        value: production
+        value: staging
       - key: DATABASE_URL
         sync: false
       - key: JWT_SECRET
