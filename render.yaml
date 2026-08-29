@@ -33,7 +33,7 @@ services:
     # `standard` tier is what actually confirms the sizing.
     plan: free
     region: oregon
-    buildCommand: npm install && npx prisma generate --schema=./prisma/schema.prisma && npm run build --workspace=apps/api
+    buildCommand: npm install && npx prisma generate --schema=./prisma/schema.prisma && npm run build --workspace=packages/shared && npm run build --workspace=apps/api
     startCommand: npm run start --workspace=apps/api
     healthCheckPath: /health
     envVars:
