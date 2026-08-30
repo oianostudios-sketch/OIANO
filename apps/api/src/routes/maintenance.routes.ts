@@ -35,6 +35,7 @@ maintenanceRouter.get('/summary', async (_req, res, next) => {
       bookings,
       completedBookings,
       paidRevenue,
+      platformRevenue,
       failedPayments,
       newCreators30d,
       bookings30d,
@@ -51,6 +52,10 @@ maintenanceRouter.get('/summary', async (_req, res, next) => {
       prisma.booking.count(),
       prisma.booking.count({ where: { status: 'COMPLETED' } }),
       prisma.payment.aggregate({ where: { status: 'PAID' }, _sum: { amount_usd: true } }),
+      prisma.financialLedgerEntry.aggregate({
+        where: { account_code: 'PLATFORM_REVENUE', direction: 'CREDIT' },
+        _sum: { amount_usd: true },
+      }),
       prisma.payment.count({ where: { status: 'FAILED' } }),
       prisma.user.count({ where: { role: { in: ['ARTIST', 'PRODUCER'] }, created_at: { gte: thirtyDaysAgo } } }),
       prisma.booking.count({ where: { created_at: { gte: thirtyDaysAgo } } }),
@@ -86,7 +91,8 @@ maintenanceRouter.get('/summary', async (_req, res, next) => {
       business: {
         bookings,
         completed_bookings: completedBookings,
-        paid_revenue_usd: Number(paidRevenue._sum.amount_usd ?? 0),
+        gmv_paid_usd: Number(paidRevenue._sum.amount_usd ?? 0),
+        platform_revenue_usd: Number(platformRevenue._sum.amount_usd ?? 0),
         failed_payments: failedPayments,
         new_creators_30d: newCreators30d,
         bookings_30d: bookings30d,
@@ -99,6 +105,64 @@ maintenanceRouter.get('/summary', async (_req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+maintenanceRouter.get('/search', async (req, res, next) => {
+  try {
+    const q = String(req.query.q ?? '').trim();
+    if (q.length < 2) return res.json({ query: q, results: [] });
+
+    const [artists, producers, studios, booking] = await Promise.all([
+      prisma.artist.findMany({
+        where: {
+          OR: [
+            { name: { contains: q, mode: 'insensitive' } },
+            { alias: { contains: q, mode: 'insensitive' } },
+            { user: { email: { contains: q, mode: 'insensitive' } } },
+            { passport: { passport_code: { contains: q, mode: 'insensitive' } } },
+          ],
+        },
+        take: 10,
+        select: { id: true, name: true, alias: true, user: { select: { email: true } }, passport: { select: { passport_code: true } } },
+      }),
+      prisma.producer.findMany({
+        where: {
+          OR: [
+            { name: { contains: q, mode: 'insensitive' } },
+            { alias: { contains: q, mode: 'insensitive' } },
+            { user: { email: { contains: q, mode: 'insensitive' } } },
+            { passport: { passport_code: { contains: q, mode: 'insensitive' } } },
+          ],
+        },
+        take: 10,
+        select: { id: true, name: true, alias: true, user: { select: { email: true } }, passport: { select: { passport_code: true } } },
+      }),
+      prisma.studio.findMany({
+        where: {
+          OR: [
+            { name: { contains: q, mode: 'insensitive' } },
+            { slug: { contains: q, mode: 'insensitive' } },
+          ],
+        },
+        take: 10,
+        select: { id: true, name: true, slug: true },
+      }),
+      prisma.booking.findUnique({
+        where: { id: q },
+        select: { id: true, status: true, starts_at: true, artist: { select: { name: true } }, studio: { select: { name: true } } },
+      }).catch(() => null),
+    ]);
+
+    res.json({
+      query: q,
+      results: {
+        artists: artists.map((a) => ({ id: a.id, type: 'artist', name: a.name, alias: a.alias, email: a.user.email, passport_code: a.passport?.passport_code ?? null })),
+        producers: producers.map((p) => ({ id: p.id, type: 'producer', name: p.name, alias: p.alias, email: p.user.email, passport_code: p.passport?.passport_code ?? null })),
+        studios: studios.map((s) => ({ id: s.id, type: 'studio', name: s.name, slug: s.slug })),
+        booking: booking ? { id: booking.id, type: 'booking', status: booking.status, starts_at: booking.starts_at, artist_name: booking.artist.name, studio_name: booking.studio.name } : null,
+      },
+    });
+  } catch (error) { next(error); }
 });
 
 maintenanceRouter.get('/studios', async (_req, res, next) => {

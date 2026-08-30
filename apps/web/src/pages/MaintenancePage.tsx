@@ -8,10 +8,15 @@ import MaintenanceShell, { maintenanceSections } from '../components/Maintenance
 type Summary = {
   generated_at: string;
   network: { studios: number; artists: number; producers: number; creators: number; studio_staff: number; live_sessions: number };
-  business: { bookings: number; completed_bookings: number; paid_revenue_usd: number; failed_payments: number; new_creators_30d: number; bookings_30d: number; pending_bookings: number; processing_payments: number };
+  business: { bookings: number; completed_bookings: number; gmv_paid_usd: number; platform_revenue_usd: number; failed_payments: number; new_creators_30d: number; bookings_30d: number; pending_bookings: number; processing_payments: number };
   activity: Array<{ date: string; creators: number; bookings: number }>;
   system: { api: string; database: string };
 };
+
+type SearchHit = { id: string; type: string; name?: string; alias?: string | null; email?: string; passport_code?: string | null; slug?: string; status?: string; starts_at?: string; artist_name?: string; studio_name?: string };
+type SearchResults = { query: string; results: { artists: SearchHit[]; producers: SearchHit[]; studios: SearchHit[]; booking: SearchHit | null } };
+
+const SEARCH_DESTINATION: Record<string, string> = { artist: '/maintenance/creators', producer: '/maintenance/creators', studio: '/maintenance/studios', booking: '/maintenance/bookings' };
 
 const nav = maintenanceSections;
 
@@ -35,6 +40,18 @@ export default function MaintenancePage() {
     ...(data.business.processing_payments ? [{severity:'Monitor', title:`${data.business.processing_payments} payment${data.business.processing_payments === 1 ? '' : 's'} processing`, detail:'Watch for delayed provider confirmation.', tone:'#5A9BCB',href:'/maintenance/finance'}] : []),
   ] : [];
   const destinations=useMemo(()=>nav.filter(item=>item.to&&item.label.toLowerCase().includes(search.toLowerCase())),[search]);
+  const trimmedSearch = search.trim();
+  const { data: searchData } = useQuery<SearchResults>({
+    queryKey: ['maintenance-search', trimmedSearch],
+    queryFn: async () => (await api.get('/maintenance/search', { params: { q: trimmedSearch } })).data,
+    enabled: searchOpen && trimmedSearch.length >= 2,
+  });
+  const searchHits: SearchHit[] = trimmedSearch.length >= 2 && searchData ? [
+    ...searchData.results.artists,
+    ...searchData.results.producers,
+    ...searchData.results.studios,
+    ...(searchData.results.booking ? [searchData.results.booking] : []),
+  ] : [];
 
   return <MaintenanceShell toolbar={<button onClick={()=>setSearchOpen(true)} className="flex w-[360px] items-center gap-2 rounded-xl border border-white/[.055] bg-white/[.018] px-3 py-2.5 text-zinc-700 transition hover:border-white/[.1] hover:text-zinc-500"><Search size={14}/><span className="text-xs">Go to a control area</span><kbd className="ml-auto rounded border border-white/[.06] px-1.5 py-0.5 text-[8px]">⌘ K</kbd></button>}>
 
@@ -48,7 +65,7 @@ export default function MaintenancePage() {
           <div className="relative flex flex-wrap items-center justify-between gap-8"><div><div className="flex items-center gap-2"><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400"/><p className="text-[9px] font-mono uppercase tracking-[.22em] text-emerald-400">OIANO network live</p></div><p className="mt-5 font-display text-2xl">{data.network.studios} studios · {data.network.live_sessions} live sessions · {data.network.creators} creators</p><p className="mt-2 text-xs text-zinc-600">API operational · Database connected · Updated every 30 seconds</p></div><div className="grid grid-cols-3 gap-7 text-center"><div><b className="text-xl">{data.network.studios}</b><p className="mt-1 text-[9px] uppercase tracking-wider text-zinc-700">Studios</p></div><div><b className="text-xl text-dome">{data.network.live_sessions}</b><p className="mt-1 text-[9px] uppercase tracking-wider text-zinc-700">Live</p></div><div><b className="text-xl text-[#C9A84C]">{data.business.new_creators_30d}</b><p className="mt-1 text-[9px] uppercase tracking-wider text-zinc-700">New 30d</p></div></div></div>
         </article>
 
-        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Metric onClick={()=>navigate('/maintenance/studios')} icon={Building2} label="Studios" value={data.network.studios} detail={`${data.network.studio_staff} studio team members`}/><Metric onClick={()=>navigate('/maintenance/creators')} icon={Users} label="Creators" value={data.network.creators} detail={`${data.network.artists} artists · ${data.network.producers} producers`} tone="gold"/><Metric onClick={()=>navigate('/maintenance/bookings')} icon={CalendarCheck} label="Bookings" value={data.business.bookings.toLocaleString()} detail={`${data.business.bookings_30d} created in 30 days`}/><Metric onClick={()=>navigate('/maintenance/finance')} icon={CircleDollarSign} label="Paid volume" value={`$${data.business.paid_revenue_usd.toLocaleString()}`} detail="Gross paid booking value" tone="gold"/></div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5"><Metric onClick={()=>navigate('/maintenance/studios')} icon={Building2} label="Studios" value={data.network.studios} detail={`${data.network.studio_staff} studio team members`}/><Metric onClick={()=>navigate('/maintenance/creators')} icon={Users} label="Creators" value={data.network.creators} detail={`${data.network.artists} artists · ${data.network.producers} producers`} tone="gold"/><Metric onClick={()=>navigate('/maintenance/bookings')} icon={CalendarCheck} label="Bookings" value={data.business.bookings.toLocaleString()} detail={`${data.business.bookings_30d} created in 30 days`}/><Metric onClick={()=>navigate('/maintenance/finance')} icon={CircleDollarSign} label="GMV" value={`$${data.business.gmv_paid_usd.toLocaleString()}`} detail="Gross paid booking value (not revenue)" tone="gold"/><Metric onClick={()=>navigate('/maintenance/finance')} icon={CircleDollarSign} label="Platform revenue" value={`$${data.business.platform_revenue_usd.toLocaleString()}`} detail="OIANO's actual fee take" tone="amber"/></div>
 
         <div className="mt-3 grid gap-3 xl:grid-cols-[1.45fr_1fr]">
           <article className="rounded-2xl border border-white/[.065] bg-studio-surface p-6"><div className="flex items-center justify-between"><div><h2 className="text-sm font-semibold">Network activity</h2><p className="mt-1 text-xs text-zinc-700">Creator registrations and booking demand</p></div><Activity size={16} className="text-dome"/></div><div className="mt-8 flex h-40 items-end gap-3">{data.activity.map(day=><div key={day.date} className="flex h-full flex-1 flex-col justify-end gap-1"><div className="rounded-t bg-dome/70" style={{height:`${Math.max(3,day.bookings/maxActivity*100)}%`}}/><div className="rounded-t bg-[#C9A84C]/70" style={{height:`${Math.max(3,day.creators/maxActivity*100)}%`}}/><span className="mt-2 text-center text-[8px] font-mono text-zinc-800">{new Date(`${day.date}T12:00:00`).toLocaleDateString(undefined,{weekday:'short'})}</span></div>)}</div><div className="mt-5 flex gap-5 text-[9px] text-zinc-700"><span><i className="mr-2 inline-block h-2 w-2 rounded-sm bg-dome/70"/>Bookings</span><span><i className="mr-2 inline-block h-2 w-2 rounded-sm bg-[#C9A84C]/70"/>Creators</span></div></article>
@@ -56,6 +73,21 @@ export default function MaintenancePage() {
         </div><p className="mt-5 text-right text-[8px] font-mono text-zinc-800">Updated {new Date(data.generated_at).toLocaleString()}</p>
       </>}
     </section>
-    {searchOpen&&<div role="dialog" aria-modal="true" aria-label="Control area search" onMouseDown={()=>setSearchOpen(false)} className="fixed inset-0 z-50 flex justify-center bg-black/75 px-4 pt-[12vh] backdrop-blur-sm"><div onMouseDown={event=>event.stopPropagation()} className="h-fit w-full max-w-xl overflow-hidden rounded-2xl border border-white/[.1] bg-studio-surface shadow-2xl"><div className="flex items-center gap-3 border-b border-white/[.07] px-5"><Search size={16} className="text-dome"/><input autoFocus value={search} onChange={event=>setSearch(event.target.value)} placeholder="Search control areas…" className="w-full bg-transparent py-5 text-sm outline-none placeholder:text-zinc-700"/><button onClick={()=>setSearchOpen(false)} className="text-[9px] font-mono text-zinc-700">ESC</button></div><div className="p-2">{destinations.map(({label,icon:Icon,to})=><button key={label} onClick={()=>to&&navigate(to)} className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-xs text-zinc-400 hover:bg-white/[.04] hover:text-white"><Icon size={15} className="text-dome"/>{label}<ChevronRight size={13} className="ml-auto text-zinc-800"/></button>)}{!destinations.length&&<p className="p-5 text-center text-xs text-zinc-700">No control area found.</p>}</div></div></div>}
+    {searchOpen&&<div role="dialog" aria-modal="true" aria-label="Control area search" onMouseDown={()=>setSearchOpen(false)} className="fixed inset-0 z-50 flex justify-center bg-black/75 px-4 pt-[12vh] backdrop-blur-sm"><div onMouseDown={event=>event.stopPropagation()} className="h-fit w-full max-w-xl overflow-hidden rounded-2xl border border-white/[.1] bg-studio-surface shadow-2xl"><div className="flex items-center gap-3 border-b border-white/[.07] px-5"><Search size={16} className="text-dome"/><input autoFocus value={search} onChange={event=>setSearch(event.target.value)} placeholder="Search control areas, or a Passport code / email / booking ID…" className="w-full bg-transparent py-5 text-sm outline-none placeholder:text-zinc-700"/><button onClick={()=>setSearchOpen(false)} className="text-[9px] font-mono text-zinc-700">ESC</button></div><div className="max-h-[50vh] overflow-y-auto p-2">
+      {trimmedSearch.length>=2&&<>
+        <p className="px-4 pb-1 pt-2 text-[9px] font-mono uppercase tracking-[.16em] text-zinc-700">Network records</p>
+        {searchHits.map(hit=><button key={`${hit.type}-${hit.id}`} onClick={()=>{navigate(SEARCH_DESTINATION[hit.type] ?? '/maintenance');setSearchOpen(false);}} className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-xs text-zinc-400 hover:bg-white/[.04] hover:text-white">
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-white/[.035] text-[8px] font-mono uppercase text-dome">{hit.type.slice(0,2)}</span>
+          <span className="min-w-0 flex-1">
+            <b className="block truncate text-xs font-medium text-zinc-200">{hit.type==='booking'?`Booking · ${hit.artist_name} @ ${hit.studio_name}`:hit.name ?? hit.alias ?? hit.slug}</b>
+            <small className="mt-0.5 block truncate text-[10px] text-zinc-700">{hit.type==='booking'?`${hit.status} · starts ${hit.starts_at?new Date(hit.starts_at).toLocaleString():''}`:[hit.passport_code,hit.email].filter(Boolean).join(' · ')}</small>
+          </span>
+          <ChevronRight size={13} className="text-zinc-800"/>
+        </button>)}
+        {!searchHits.length&&<p className="p-5 text-center text-xs text-zinc-700">No matching network record.</p>}
+        <div className="my-2 h-px bg-white/[.05]"/>
+      </>}
+      <p className="px-4 pb-1 pt-2 text-[9px] font-mono uppercase tracking-[.16em] text-zinc-700">Control areas</p>
+      {destinations.map(({label,icon:Icon,to})=><button key={label} onClick={()=>to&&navigate(to)} className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-xs text-zinc-400 hover:bg-white/[.04] hover:text-white"><Icon size={15} className="text-dome"/>{label}<ChevronRight size={13} className="ml-auto text-zinc-800"/></button>)}{!destinations.length&&<p className="p-5 text-center text-xs text-zinc-700">No control area found.</p>}</div></div></div>}
   </MaintenanceShell>;
 }
