@@ -17,6 +17,8 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:seed": "ts-node -r tsconfig-paths/register ../../prisma/seed.ts",
+    "db:seed:ecosystem": "ts-node -r tsconfig-paths/register ../../prisma/seed-ecosystem.ts",
+    "dev:trigger": "ts-node -r tsconfig-paths/register ../../scripts/dev-ecosystem-triggers.ts",
     "db:studio": "prisma studio",
     "db:generate": "prisma generate"
   },
@@ -38,6 +40,7 @@
     "multer": "^2.2.0",
     "qrcode": "^1.5.4",
     "satori": "^0.26.0",
+    "sharp": "^0.35.4",
     "stripe": "^22.3.0",
     "zod": "^3.23.8"
   },

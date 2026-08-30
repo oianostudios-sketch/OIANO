@@ -19,6 +19,8 @@
     "db:migrate": "npm run db:migrate --workspace=apps/api",
     "db:verify-baseline": "node scripts/verify-database-baseline.js",
     "db:seed": "npm run db:seed --workspace=apps/api",
+    "db:seed:ecosystem": "npm run db:seed:ecosystem --workspace=apps/api",
+    "dev:trigger": "npm run dev:trigger --workspace=apps/api",
     "db:studio": "npm run db:studio --workspace=apps/api"
     ,"qa:reset-demo-passwords": "ts-node -r tsconfig-paths/register scripts/reset-local-demo-passwords.ts"
   },
