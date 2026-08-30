@@ -60,7 +60,7 @@ export default function MaintenanceFinancePage() {
                 [CreditCard, 'Failed', String(data.totals.failed)],
                 [AlertTriangle, 'Wallet drift', String(data.totals.wallet_drift_count)],
               ].map(([Icon, label, value]: any) => (
-                <article key={label} className="rounded-2xl border border-white/[.065] bg-[#0b0d0f] p-5">
+                <article key={label} className="metric-enter rounded-2xl border border-white/[.065] bg-studio-surface p-5">
                   <Icon size={15} className={label === 'Wallet drift' && data.totals.wallet_drift_count > 0 ? 'text-amber-400' : 'text-[#C9A84C]'} />
                   <b className="mt-7 block text-xl">{value}</b>
                   <p className="mt-2 text-[8px] font-mono uppercase tracking-wider text-zinc-700">{label}</p>
@@ -108,7 +108,7 @@ export default function MaintenanceFinancePage() {
               </div>
             )}
 
-            <article className="mt-5 overflow-x-auto rounded-2xl border border-white/[.065] bg-[#0b0d0f] p-5">
+            <article className="mt-5 overflow-x-auto rounded-2xl border border-white/[.065] bg-studio-surface p-5">
               <div className="mb-5">
                 <h2 className="text-sm font-semibold">Payments</h2>
                 <p className="mt-1 text-[10px] text-zinc-700">Every booking payment, wallet-funded or Stripe-paid.</p>

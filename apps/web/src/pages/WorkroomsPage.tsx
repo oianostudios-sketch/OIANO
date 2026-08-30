@@ -63,8 +63,8 @@ export default function WorkroomsPage() {
   const loading = bookingsQuery.isLoading || projectsQuery.isLoading;
 
   return (
-    <div className="min-h-screen bg-[#090b0d] text-zinc-100 pb-28">
-      <header className="sticky top-0 z-20 border-b border-white/[.07] bg-[#090b0d]/95 px-5 py-4 backdrop-blur-xl">
+    <div className="min-h-screen bg-studio-bg text-zinc-100 pb-28">
+      <header className="sticky top-0 z-20 border-b border-white/[.07] bg-studio-bg/95 px-5 py-4 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center gap-4">
           <Link to="/dashboard" className="text-xs text-zinc-500 hover:text-white">← Home</Link>
           <div><p className="text-[9px] font-mono uppercase tracking-[.2em] text-dome">Oiano communications</p><h1 className="text-xl font-medium">Workrooms</h1></div>

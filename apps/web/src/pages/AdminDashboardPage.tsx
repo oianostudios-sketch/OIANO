@@ -303,11 +303,11 @@ export default function AdminDashboardPage() {
 
         <section aria-label="Operator shortcuts" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
           <button onClick={()=>setShowWalkIn(true)} className="group flex items-center gap-3 rounded-xl border border-dome/20 bg-dome/[.055] p-4 text-left hover:bg-dome/[.09]"><span className="grid h-9 w-9 place-items-center rounded-lg bg-dome/10 text-dome"><Plus size={16}/></span><span><b className="block text-xs">Add walk-in</b><small className="text-[9px] text-zinc-600">Fast booking</small></span><ArrowRight size={13} className="ml-auto text-zinc-700 group-hover:text-dome"/></button>
-          <Link to="/calendar" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-[#0b0d0f] p-4 hover:border-white/[.12]"><Calendar size={16} className="text-blue-400"/><span><b className="block text-xs">Calendar</b><small className="text-[9px] text-zinc-600">Capacity & conflicts</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
-          <Link to="/admin/team" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-[#0b0d0f] p-4 hover:border-white/[.12]"><Users size={16} className="text-violet-400"/><span><b className="block text-xs">Team access</b><small className="text-[9px] text-zinc-600">People & permissions</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
-          <Link to="/runsheet" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-[#0b0d0f] p-4 hover:border-white/[.12]"><ClipboardList size={16} className="text-emerald-400"/><span><b className="block text-xs">Session records</b><small className="text-[9px] text-zinc-600">Execution history</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
-          <Link to="/admin/policies" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-[#0b0d0f] p-4 hover:border-white/[.12]"><ShieldCheck size={16} className="text-dome"/><span><b className="block text-xs">Standards</b><small className="text-[9px] text-zinc-600">Rules & exceptions</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
-          <button onClick={()=>setShowAnnounce(true)} className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-[#0b0d0f] p-4 text-left hover:border-white/[.12]"><Megaphone size={16} className="text-amber-400"/><span><b className="block text-xs">Broadcast</b><small className="text-[9px] text-zinc-600">Message artists</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></button>
+          <Link to="/calendar" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-studio-surface p-4 hover:border-white/[.12]"><Calendar size={16} className="text-blue-400"/><span><b className="block text-xs">Calendar</b><small className="text-[9px] text-zinc-600">Capacity & conflicts</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
+          <Link to="/admin/team" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-studio-surface p-4 hover:border-white/[.12]"><Users size={16} className="text-violet-400"/><span><b className="block text-xs">Team access</b><small className="text-[9px] text-zinc-600">People & permissions</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
+          <Link to="/runsheet" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-studio-surface p-4 hover:border-white/[.12]"><ClipboardList size={16} className="text-emerald-400"/><span><b className="block text-xs">Session records</b><small className="text-[9px] text-zinc-600">Execution history</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
+          <Link to="/admin/policies" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-studio-surface p-4 hover:border-white/[.12]"><ShieldCheck size={16} className="text-dome"/><span><b className="block text-xs">Standards</b><small className="text-[9px] text-zinc-600">Rules & exceptions</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
+          <button onClick={()=>setShowAnnounce(true)} className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-studio-surface p-4 text-left hover:border-white/[.12]"><Megaphone size={16} className="text-amber-400"/><span><b className="block text-xs">Broadcast</b><small className="text-[9px] text-zinc-600">Message artists</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></button>
         </section>
 
         {(pending.length>0||(creditRequests as any[]).length>0)&&<section className="rounded-2xl border border-amber-500/15 bg-[linear-gradient(120deg,rgba(245,158,11,.07),rgba(255,255,255,.015))] p-5"><div className="flex flex-wrap items-center gap-4"><div className="grid h-10 w-10 place-items-center rounded-xl bg-amber-500/10 text-amber-400"><Zap size={17}/></div><div><p className="text-[9px] font-mono uppercase tracking-[.2em] text-amber-400">Needs attention</p><h2 className="mt-1 text-sm font-semibold">{pending.length} booking request{pending.length===1?'':'s'} · {(creditRequests as any[]).length} credit request{(creditRequests as any[]).length===1?'':'s'}</h2></div><button onClick={()=>setBookingTab('Pending')} className="ml-auto rounded-lg border border-amber-500/20 bg-amber-500/[.07] px-4 py-2 text-[10px] text-amber-300">Open queue</button></div></section>}
@@ -318,7 +318,7 @@ export default function AdminDashboardPage() {
         <div className="grid grid-cols-2 gap-2">
           {loadingAnalytics
             ? Array.from({ length: 2 }).map((_, i) => (
-                <div key={i} className="rounded-xl border border-white/[.06] bg-[#0b0d0f] p-5">
+                <div key={i} className="rounded-xl border border-white/[.06] bg-studio-surface p-5">
                   <SkeletonKPI />
                 </div>
               ))
@@ -327,7 +327,7 @@ export default function AdminDashboardPage() {
                 return (
                 <div
                   key={kpi.label}
-                  className={`min-h-32 rounded-xl border border-white/[.06] bg-[#0b0d0f] p-5 flex flex-col justify-between transition hover:border-white/[.1] ${SURFACE_ANIMS[i] ?? 'animate-surface-4'}${isPendingCard ? ' kpi-pending-pulse' : ''}`}
+                  className={`min-h-32 rounded-xl border border-white/[.06] bg-studio-surface p-5 flex flex-col justify-between transition hover:border-white/[.1] ${SURFACE_ANIMS[i] ?? 'animate-surface-4'}${isPendingCard ? ' kpi-pending-pulse' : ''}`}
                 >
                   <div>
                     <p className="label-mono mb-3">{kpi.label}</p>

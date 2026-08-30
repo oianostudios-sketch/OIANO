@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { ProducerNav } from '../components/ProducerNav';
 import { initials } from '../components/ArtistAvatar';
+import { disciplineLabel } from '../lib/creativeDisciplines';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Phase =
@@ -33,6 +34,11 @@ interface ProducerProfile {
   bio: string | null;
   avatar_url: string | null;
   open_to_collabs: boolean;
+  primary_discipline: string;
+  disciplines: string[];
+  services: string[];
+  location: string | null;
+  onboarding_complete: boolean;
   passport: {
     passport_code: string;
     genres_produced: string[];
@@ -506,7 +512,7 @@ export default function ProducerDashboardPage() {
   if (isLoading) {
     return (
       <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ color: '#555', fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }}>Loading production board…</div>
+        <div style={{ color: '#555', fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }}>Opening your professional workspace…</div>
       </div>
     );
   }
@@ -518,6 +524,10 @@ export default function ProducerDashboardPage() {
   }
 
   if (!producer) return null;
+
+  if (!producer.onboarding_complete) {
+    return <div className="min-h-screen bg-studio-bg px-5 py-20 text-white"><div className="mx-auto max-w-xl rounded-3xl border border-white/[.07] bg-studio-surface p-8"><p className="font-mono text-[9px] uppercase tracking-[.2em] text-dome">Creative professional identity</p><h1 className="mt-4 font-display text-3xl">Tell OIANO what you do.</h1><p className="mt-3 text-sm leading-6 text-zinc-500">Your workspace, discovery profile and contribution language are shaped by your disciplines—not by a generic producer label.</p><button type="button" onClick={()=>navigate('/professional/onboarding')} className="mt-7 rounded-xl bg-dome px-5 py-3 text-xs font-semibold text-black">Complete professional setup</button></div></div>;
+  }
 
   const activeProjects = (producer.projects ?? []).filter(p => p.is_active);
 
@@ -538,14 +548,15 @@ export default function ProducerDashboardPage() {
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '2rem', gap: '1rem', flexWrap: 'wrap' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.25rem' }}>
-            <span style={{ fontSize: '1.5rem' }}>🎛️</span>
+            <span style={{ fontSize: '1.5rem' }}>✦</span>
             <h1 style={{ margin: 0, fontSize: '1.6rem', fontFamily: 'var(--font-display, Playfair Display)', color: '#fff', fontWeight: 700 }}>
               {producer.alias ?? producer.name}
             </h1>
           </div>
           <p style={{ margin: 0, color: '#555', fontSize: '0.85rem', fontFamily: 'var(--font-mono, JetBrains Mono)' }}>
-            {producer.passport?.passport_code ?? 'Producer'}
+            {disciplineLabel(producer.primary_discipline)} · {producer.passport?.passport_code ?? 'Professional Passport'}
           </p>
+          <div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:10}}>{(producer.disciplines??[]).map((id)=><span key={id} style={{border:'1px solid rgba(90,155,203,.18)',borderRadius:999,padding:'3px 8px',fontSize:9,color:'#7299ae'}}>{disciplineLabel(id)}</span>)}</div>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
           <button
@@ -580,7 +591,8 @@ export default function ProducerDashboardPage() {
       {/* Stats */}
       <StatsStrip projects={activeProjects} producer={producer} />
 
-      {/* Production Board — horizontal scrolling lane */}
+      <div style={{margin:'1rem 0',display:'flex',justifyContent:'space-between',alignItems:'end',gap:12,flexWrap:'wrap'}}><div><p style={{margin:0,fontSize:10,color:'#5A9BCB',textTransform:'uppercase',letterSpacing:'.15em'}}>Creative work</p><h2 style={{margin:'5px 0 0',fontSize:'1.1rem'}}>Project contribution board</h2></div><button type="button" onClick={()=>navigate('/professional/onboarding')} style={{border:'1px solid rgba(255,255,255,.08)',borderRadius:8,background:'transparent',color:'#777',padding:'8px 11px',fontSize:10}}>Edit disciplines & services</button></div>
+      {/* Project contribution board — horizontal scrolling lane */}
       <style>{'@media (max-width: 768px) { .producer-board-hint { display: block !important; } }'}</style>
       <div className="producer-board-hint" style={{ display: 'none', fontSize: '0.7rem', color: '#5A9BCB', fontFamily: 'var(--font-mono, JetBrains Mono), monospace', marginBottom: '0.5rem' }}>
         ← Swipe to see every phase →
