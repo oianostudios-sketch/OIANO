@@ -252,16 +252,20 @@ async function main() {
   const ENGINEER_PASSWORD    = seedPassword('SEED_ENGINEER_PASSWORD', 'engineer123');
   const PRODUCER_PASSWORD    = seedPassword('SEED_PRODUCER_PASSWORD', 'producer123');
   const OIANO_ADMIN_PASSWORD = seedPassword('SEED_OIANO_ADMIN_PASSWORD', 'maintenance123');
+  // Configurable so re-seeding a real environment updates the actual admin
+  // identity in place instead of creating a stray second demo account once
+  // that identity has been rotated off the maintenance@oiano.com default.
+  const OIANO_ADMIN_EMAIL = process.env.SEED_OIANO_ADMIN_EMAIL || 'maintenance@oiano.com';
 
   // ── OIANO Maintenance User ─────────────────────────────────────────────────
   // Private platform-owner account. It has no studio_staff or creator profile
   // because its authority belongs to the OIANO network, not an individual studio.
   const oianoAdminPasswordHash = await bcrypt.hash(OIANO_ADMIN_PASSWORD, 10);
   const oianoAdmin = await prisma.user.upsert({
-    where: { email: 'maintenance@oiano.com' },
+    where: { email: OIANO_ADMIN_EMAIL },
     update: { password_hash: oianoAdminPasswordHash, role: UserRole.OIANO_ADMIN },
     create: {
-      email: 'maintenance@oiano.com',
+      email: OIANO_ADMIN_EMAIL,
       password_hash: oianoAdminPasswordHash,
       role: UserRole.OIANO_ADMIN,
     },

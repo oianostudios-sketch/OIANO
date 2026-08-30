@@ -8,7 +8,7 @@ import { generatePassportCode } from '../lib/passport';
 import { AppError } from '../lib/errors';
 import { emitActivityEvent } from '../lib/activityEvents';
 import { writeAdminAudit } from '../lib/adminAudit';
-import { decryptTotp, encryptTotp, newTotpSecret, tryDecryptTotp, verifyTotp } from '../lib/totp';
+import { encryptTotp, newTotpSecret, tryDecryptTotp, verifyTotp } from '../lib/totp';
 import { issuePasswordResetToken, verifyPasswordResetToken, passwordVersionMatches } from '../lib/passwordResetToken';
 import { sendPasswordResetEmail } from '../services/email.service';
 
@@ -192,9 +192,15 @@ export async function login(req: Request, res: Response, next: NextFunction) {
 
 export async function verifyMfa(req:Request,res:Response,next:NextFunction){try{
  const {challenge,code}=z.object({challenge:z.string(),code:z.string().regex(/^\d{6}$/)}).parse(req.body);
- const payload=jwt.verify(challenge,process.env.JWT_SECRET!) as any;if(payload.type!=='mfa'||!['setup','verify'].includes(payload.purpose))throw new AppError('Invalid MFA challenge',401);
+ // jwt.verify throws TokenExpiredError/JsonWebTokenError for a stale or malformed
+ // challenge — neither is a ZodError/AppError, so left uncaught it fell through to
+ // error.middleware's generic 500 instead of a message the user could act on.
+ let payload:any;
+ try{payload=jwt.verify(challenge,process.env.JWT_SECRET!);}catch{throw new AppError('Your verification session expired — please sign in again.',401);}
+ if(payload.type!=='mfa'||!['setup','verify'].includes(payload.purpose))throw new AppError('Invalid MFA challenge',401);
  const user=await prisma.user.findUnique({where:{id:payload.sub}});if(!user||user.role!=='OIANO_ADMIN'||!user.mfa_secret_encrypted)throw new AppError('Invalid MFA challenge',401);
- if(!verifyTotp(decryptTotp(user.mfa_secret_encrypted),code)){await writeAdminAudit(user.id,'mfa.verification.failed',req);throw new AppError('Invalid authenticator code',401);}
+ const secret=tryDecryptTotp(user.mfa_secret_encrypted);
+ if(!secret||!verifyTotp(secret,code)){await writeAdminAudit(user.id,'mfa.verification.failed',req);throw new AppError('Invalid authenticator code',401);}
  if(payload.purpose==='setup')await prisma.user.update({where:{id:user.id},data:{mfa_enabled:true}});
  await writeAdminAudit(user.id,payload.purpose==='setup'?'mfa.enrollment.completed':'auth.login.success',req);
  const refreshed=await prisma.user.findUnique({where:{id:user.id}});res.json({token:signToken(user.id,user.role,user.auth_version),user:sanitizeUser(refreshed)});

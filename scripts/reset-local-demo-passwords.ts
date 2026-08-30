@@ -9,7 +9,9 @@ const accounts = [
   ['producer@dreamzmusiclab.com', 'producer123'],
   ['engineer@dreamzmusiclab.com', 'engineer123'],
   ['admin@dreamzmusiclab.com', 'admin123'],
-  ['maintenance@oiano.com', 'maintenance123'],
+  // maintenance@oiano.com intentionally omitted: once SEED_OIANO_ADMIN_EMAIL
+  // points the platform-admin identity at a real address (see prisma/seed.ts),
+  // this script must never reset that account back to the demo password.
 ] as const;
 
 async function main() {
