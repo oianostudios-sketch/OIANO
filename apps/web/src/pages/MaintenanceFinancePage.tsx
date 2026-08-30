@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, ArrowLeft, CheckCircle2, CircleDollarSign, Clock3, CreditCard, WalletCards } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import MaintenanceShell from '../components/MaintenanceShell';
+import MaintenanceMetricCard from '../components/MaintenanceMetricCard';
 import { api } from '../lib/api';
 
 type Provider = { provider: string; count: number; volume: number };
@@ -53,19 +54,11 @@ export default function MaintenanceFinancePage() {
         ) : (
           <>
             <div className="mt-9 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-              {[
-                [CircleDollarSign, 'Collected', usd(data.totals.collected)],
-                [WalletCards, 'Wallet liability', usd(data.totals.wallet_liability)],
-                [Clock3, 'Processing', String(data.totals.processing)],
-                [CreditCard, 'Failed', String(data.totals.failed)],
-                [AlertTriangle, 'Wallet drift', String(data.totals.wallet_drift_count)],
-              ].map(([Icon, label, value]: any) => (
-                <article key={label} className="metric-enter rounded-2xl border border-white/[.065] bg-studio-surface p-5">
-                  <Icon size={15} className={label === 'Wallet drift' && data.totals.wallet_drift_count > 0 ? 'text-amber-400' : 'text-[#C9A84C]'} />
-                  <b className="mt-7 block text-xl">{value}</b>
-                  <p className="mt-2 text-[8px] font-mono uppercase tracking-wider text-zinc-700">{label}</p>
-                </article>
-              ))}
+              <MaintenanceMetricCard icon={CircleDollarSign} label="Collected" value={usd(data.totals.collected)} tone="gold" />
+              <MaintenanceMetricCard icon={WalletCards} label="Wallet liability" value={usd(data.totals.wallet_liability)} tone="gold" />
+              <MaintenanceMetricCard icon={Clock3} label="Processing" value={data.totals.processing} tone="gold" />
+              <MaintenanceMetricCard icon={CreditCard} label="Failed" value={data.totals.failed} tone={data.totals.failed > 0 ? 'red' : 'gold'} />
+              <MaintenanceMetricCard icon={AlertTriangle} label="Wallet drift" value={data.totals.wallet_drift_count} tone={data.totals.wallet_drift_count > 0 ? 'amber' : 'gold'} />
             </div>
 
             <article className={`mt-5 rounded-2xl border p-5 ${data.ledger_reconciliation.healthy ? 'border-emerald-500/15 bg-emerald-500/[.035]' : 'border-red-500/20 bg-red-500/[.04]'}`}>

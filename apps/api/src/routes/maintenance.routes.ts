@@ -335,19 +335,37 @@ maintenanceRouter.get('/health', async (_req, res, next) => {
     const started = Date.now();
     await prisma.$queryRaw`SELECT 1`;
     const databaseLatencyMs = Date.now() - started;
-    const [webhookProcessing, webhookFailed, webhookProcessed, users, admins] = await Promise.all([
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const [webhookProcessing, webhookFailed, webhookProcessed, users, admins, adminsWithoutMfa, recentAuditEvents] = await Promise.all([
       prisma.stripeWebhookEvent.count({ where: { status: 'PROCESSING' } }),
       prisma.stripeWebhookEvent.count({ where: { status: 'FAILED' } }),
       prisma.stripeWebhookEvent.count({ where: { status: 'PROCESSED' } }),
       prisma.user.count(), prisma.user.count({ where: { role: 'OIANO_ADMIN' } }),
+      prisma.user.count({ where: { role: 'OIANO_ADMIN', mfa_enabled: false } }),
+      prisma.adminAuditLog.count({ where: { created_at: { gte: oneDayAgo } } }),
     ]);
     const stripeEnabled = process.env.STRIPE_ENABLED === 'true';
     res.json({
       checked_at: new Date().toISOString(), uptime_seconds: Math.floor(process.uptime()),
       services: { api: { status: 'OPERATIONAL' }, database: { status: 'OPERATIONAL', latency_ms: databaseLatencyMs }, webhooks: { status: webhookFailed > 0 ? 'DEGRADED' : 'OPERATIONAL', processing: webhookProcessing, failed: webhookFailed, processed: webhookProcessed } },
       configuration: { database: Boolean(process.env.DATABASE_URL), jwt: Boolean(process.env.JWT_SECRET), frontend_origin: Boolean(process.env.FRONTEND_URL), stripe_enabled: stripeEnabled, stripe_secret: !stripeEnabled || Boolean(process.env.STRIPE_SECRET_KEY), stripe_webhook_secret: !stripeEnabled || Boolean(process.env.STRIPE_WEBHOOK_SECRET), object_storage: Boolean(process.env.R2_ACCOUNT_ID) },
-      security: { helmet: true, cors_allowlist: true, auth_rate_limit: true, role_protected_maintenance: true, webhook_idempotency: true, administrative_audit_log: true, mfa: true },
-      accounts: { users, oiano_admins: admins },
+      // helmet/role_protected_maintenance/webhook_idempotency are structural
+      // guarantees enforced unconditionally by code (app.ts middleware order,
+      // this router's own requireRole('OIANO_ADMIN'), the webhook handler's
+      // idempotency key) — verified by tests, not runtime-checkable facts, so
+      // they stay static. mfa and administrative_audit_log DO have a reachable
+      // false state at runtime and were previously hardcoded true regardless —
+      // now computed from real rows so this panel can actually go red.
+      security: {
+        helmet: true,
+        cors_allowlist: Boolean(process.env.FRONTEND_URL),
+        auth_rate_limit: true,
+        role_protected_maintenance: true,
+        webhook_idempotency: true,
+        administrative_audit_log: recentAuditEvents > 0,
+        mfa: admins > 0 && adminsWithoutMfa === 0,
+      },
+      accounts: { users, oiano_admins: admins, oiano_admins_without_mfa: adminsWithoutMfa },
     });
   } catch (error) { next(error); }
 });

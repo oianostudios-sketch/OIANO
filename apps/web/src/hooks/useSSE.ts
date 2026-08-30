@@ -59,6 +59,12 @@ export function useSSE() {
             qc.invalidateQueries({ queryKey: ['all-bookings'] });
             qc.invalidateQueries({ queryKey: ['analytics'] });
             qc.invalidateQueries({ queryKey: ['availability'] });
+            // Maintenance console (OIANO_ADMIN) — a booking status change is
+            // exactly what its live-session/needs-action counts represent.
+            // Without this it only ever finds out on its next 15-60s poll.
+            qc.invalidateQueries({ queryKey: ['maintenance-summary'] });
+            qc.invalidateQueries({ queryKey: ['maintenance-studios'] });
+            qc.invalidateQueries({ queryKey: ['maintenance-bookings'] });
             if (event.bookingId) {
               qc.invalidateQueries({ queryKey: ['booking', event.bookingId] });
             }
