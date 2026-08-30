@@ -527,6 +527,19 @@ export async function updateBookingStatus(req: Request, res: Response, next: Nex
       await syncStudioCircleMembership(booking.studio_id, booking.artist_id);
     }
 
+    if (status === 'CONFIRMED') {
+      emitActivityEvent('booking.confirmed', {
+        artist_id: booking.artist_id,
+        booking_id: booking.id,
+      }).catch((e) => console.error('[activity] booking.confirmed emit failed:', e?.message));
+    }
+    if (status === 'CANCELLED') {
+      emitActivityEvent('booking.cancelled', {
+        artist_id: booking.artist_id,
+        booking_id: booking.id,
+      }).catch((e) => console.error('[activity] booking.cancelled emit failed:', e?.message));
+    }
+
     // On COMPLETED — update project's last_session_at if booking is tied to one
     if (status === 'COMPLETED' && (existing as any).project_id) {
       (prisma as any).project.update({

@@ -7,7 +7,10 @@ export type ActivityEventType =
   | 'profile.created'
   | 'status.changed'
   | 'session.booked'
-  | 'session.completed';
+  | 'session.completed'
+  | 'booking.confirmed'
+  | 'booking.cancelled'
+  | 'payment.received';
 
 export interface ActivityEvent {
   id: string;

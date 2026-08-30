@@ -1,7 +1,9 @@
 import { app } from './app';
 import { registerClockActivityConsumer } from './services/clockActivityConsumer';
+import { registerSseActivityBridge } from './services/sseActivityBridge';
 
 registerClockActivityConsumer();
+registerSseActivityBridge();
 
 const PORT = process.env.PORT ?? 4000;
 

@@ -11,9 +11,12 @@ import SessionStats from '../components/SessionStats';
 import OianoBrand from '../components/OianoBrand';
 import ArtistStatusToggle from '../components/ArtistStatusToggle';
 import { fmtTime as _fmtTime, fmtDateShort as _fmtDateShort } from '../lib/fmt';
-import { CalendarDays, Compass, Mic2, Pencil } from 'lucide-react';
+import { CalendarDays, Compass, Mic2, Pencil, Wallet } from 'lucide-react';
 import ArtistAvatar from '../components/ArtistAvatar';
 import { STATUS_HEX } from '../lib/bookingStatus';
+import MySignal from '../components/MySignal';
+import MyOrbit from '../components/MyOrbit';
+import OianoNow from '../components/OianoNow';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -126,8 +129,8 @@ export function SessionCountdown({ session }: { session: any }) {
           {fmtTime(session.starts_at)} – {fmtTime(session.ends_at)} · {session.room?.name ?? 'Room TBA'}
         </p>
         {/* Progress bar */}
-        <div style={{ marginTop: 12, height: 2, background: '#1e1e1e', borderRadius: 2 }}>
-          <div style={{ height: '100%', width: `${Math.round(progress * 100)}%`, background: 'linear-gradient(90deg, #5A9BCB, #8BBEDD)', borderRadius: 2, transition: 'width 10s linear' }} />
+        <div className="meter" style={{ marginTop: 12 }}>
+          <div className="meter-fill" style={{ width: `${Math.round(progress * 100)}%`, background: 'linear-gradient(90deg, #5A9BCB, #8BBEDD)', transition: 'width 10s linear' }} />
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 9, color: '#3a3a3a', fontFamily: 'monospace' }}>
           <span>Now</span>
@@ -186,7 +189,7 @@ function StudioBar() {
   useEffect(() => { setMessageIndex((value) => value % messages.length); }, [messages.length]);
 
   return <button type="button" onClick={() => navigate(current.href)} onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocus={() => setPaused(true)} onBlur={() => setPaused(false)} aria-label={`${current.label}${messages.length > 1 ? `. Message ${(messageIndex % messages.length) + 1} of ${messages.length}` : ''}`} style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 210, maxWidth: 320, padding: '8px 14px', borderRadius: 8, background: isLive ? '#120d08' : '#0f0f0f', border: `1px solid ${isLive ? '#5A9BCB22' : '#1a1a1a'}`, color: current.color, fontSize: 11, fontFamily: 'monospace', cursor: 'pointer', textAlign: 'left' }}>
-    <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: current.color, boxShadow: `0 0 6px ${current.color}`, animation: isLive ? 'db-pulse 1s ease-in-out infinite' : 'none' }} />
+    <span aria-hidden="true" className={`signal-dot${isLive ? ' signal-pulse' : ''}`} style={{ '--signal': current.color } as React.CSSProperties} />
     <span key={`${messageIndex}-${current.label}`} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', animation: 'db-ticker-in .35s ease both' }}>{current.label}</span>
     {messages.length > 1 && <span aria-hidden="true" style={{ marginLeft: 'auto', color: '#3d4347', fontSize: 8, whiteSpace: 'nowrap' }}>{(messageIndex % messages.length) + 1}/{messages.length}</span>}
   </button>;
@@ -449,7 +452,7 @@ export default function DashboardPage() {
             <p id="today-heading" style={{ fontSize: 10, color: '#777', fontFamily: 'monospace', letterSpacing: '0.14em', textTransform: 'uppercase' }}>Today at OIANO</p>
             <span style={{ fontSize: 10, color: '#3f454a', fontFamily: 'monospace' }}>{studio?.name ?? 'OIANO Network'}</span>
           </div>
-          <div className="db-briefing" style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 1.65fr) repeat(4, minmax(0, 1fr))', gap: 12 }}>
+          <div className="db-briefing" style={{ display: 'grid', gridTemplateColumns: `minmax(280px, 1.65fr) repeat(${balance > 0 ? 4 : 3}, minmax(0, 1fr))`, gap: 12 }}>
             <Link className="db-focus-card" to={primaryAction.to} style={{ minHeight: 180, position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: 22, borderRadius: 16, textDecoration: 'none', background: '#0a0f13', border: '1px solid rgba(106,169,210,.2)', boxShadow: '0 24px 70px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.04)' }}>
               <img src="/images/mock/oiano-studio-editorial-v1.png" alt="" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: '62% center', opacity: .78 }} />
               <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(5,8,11,.98) 0%, rgba(5,9,12,.9) 43%, rgba(5,9,12,.25) 100%), linear-gradient(0deg, rgba(4,7,9,.65), transparent 70%)' }} />
@@ -479,15 +482,31 @@ export default function DashboardPage() {
               <span style={{ marginTop: 4, color: '#7d7a72', fontSize: 10 }}>{profileScore < 100 ? 'Strength · keep building →' : 'Portfolio complete'}</span>
             </Link>
 
-            <button className="db-signal-card" type="button" onClick={() => setTopUpOpen(true)} style={{ minHeight: 180, display: 'flex', flexDirection: 'column', textAlign: 'left', padding: 17, borderRadius: 16, cursor: 'pointer', background: 'linear-gradient(145deg, rgba(18,21,24,.94), rgba(10,12,14,.92))', border: '1px solid rgba(255,255,255,.075)' }}>
-              <span style={{ fontSize: 9, color: '#596168', fontFamily: 'monospace', letterSpacing: '0.12em' }}>STUDIO CREDIT</span>
-              <strong style={{ marginTop: 'auto', color: '#f1efe9', fontFamily: "'Playfair Display', serif", fontWeight: 500, fontSize: 23 }}>${balance.toFixed(2)}</strong>
-              <span style={{ marginTop: 4, color: '#6aa9d2', fontSize: 10 }}>{balance > 0 ? 'Ready to invest in studio time' : 'Add credits →'}</span>
-            </button>
+            {balance > 0 && (
+              <button className="db-signal-card" type="button" onClick={() => setTopUpOpen(true)} style={{ minHeight: 180, display: 'flex', flexDirection: 'column', textAlign: 'left', padding: 17, borderRadius: 16, cursor: 'pointer', background: 'linear-gradient(145deg, rgba(18,21,24,.94), rgba(10,12,14,.92))', border: '1px solid rgba(255,255,255,.075)' }}>
+                <span style={{ fontSize: 9, color: '#596168', fontFamily: 'monospace', letterSpacing: '0.12em' }}>STUDIO CREDIT</span>
+                <strong style={{ marginTop: 'auto', color: '#f1efe9', fontFamily: "'Playfair Display', serif", fontWeight: 500, fontSize: 23 }}>${balance.toFixed(2)}</strong>
+                <span style={{ marginTop: 4, color: '#6aa9d2', fontSize: 10 }}>Ready to invest in studio time</span>
+              </button>
+            )}
           </div>
         </section>
 
-        <nav className="db-action-dock db-fade db-fade-1" aria-label="Artist shortcuts" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, padding: 8, borderRadius: 16, background: 'rgba(14,17,19,.72)', border: '1px solid rgba(255,255,255,.07)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.025)' }}>
+        {/* ── MY SIGNAL · MY ORBIT · OIANO NOW ──────────────────────────────
+            ME → MY WORK are the hero + briefing grid above. This section is
+            the next two scales out: how the work is moving, who it connects
+            to, and the wider network it sits inside. Every number here is
+            real (network-metrics.routes.ts / network-pulse.routes.ts) —
+            nothing here is fabricated to look alive. */}
+        <section className="db-fade db-fade-1" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <MySignal accent="#6aa9d2" />
+          <div className="db-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+            <MyOrbit />
+            <OianoNow />
+          </div>
+        </section>
+
+        <nav className="db-action-dock db-fade db-fade-1" aria-label="Artist shortcuts" style={{ display: 'grid', gridTemplateColumns: `repeat(${balance === 0 ? 5 : 4}, 1fr)`, gap: 8, padding: 8, borderRadius: 16, background: 'rgba(14,17,19,.72)', border: '1px solid rgba(255,255,255,.07)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.025)' }}>
           {[
             { label: 'Book studio', to: '/book', Icon: Mic2 },
             { label: 'My schedule', to: '/calendar', Icon: CalendarDays },
@@ -502,6 +521,17 @@ export default function DashboardPage() {
             <Pencil size={18} strokeWidth={1.65} aria-hidden="true" />
             <span>Edit profile</span>
           </button>
+          {/* Zero-balance case: the studio-credit hero tile above disappears
+              entirely rather than showing "$0.00" — this keeps the "add
+              credit" action reachable at the smaller, less prominent depth
+              a not-yet-relevant action belongs at (Section 5 / HOME MIGRATION:
+              "become contextual" rather than "always visible"). */}
+          {balance === 0 && (
+            <button className="db-action-tile" type="button" onClick={() => setTopUpOpen(true)} style={{ minHeight: 66, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 7, color: '#898d90', background: 'transparent', border: '1px solid transparent', borderRadius: 11, fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>
+              <Wallet size={18} strokeWidth={1.65} aria-hidden="true" />
+              <span>Add credit</span>
+            </button>
+          )}
         </nav>
 
         <div className="db-fade db-fade-1 db-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
@@ -617,16 +647,21 @@ export default function DashboardPage() {
           <div style={{ padding: '0 14px 14px' }}><SessionStats /></div>
         </details>
 
-        <div className="db-fade db-fade-2" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '15px 18px', borderRadius: 14, background: 'linear-gradient(100deg, rgba(211,179,92,.055), rgba(106,169,210,.055))', border: '1px solid rgba(255,255,255,.07)' }}>
-          <div style={{ minWidth: 0 }}>
-            <p style={{ margin: 0, color: '#d7d4ce', fontSize: 12, fontWeight: 600 }}>Discover collaborators</p>
-            <p style={{ margin: '3px 0 0', color: '#62676a', fontSize: 10 }}>Find artists by creative DNA or preview producer catalogues.</p>
+        {/* Contextual, not permanent: an artist already moving on active work
+            doesn't need a standing nudge to go find more of it — this earns
+            its place on Home only when there's nothing already active. */}
+        {activeProjects.length === 0 && (
+          <div className="db-fade db-fade-2" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '15px 18px', borderRadius: 14, background: 'linear-gradient(100deg, rgba(211,179,92,.055), rgba(106,169,210,.055))', border: '1px solid rgba(255,255,255,.07)' }}>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ margin: 0, color: '#d7d4ce', fontSize: 12, fontWeight: 600 }}>Discover collaborators</p>
+              <p style={{ margin: '3px 0 0', color: '#62676a', fontSize: 10 }}>Find artists by creative DNA or preview producer catalogues.</p>
+            </div>
+            <div style={{ display: 'flex', gap: 7, flexShrink: 0 }}>
+              <Link to="/discover" style={{ color: '#d3b35c', border: '1px solid rgba(211,179,92,.22)', padding: '7px 11px', borderRadius: 8, textDecoration: 'none', fontSize: 10 }}>Artists</Link>
+              <Link to="/producers" style={{ color: '#6aa9d2', border: '1px solid rgba(106,169,210,.22)', padding: '7px 11px', borderRadius: 8, textDecoration: 'none', fontSize: 10 }}>Producers</Link>
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: 7, flexShrink: 0 }}>
-            <Link to="/discover" style={{ color: '#d3b35c', border: '1px solid rgba(211,179,92,.22)', padding: '7px 11px', borderRadius: 8, textDecoration: 'none', fontSize: 10 }}>Artists</Link>
-            <Link to="/producers" style={{ color: '#6aa9d2', border: '1px solid rgba(106,169,210,.22)', padding: '7px 11px', borderRadius: 8, textDecoration: 'none', fontSize: 10 }}>Producers</Link>
-          </div>
-        </div>
+        )}
 
         {/* The home answers what matters now. Historical proof remains one
             deliberate disclosure away instead of competing with today's work. */}
@@ -642,7 +677,7 @@ export default function DashboardPage() {
               const colors: Record<string, string> = { blue: '#6aa9d2', gold: '#d3b35c', green: '#4fa98a', violet: '#9878c7' };
               const color = colors[item.tone] ?? '#7d8589';
               return <Link key={item.id} to={item.href} style={{ display: 'grid', gridTemplateColumns: '10px minmax(0,1fr) auto', alignItems: 'center', gap: 13, padding: '13px 16px', borderBottom: index < Math.min(careerActivity.length, 6) - 1 ? '1px solid rgba(255,255,255,.05)' : 'none', textDecoration: 'none' }}>
-                <span aria-hidden="true" style={{ width: 7, height: 7, borderRadius: '50%', background: color, boxShadow: `0 0 12px ${color}55` }} />
+                <span aria-hidden="true" className="signal-dot" style={{ '--signal': color, width: 7, height: 7 } as React.CSSProperties} />
                 <span style={{ minWidth: 0 }}><strong style={{ display: 'block', color: '#d9d7d1', fontSize: 12, fontWeight: 600 }}>{item.title}</strong><span style={{ display: 'block', marginTop: 2, color: '#5e6468', fontSize: 10, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{item.detail}</span></span>
                 <time style={{ color: '#4d5357', fontSize: 9, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{new Date(item.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</time>
               </Link>;
@@ -678,14 +713,14 @@ export default function DashboardPage() {
                   <Link key={b.id} to={`/bookings/${b.id}`} style={{ textDecoration: 'none' }}
                     className="db-session-row"
                   >
-                    <div style={{
+                    <div className={i === 0 && isActive ? 'channel-active' : undefined} style={{
                       display: 'flex', alignItems: 'center', gap: 14,
                       padding: '12px 16px', borderBottom: '1px solid #0f0f0f',
-                      background: i === 0 && isActive ? '#0f0d08' : 'transparent',
-                      borderLeft: i === 0 && isActive ? '2px solid #5A9BCB' : '2px solid transparent',
+                      borderLeft: i === 0 && isActive ? undefined : '2px solid transparent',
                       borderRadius: i === 0 ? '8px 8px 0 0' : undefined,
                       transition: 'background 0.12s',
-                    }}>
+                      '--channel-accent': '#5A9BCB', '--channel-accent-dim': 'rgba(90,155,203,0.35)',
+                    } as React.CSSProperties}>
                       {/* Date column */}
                       <div style={{ width: 44, flexShrink: 0, textAlign: 'right' }}>
                         <p style={{ fontSize: 11, color: '#5A9BCB', fontFamily: 'monospace' }}>{fmtDateShort(b.starts_at)}</p>
@@ -693,7 +728,7 @@ export default function DashboardPage() {
                       </div>
 
                       {/* Status dot */}
-                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: statusColors[b.status] ?? '#2a2a2a', flexShrink: 0 }} />
+                      <span aria-hidden="true" className={`signal-dot${i === 0 && isActive ? ' signal-pulse' : ''}`} style={{ '--signal': statusColors[b.status] ?? '#2a2a2a' } as React.CSSProperties} />
 
                       {/* Info */}
                       <div style={{ flex: 1, minWidth: 0 }}>

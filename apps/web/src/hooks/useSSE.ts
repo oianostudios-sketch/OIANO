@@ -131,6 +131,14 @@ export function useSSE() {
             }
           }
 
+          // ── activity (generic bridge from the server-side activity-event
+          // bus — see apps/api/src/services/sseActivityBridge.ts) ───────────
+          else if (event.type === 'activity') {
+            qc.invalidateQueries({ queryKey: ['network-metrics'] });
+            qc.invalidateQueries({ queryKey: ['network-orbit'] });
+            qc.invalidateQueries({ queryKey: ['artist-activity'] });
+          }
+
           // ── Dispatch to window so inline components can react ──────────────
           window.dispatchEvent(new CustomEvent('sse', { detail: event }));
 

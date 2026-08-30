@@ -39,6 +39,7 @@ import { networkExchangeRouter } from './routes/network-exchange.routes';
 import { studioCircleRouter } from './routes/studio-circle.routes';
 import { feedbackRouter } from './routes/feedback.routes';
 import { networkMetricsRouter } from './routes/network-metrics.routes';
+import { networkPulseRouter } from './routes/network-pulse.routes';
 import { contributionsRouter } from './routes/contributions.routes';
 import { studioPolicyRouter } from './routes/studio-policy.routes';
 
@@ -143,6 +144,7 @@ app.use('/api/studio-clock',             studioClockRouter);
 app.use('/api/notifications',            notificationsRouter);
 app.use('/api/network-exchange',          networkExchangeRouter);
 app.use('/api/network-metrics',           networkMetricsRouter);
+app.use('/api/network',                   networkPulseRouter);
 app.use('/api/contributions',             contributionsRouter);
 app.use('/api/feedback',                  feedbackRouter);
 app.use('/api/studio-circle',             studioCircleRouter);

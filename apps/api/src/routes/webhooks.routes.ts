@@ -7,6 +7,7 @@ import { broadcastToUser } from './notifications.routes';
 import { Prisma } from '@prisma/client';
 import { applyWalletDelta } from '../lib/walletLedger';
 import { recordBookingPayment, recordWalletTopUp, postFinancialTransaction, bookingAllocation } from '../lib/financialLedger';
+import { emitActivityEvent } from '../lib/activityEvents';
 
 export const webhooksRouter = Router();
 
@@ -133,6 +134,22 @@ async function handleBookingPayment(session: Stripe.Checkout.Session) {
       console.error('[email] receipt failed:', e?.message),
     );
   }
+
+  // 6. Live signal — booking payments previously had no SSE reach at all,
+  // unlike wallet top-ups just below in handleWalletTopUp(). Payment arriving
+  // should register immediately, not just on next poll/reload.
+  if (booking.artist?.user_id) {
+    broadcastToUser(booking.artist.user_id, {
+      type: 'booking_updated',
+      bookingId: booking.id,
+      status: 'CONFIRMED',
+    });
+  }
+  emitActivityEvent('payment.received', {
+    artist_id: booking.artist_id,
+    booking_id: booking.id,
+    amount_usd: Number(booking.payment!.amount_usd),
+  }).catch((e) => console.error('[activity] payment.received emit failed:', e?.message));
 }
 
 async function handleWalletTopUp(session: Stripe.Checkout.Session) {
