@@ -8,7 +8,7 @@
  */
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { Calendar, ClipboardList, Activity, Compass, Handshake, Users, Home as HomeIcon } from 'lucide-react';
+import { Calendar, ClipboardList, Activity, Compass, Handshake, Users, Zap, Home as HomeIcon } from 'lucide-react';
 import { useAuthStore } from '../store/auth.store';
 
 const ARTIST_TABS = [
@@ -81,13 +81,17 @@ function lucideIcon(Icon: typeof Calendar) {
 
 const HOME_TAB = { id: 'home', label: 'Home', path: '/dashboard', icon: lucideIcon(HomeIcon) };
 const CONTRIBUTIONS_TAB = { id: 'contributions', label: 'Contribute', path: '/contributions', icon: lucideIcon(Handshake) };
+// Replaces Contribute for the two roles physically present at a studio —
+// reporting a dead mic mid-session is a higher mobile priority than the
+// contribution inbox, which stays reachable via the Command Palette instead.
+const FACILITIES_TAB = { id: 'facilities', label: 'Facilities', path: '/facilities', icon: lucideIcon(Zap) };
 
 const STUDIO_ADMIN_TABS = [
   HOME_TAB,
   { id: 'calendar', label: 'Calendar', path: '/calendar', icon: lucideIcon(Calendar) },
   { id: 'runsheet', label: 'Runsheet', path: '/runsheet', icon: lucideIcon(ClipboardList) },
   { id: 'pulse', label: 'Pulse', path: '/pulse', icon: lucideIcon(Activity) },
-  CONTRIBUTIONS_TAB,
+  FACILITIES_TAB,
 ];
 
 const ENGINEER_TABS = [
@@ -95,7 +99,7 @@ const ENGINEER_TABS = [
   { id: 'calendar', label: 'Calendar', path: '/calendar', icon: lucideIcon(Calendar) },
   { id: 'runsheet', label: 'Runsheet', path: '/runsheet', icon: lucideIcon(ClipboardList) },
   { id: 'communications', label: 'Comms', path: '/communications', icon: lucideIcon(Users) },
-  CONTRIBUTIONS_TAB,
+  FACILITIES_TAB,
 ];
 
 const PRODUCER_TABS = [

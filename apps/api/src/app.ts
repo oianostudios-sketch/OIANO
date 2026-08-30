@@ -35,6 +35,7 @@ import { connectRouter } from './routes/connect.routes';
 import { artistProjectsRouter } from './routes/artist-projects.routes';
 import { artistActivityRouter } from './routes/artist-activity.routes';
 import { maintenanceRouter } from './routes/maintenance.routes';
+import { facilitiesRouter } from './routes/facilities.routes';
 import { networkExchangeRouter } from './routes/network-exchange.routes';
 import { studioCircleRouter } from './routes/studio-circle.routes';
 import { feedbackRouter } from './routes/feedback.routes';
@@ -155,6 +156,7 @@ app.use('/api/connect',                  connectRouter);
 app.use('/api/artist-projects',          artistProjectsRouter);
 app.use('/api/artist-activity',          artistActivityRouter);
 app.use('/api/maintenance',              maintenanceRouter);
+app.use('/api/facilities',               facilitiesRouter);
 
 app.use(errorHandler);
 

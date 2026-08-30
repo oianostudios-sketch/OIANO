@@ -29,6 +29,25 @@ enum BookingStatus {
   NO_SHOW
 }
 
+// Facilities — how bad the reported symptom is, set by the reporter at
+// report time (§15's "cannot use / degraded / minor").
+enum IssueSeverity {
+  CRITICAL // cannot use
+  DEGRADED // usable with restrictions
+  MINOR    // worth monitoring
+}
+
+// Facilities — the issue's own lifecycle IS its visual state (no separate
+// "readiness" enum stored anywhere); Room/Equipment readiness is always
+// derived live from whether an open (non-RESTORED) issue references them.
+enum IssueStatus {
+  REPORTED
+  ASSIGNED
+  REPAIRING
+  VERIFY
+  RESTORED
+}
+
 enum ProjectPhase {
   PRE_PRODUCTION
   TRACKING
@@ -140,6 +159,9 @@ model User {
   communication_threads_waiting CommunicationThread[]      @relation("CommunicationThreadWaitingOn")
   communication_participations  CommunicationParticipant[]
   communication_events          CommunicationEvent[]
+  maintenance_issues_reported   MaintenanceIssue[]          @relation("MaintenanceIssueReporter")
+  maintenance_issues_assigned   MaintenanceIssue[]          @relation("MaintenanceIssueAssignee")
+  maintenance_issues_verified   MaintenanceIssue[]          @relation("MaintenanceIssueVerifier")
 
   @@map("users")
 }
@@ -195,6 +217,8 @@ model Studio {
   policy_exceptions    PolicyException[]
   staff_invitations    StudioStaffInvitation[]
   communication_threads CommunicationThread[]
+  equipment            Equipment[]
+  maintenance_issues   MaintenanceIssue[]
   created_at           DateTime             @default(now())
 
   @@map("studios")
@@ -252,8 +276,64 @@ model Room {
   hourly_rate  Decimal?           @db.Decimal(10, 2)
   bookings     Booking[]
   availability AvailabilitySlot[]
+  equipment    Equipment[]
+  issues       MaintenanceIssue[]
 
   @@map("rooms")
+}
+
+// ─── Facilities (studio physical maintenance — distinct from the OIANO_ADMIN
+// operations console at /maintenance) ──────────────────────────────────────
+
+model Equipment {
+  id              String             @id @default(uuid())
+  studio_id       String
+  studio          Studio             @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  room_id         String?
+  room            Room?              @relation(fields: [room_id], references: [id])
+  name            String
+  type            String
+  serial          String?
+  added_at        DateTime           @default(now())
+  last_service_at DateTime?
+  next_service_at DateTime?
+  notes           String?
+  issues          MaintenanceIssue[]
+  created_at      DateTime           @default(now())
+
+  @@index([studio_id])
+  @@index([room_id])
+  @@map("equipment")
+}
+
+model MaintenanceIssue {
+  id           String        @id @default(uuid())
+  studio_id    String
+  studio       Studio        @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  room_id      String?
+  room         Room?         @relation(fields: [room_id], references: [id])
+  equipment_id String?
+  equipment    Equipment?    @relation(fields: [equipment_id], references: [id])
+  booking_id   String?
+  booking      Booking?      @relation(fields: [booking_id], references: [id])
+  reported_by  String
+  reporter     User          @relation("MaintenanceIssueReporter", fields: [reported_by], references: [id])
+  symptom      String
+  severity     IssueSeverity
+  status       IssueStatus   @default(REPORTED)
+  assigned_to  String?
+  assignee     User?         @relation("MaintenanceIssueAssignee", fields: [assigned_to], references: [id])
+  notes        String?
+  resolved_at  DateTime?
+  verified_by  String?
+  verifier     User?         @relation("MaintenanceIssueVerifier", fields: [verified_by], references: [id])
+  created_at   DateTime      @default(now())
+  updated_at   DateTime      @updatedAt
+
+  @@index([studio_id, status])
+  @@index([room_id, status])
+  @@index([equipment_id, status])
+  @@map("maintenance_issues")
 }
 
 model Engineer {
@@ -487,6 +567,7 @@ model Booking {
   project               Project?                   @relation(fields: [project_id], references: [id])
   deliverables          Deliverable[]
   completion_requests   SessionCompletionRequest[]
+  maintenance_issues    MaintenanceIssue[]
   created_at            DateTime                   @default(now())
   updated_at            DateTime                   @updatedAt
 

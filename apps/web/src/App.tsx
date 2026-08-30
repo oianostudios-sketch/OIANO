@@ -21,6 +21,7 @@ const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const OnboardingSequencePage = lazy(() => import('./pages/OnboardingSequencePage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage'));
+const FacilitiesPage = lazy(() => import('./pages/FacilitiesPage'));
 const PulseDashboard = lazy(() => import('./pages/PulseDashboard'));
 const EngineerDashboardPage = lazy(() => import('./pages/EngineerDashboardPage'));
 const RunsheetPage = lazy(() => import('./pages/RunsheetPage'));
@@ -58,6 +59,7 @@ const StudioTeamPage = lazy(() => import('./pages/StudioTeamPage'));
 const AcceptStudioInvitePage = lazy(() => import('./pages/AcceptStudioInvitePage'));
 const SelectStudioPage = lazy(() => import('./pages/SelectStudioPage'));
 const CommunicationsPage = lazy(() => import('./pages/CommunicationsPage'));
+const ProfessionalOnboardingPage = lazy(() => import('./pages/ProfessionalOnboardingPage'));
 
 function RequireAuth({ children, role, roles }: { children: JSX.Element; role?: string; roles?: string[] }) {
   const { token, user } = useAuthStore();
@@ -86,7 +88,7 @@ function SSEProvider() {
 // The onboarding sequence (Screens 1-5) must read as "no navigation chrome
 // visible" per the wireframe spec — hide the app's persistent widgets/nav
 // while on those routes instead of threading a flag through each of them.
-const CHROME_FREE_ROUTES = ['/enter', '/onboarding', '/forgot-password', '/reset-password'];
+const CHROME_FREE_ROUTES = ['/enter', '/onboarding', '/professional/onboarding', '/forgot-password', '/reset-password'];
 function Chrome() {
   const { pathname } = useLocation();
   const { user } = useAuthStore();
@@ -121,6 +123,7 @@ function AnimatedRoutes() {
     <div key={pathname} data-account-family={accountFamilyForRole(user?.role)} className={`page-enter ${pathname === '/pulse' ? 'route-pulse' : ''} ${user?.role === 'ARTIST' ? `artist-experience ${routeClass}` : ''}`} style={{ minHeight: '100%' }}>
       <Suspense fallback={<div className="min-h-screen grid place-items-center text-zinc-500"><div className="text-center"><div className="mx-auto mb-4 h-8 w-8 rounded-full border border-dome/20 border-t-dome animate-spin" /><p className="text-xs font-mono tracking-widest uppercase">Opening your space</p></div></div>}><ErrorBoundary><Routes>
         <Route path="/onboarding"   element={<RequireAuth role="ARTIST"><OnboardingSequencePage /></RequireAuth>} />
+        <Route path="/professional/onboarding" element={<RequireAuth role="PRODUCER"><ProfessionalOnboardingPage /></RequireAuth>} />
         <Route path="/enter"        element={<EnterPage />} />
         <Route path="/legal/:document" element={<LegalPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -145,6 +148,7 @@ function AnimatedRoutes() {
         <Route path="/passport"     element={<Navigate to="/artist/passport" replace />} />
         <Route path="/calendar"     element={<RequireAuth><CalendarPage /></RequireAuth>} />
         <Route path="/admin"        element={<RequireAuth role="STUDIO_ADMIN"><AdminDashboardPage /></RequireAuth>} />
+        <Route path="/facilities"   element={<RequireAuth roles={['STUDIO_ADMIN', 'ENGINEER']}><FacilitiesPage /></RequireAuth>} />
         <Route path="/admin/policies" element={<RequireAuth role="STUDIO_ADMIN"><StudioPoliciesPage /></RequireAuth>} />
         <Route path="/admin/team" element={<RequireAuth role="STUDIO_ADMIN"><StudioTeamPage /></RequireAuth>} />
         <Route path="/accept-studio-invite" element={<RequireAuth><AcceptStudioInvitePage /></RequireAuth>} />

@@ -262,6 +262,7 @@ export default function AdminDashboardPage() {
             { to: '/pulse',     label: 'Pulse', icon: Activity },
             { to: '/calendar',  label: 'Calendar',     icon: Calendar },
             { to: '/runsheet',  label: 'Runsheet',      icon: ClipboardList },
+            { to: '/facilities', label: 'Facilities', icon: Zap },
             { to: '/admin/team', label: 'Team', icon: Users },
           ].map(({ to, label, icon: Icon }) => (
             <Link

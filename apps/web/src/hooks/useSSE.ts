@@ -137,6 +137,13 @@ export function useSSE() {
             }
           }
 
+          // ── facility_issue_updated (studio physical maintenance) ───────────
+          else if (event.type === 'facility_issue_updated') {
+            qc.invalidateQueries({ queryKey: ['facilities-rooms'] });
+            qc.invalidateQueries({ queryKey: ['facilities-equipment'] });
+            qc.invalidateQueries({ queryKey: ['facilities-issues'] });
+          }
+
           // ── activity (generic bridge from the server-side activity-event
           // bus — see apps/api/src/services/sseActivityBridge.ts) ───────────
           else if (event.type === 'activity') {
