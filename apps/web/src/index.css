@@ -587,8 +587,8 @@ a:hover { color: var(--gold); }
 /* ─── Global button press feel ───────────────────────────────── */
 button:active:not(:disabled),
 a[role="button"]:active {
-  transform: scale(0.97);
-  transition: transform 80ms ease;
+  transform: scale(0.985);
+  transition: transform 90ms ease;
 }
 /* Smooth return from press */
 button:not(:active),
@@ -940,4 +940,93 @@ body.session-live .pulse-topbar {
   0%   { opacity: 0; transform: scale(0.6) rotate(-8deg); }
   70%  { opacity: 1; transform: scale(1.05) rotate(1deg); }
   100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The status glow is the one infinite loop in this sequence — the rest are
+     short one-shot entrances, so only this needs to stop outright. */
+  .onb-status-glow { animation: none; opacity: 0.75; }
+  .onb-screen, .onb-slot-expand, .onb-diamond { animation-duration: 0.01ms; animation-iteration-count: 1; }
+}
+
+/* ─── Console vocabulary — restrained "the system noticed" primitives ────────
+   Extends card-lift/metric-enter/hub-* rather than replacing them. Three
+   shapes: a hover/press response for interactive surfaces, a small LED for
+   status, and a linear meter for a real (never invented) proportion. ────── */
+
+/* Interactive surface response — border sharpens in three steps (rest →
+   hover → selected) instead of a color wash; a soft brightness lift stands
+   in for light catching a physical control. Movement stays within 1px/1%
+   on purpose — this should read as tactile, not floaty. */
+.console-control {
+  border-color: rgba(255,255,255,.06);
+  transition: border-color 160ms ease, filter 160ms ease, transform 160ms ease;
+}
+.console-control:hover {
+  border-color: rgba(255,255,255,.10);
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+}
+.console-control:active {
+  transform: translateY(0) scale(0.99);
+  transition-duration: 90ms;
+}
+.console-control.is-selected {
+  border-color: rgba(255,255,255,.14);
+}
+@media (prefers-reduced-motion: reduce) {
+  .console-control { transition: border-color 160ms ease; }
+  .console-control:hover, .console-control:active { transform: none; }
+}
+
+/* Signal dot — one small LED covering "healthy/pending/live/selected"
+   wherever a page needs one, instead of each page hand-rolling its own
+   dot + box-shadow pair. Color comes from --signal so callers just set
+   one custom property (e.g. style={{ '--signal': accentHex }}). */
+.signal-dot {
+  --signal: #52525b;
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--signal);
+  box-shadow: 0 0 4px var(--signal);
+  flex-shrink: 0;
+}
+.signal-dot.signal-pulse { animation: signal-breathe 1.8s ease-in-out infinite; }
+@keyframes signal-breathe {
+  0%, 100% { box-shadow: 0 0 4px var(--signal); opacity: 1; }
+  50%      { box-shadow: 0 0 10px var(--signal), 0 0 18px var(--signal); opacity: .85; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .signal-dot.signal-pulse { animation: none; }
+}
+
+/* Restrained linear meter — width must always come from a real value already
+   present in the component (utilization, capacity, progress). Never used
+   to manufacture a statistic that doesn't exist. */
+.meter {
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255,255,255,.06);
+  overflow: hidden;
+}
+.meter-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--signal, var(--gold));
+  transition: width 0.6s cubic-bezier(0.4,0,0.2,1);
+}
+
+/* Channel-active — the mixing-console "this is the selected channel" state.
+   Pair with a real active/selected condition only (current booking, active
+   room, selected artist) — never applied decoratively. Mirrors the existing
+   .hub-card-live convention (accent + accent-dim pair) rather than inventing
+   a new color-mixing approach. */
+.channel-active {
+  --channel-accent: var(--gold);
+  --channel-accent-dim: var(--gold-dim);
+  position: relative;
+  background-color: rgba(255,255,255,.025);
+  border-color: var(--channel-accent-dim) !important;
+  box-shadow: inset 2px 0 0 0 var(--channel-accent);
 }

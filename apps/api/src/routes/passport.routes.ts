@@ -6,7 +6,7 @@ import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
 import { isR2Configured, uploadToR2, deleteFromR2 } from '../lib/r2';
-import { getImageUpload } from '../lib/imageUpload';
+import { getImageUpload, normalizeImageUpload, writeNormalizedImageLocally } from '../lib/imageUpload';
 import QRCode from 'qrcode';
 import crypto from 'crypto';
 
@@ -18,6 +18,11 @@ const profileUpdateSchema = z.object({
   bio: z.string().trim().max(2000).optional(),
   creative_dna: z.object({
     genres: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
+    // Already initialized at signup and scored in portfolioScore() below —
+    // this was the only place that could ever set it. Reachable now so
+    // onboarding's "shape it" refinement and custom-sound entry have
+    // somewhere real to write.
+    influences: z.array(z.string().trim().min(1).max(50)).max(10).optional(),
     vocal_type: z.string().trim().max(80).optional(),
     energy_profile: z.string().trim().max(80).optional(),
     key_themes: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
@@ -295,11 +300,12 @@ passportRouter.patch('/releases/:id/artwork', async (req: any, res, next) => {
       const file = req.file;
       if (!file) throw new AppError('No artwork provided', 400);
       let artworkUrl: string;
-      if (isR2Configured && (file as any).buffer) {
-        artworkUrl = await uploadToR2((file as any).buffer, `releases/${artist.id}`, file.originalname || 'artwork.jpg', file.mimetype);
+      const normalized = await normalizeImageUpload(file);
+      if (isR2Configured) {
+        artworkUrl = await uploadToR2(normalized.buffer, `releases/${artist.id}`, normalized.filename, normalized.mimeType);
         if (release.artwork_url?.startsWith('http')) await deleteFromR2(release.artwork_url);
       } else {
-        artworkUrl = `/uploads/releases/${(file as any).filename}`;
+        artworkUrl = writeNormalizedImageLocally('releases', normalized.filename, normalized.buffer);
         if (release.artwork_url?.startsWith('/uploads/releases/')) {
           const oldPath = path.join(process.cwd(), release.artwork_url);
           if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
@@ -387,13 +393,14 @@ passportRouter.patch('/avatar', async (req: any, res, next) => {
 
       let publicUrl: string;
 
-      if (isR2Configured && (file as any).buffer) {
+      const normalized = await normalizeImageUpload(file);
+      if (isR2Configured) {
         // Upload to R2
         publicUrl = await uploadToR2(
-          (file as any).buffer,
+          normalized.buffer,
           `avatars/${artist.id}`,
-          file.originalname || 'avatar.jpg',
-          file.mimetype,
+          normalized.filename,
+          normalized.mimeType,
         );
         // Remove old avatar from R2 if present
         if (artist.avatar_url?.startsWith('http')) {
@@ -401,7 +408,7 @@ passportRouter.patch('/avatar', async (req: any, res, next) => {
         }
       } else {
         // Local disk
-        publicUrl = `/uploads/avatars/${(file as any).filename}`;
+        publicUrl = writeNormalizedImageLocally('avatars', normalized.filename, normalized.buffer);
         // Remove old avatar from disk
         if (artist.avatar_url?.startsWith('/uploads/')) {
           const oldPath = path.join(process.cwd(), artist.avatar_url);
@@ -420,6 +427,22 @@ passportRouter.patch('/avatar', async (req: any, res, next) => {
       res.json({ avatar_url: publicUrl });
     } catch (e) { next(e); }
   });
+});
+
+// POST /api/passport/onboarding/complete — marks the identity-formation
+// sequence done so /onboarding can bypass a returning artist instead of
+// re-running Identity/Status/Calendar (which creates a real booking) on
+// every stray visit. Server sets the timestamp — never client-supplied.
+passportRouter.post('/onboarding/complete', async (req: any, res, next) => {
+  try {
+    const artist = await prisma.artist.findUnique({ where: { user_id: req.userId } });
+    if (!artist) throw new AppError('Artist not found', 404);
+    const updated = await prisma.artist.update({
+      where: { id: artist.id },
+      data: { onboarding_completed_at: artist.onboarding_completed_at ?? new Date() },
+    });
+    res.json({ onboarding_completed_at: updated.onboarding_completed_at });
+  } catch (err) { next(err); }
 });
 
 // PATCH /api/passport/summary — artist edits or hides their AI brief

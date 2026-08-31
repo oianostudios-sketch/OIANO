@@ -415,6 +415,11 @@ model Artist {
   connect_messages     ConnectMessage[]     @relation("ConnectMessages")
   activity_events      ActivityEvent[]
   studio_circles       StudioCircleMember[]
+  // Nullable, set once by POST /passport/onboarding/complete — never a
+  // client-supplied timestamp. Null for every artist who signed up before
+  // this field existed, which is honest: they never went through a flow
+  // with a completion flag, so there's nothing to backfill.
+  onboarding_completed_at DateTime?
   created_at           DateTime             @default(now())
 
   @@map("artists")

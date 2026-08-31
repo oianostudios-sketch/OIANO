@@ -14,6 +14,7 @@ interface User {
     alias?: string;
     avatar_url?: string | null;
     status?: 'AVAILABLE_FOR_BOOKING' | 'IN_SESSION' | 'UNAVAILABLE';
+    onboarding_completed_at?: string | null;
     passport?: { passport_code: string; profile_strength: number };
     wallet?: { balance_usd: number };
   };
