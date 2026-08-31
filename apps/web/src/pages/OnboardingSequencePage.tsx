@@ -349,7 +349,13 @@ function CalendarStep({ onAdvance }: { onAdvance: (slot: SharedState['bookingSlo
         roomName: data.room?.name ?? 'Vocal Booth',
       });
     } catch (err: any) {
-      setError(err?.response?.data?.error ?? 'Could not book that slot');
+      const message = err?.response?.data?.error ?? 'Could not book that slot';
+      // Every new artist starts with a $0 wallet, so this is the single most
+      // likely failure here — without an escape hatch it was a hard dead
+      // end: no session, no way to ever finish onboarding. Skip below keeps
+      // onboarding completable regardless of when/how they fund their wallet;
+      // it does not change what booking a real session actually costs.
+      setError(message === 'Insufficient wallet balance' ? "You'll need studio credit to book — add funds anytime, or skip this for now." : message);
       setBooking(false);
     }
   }
@@ -358,8 +364,11 @@ function CalendarStep({ onAdvance }: { onAdvance: (slot: SharedState['bookingSlo
     <div className="onb-screen" style={{ padding: '48px 32px' }}>
       <p style={{
         fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.14em',
-        color: '#555', textTransform: 'uppercase', marginBottom: 20, textAlign: 'center',
+        color: '#555', textTransform: 'uppercase', marginBottom: 8, textAlign: 'center',
       }}>Pick a session</p>
+      <p style={{ textAlign: 'center', marginBottom: 20 }}>
+        <button type="button" onClick={() => onAdvance(null)} style={{ background: 'none', border: 'none', color: '#555', fontSize: 11, cursor: 'pointer', font: 'inherit' }}>Skip for now →</button>
+      </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6, maxWidth: 700, margin: '0 auto' }}>
         {days.map((day) => (
