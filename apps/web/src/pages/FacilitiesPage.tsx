@@ -88,12 +88,21 @@ export default function FacilitiesPage() {
           </button>
         </div>
 
-        {isStudioReady ? (
-          <div className="metric-enter mt-10 rounded-2xl border border-emerald-500/15 bg-emerald-500/[.03] p-10 text-center">
+        {roomsLoading && <p className="mt-9 text-xs text-zinc-700">Reading room and equipment status…</p>}
+
+        {/* The ready confirmation is a banner, never a replacement for the
+            room list — a manager should always be able to see their rooms
+            exist and are individually ready, not just take a generic
+            claim's word for it. */}
+        {isStudioReady && (
+          <div className="metric-enter mt-8 flex items-center gap-3 rounded-xl border border-emerald-500/15 bg-emerald-500/[.03] px-5 py-3">
             <ReadinessDot readiness="READY" />
-            <p className="mt-5 font-display text-2xl">Studio ready.</p>
-            <p className="mt-2 text-sm text-zinc-600">No maintenance requiring attention.</p>
+            <p className="text-xs text-emerald-300">Studio ready — no maintenance requiring attention.</p>
           </div>
+        )}
+
+        {!roomsLoading && rooms.length === 0 ? (
+          <p className="mt-9 text-xs text-zinc-700">No rooms configured for this studio yet.</p>
         ) : (
           <div className="mt-9 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {rooms.map((room) => {
