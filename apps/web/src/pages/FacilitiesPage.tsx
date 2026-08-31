@@ -26,15 +26,21 @@ const NEXT_STATUS: Record<string, { label: string; next: string } | null> = {
   RESTORED: null,
 };
 
+// live=true is reserved for "something is actually happening to this right
+// now" (an active repair) — a room that's merely broken-and-waiting stays
+// still, matching the brief's own motion language (§18): stillness is the
+// default, movement is earned by real ongoing work.
 function ReadinessDot({ readiness, live }: { readiness: Room['readiness']; live?: boolean }) {
   return <i className={`signal-dot${live ? ' signal-pulse' : ''}`} style={{ '--signal': READINESS_SIGNAL[readiness] } as CSSProperties} />;
 }
+
+const FLARE_SIGNAL: Record<string, string> = { RESTORED: '#4ade80', ASSIGNED: '#5A9BCB', REPAIRING: '#5A9BCB', VERIFY: '#5A9BCB' };
 
 export default function FacilitiesPage() {
   const qc = useQueryClient();
   const toast = useToast();
   const [reportOpen, setReportOpen] = useState(false);
-  const [flareIssueId, setFlareIssueId] = useState<string | null>(null);
+  const [flare, setFlare] = useState<{ issueId: string; status: string } | null>(null);
 
   const { data: rooms = [], isLoading: roomsLoading } = useQuery<Room[]>({ queryKey: ['facilities-rooms'], queryFn: async () => (await api.get('/facilities/rooms')).data });
   const { data: equipment = [] } = useQuery<Equipment[]>({ queryKey: ['facilities-equipment'], queryFn: async () => (await api.get('/facilities/equipment')).data });
@@ -42,12 +48,15 @@ export default function FacilitiesPage() {
 
   // "Alive" means a real state transition animates once, then settles — see
   // the Studio Body Audit's motion principle. Not idle looping animation.
+  // The flare color follows what actually happened: green for a genuine
+  // restore, dome for everything still in progress — never a flat "an
+  // update occurred" tint that erases the meaning of the change.
   useEffect(() => {
     function onSse(e: Event) {
       const detail = (e as CustomEvent).detail;
       if (detail?.type === 'facility_issue_updated' && detail.issueId) {
-        setFlareIssueId(detail.issueId);
-        setTimeout(() => setFlareIssueId((current) => (current === detail.issueId ? null : current)), 1400);
+        setFlare({ issueId: detail.issueId, status: detail.status });
+        setTimeout(() => setFlare((current) => (current?.issueId === detail.issueId ? null : current)), 1400);
       }
     }
     window.addEventListener('sse', onSse);
@@ -80,23 +89,26 @@ export default function FacilitiesPage() {
         </div>
 
         {isStudioReady ? (
-          <div className="mt-10 rounded-2xl border border-emerald-500/15 bg-emerald-500/[.03] p-10 text-center">
+          <div className="metric-enter mt-10 rounded-2xl border border-emerald-500/15 bg-emerald-500/[.03] p-10 text-center">
             <ReadinessDot readiness="READY" />
             <p className="mt-5 font-display text-2xl">Studio ready.</p>
             <p className="mt-2 text-sm text-zinc-600">No maintenance requiring attention.</p>
           </div>
         ) : (
           <div className="mt-9 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {rooms.map((room) => (
-              <article key={room.id} className="rounded-2xl border border-white/[.065] bg-studio-surface p-5">
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-2 text-sm font-semibold"><Building2 size={14} className="text-dome" />{room.name}</span>
-                  <ReadinessDot readiness={room.readiness} />
-                </div>
-                <p className="mt-3 text-[9px] font-mono uppercase tracking-wider" style={{ color: READINESS_SIGNAL[room.readiness] }}>{READINESS_LABEL[room.readiness]}</p>
-                {room.open_issues[0] && <p className="mt-2 text-xs text-zinc-600">{room.open_issues[0].symptom}</p>}
-              </article>
-            ))}
+            {rooms.map((room) => {
+              const beingRepaired = room.open_issues.some((issue) => issue.status === 'REPAIRING');
+              return (
+                <article key={room.id} className="metric-enter rounded-2xl border border-white/[.065] bg-studio-surface p-5">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-2 text-sm font-semibold"><Building2 size={14} className="text-dome" />{room.name}</span>
+                    <ReadinessDot readiness={room.readiness} live={beingRepaired} />
+                  </div>
+                  <p className="mt-3 text-[9px] font-mono uppercase tracking-wider" style={{ color: READINESS_SIGNAL[room.readiness] }}>{READINESS_LABEL[room.readiness]}</p>
+                  {room.open_issues[0] && <p className="mt-2 text-xs text-zinc-600">{room.open_issues[0].symptom}</p>}
+                </article>
+              );
+            })}
           </div>
         )}
 
@@ -105,7 +117,7 @@ export default function FacilitiesPage() {
             <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-amber-300"><AlertTriangle size={14} />Attention now</h2>
             <div className="space-y-2">
               {attentionNow.map((issue) => (
-                <IssueRow key={issue.id} issue={issue} flare={flareIssueId === issue.id} onAdvance={(status) => advanceMutation.mutate({ id: issue.id, status })} />
+                <IssueRow key={issue.id} issue={issue} flareSignal={flare?.issueId === issue.id ? FLARE_SIGNAL[flare.status] : null} onAdvance={(status) => advanceMutation.mutate({ id: issue.id, status })} />
               ))}
             </div>
           </section>
@@ -116,7 +128,7 @@ export default function FacilitiesPage() {
             <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-dome"><Wrench size={14} />Being fixed</h2>
             <div className="space-y-2">
               {activeRepairs.map((issue) => (
-                <IssueRow key={issue.id} issue={issue} flare={flareIssueId === issue.id} onAdvance={(status) => advanceMutation.mutate({ id: issue.id, status })} />
+                <IssueRow key={issue.id} issue={issue} flareSignal={flare?.issueId === issue.id ? FLARE_SIGNAL[flare.status] : null} onAdvance={(status) => advanceMutation.mutate({ id: issue.id, status })} />
               ))}
             </div>
           </section>
@@ -126,7 +138,7 @@ export default function FacilitiesPage() {
           <section className="mt-8">
             <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-500"><CheckCircle2 size={14} />Recently restored</h2>
             <div className="space-y-2 opacity-60">
-              {recentlyRestored.map((issue) => <IssueRow key={issue.id} issue={issue} flare={false} onAdvance={() => {}} />)}
+              {recentlyRestored.map((issue) => <IssueRow key={issue.id} issue={issue} flareSignal={null} onAdvance={() => {}} />)}
             </div>
           </section>
         )}
@@ -136,10 +148,10 @@ export default function FacilitiesPage() {
             <h2 className="mb-3 text-sm font-semibold text-zinc-400">Equipment</h2>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {equipment.map((item) => (
-                <div key={item.id} className="rounded-xl border border-white/[.05] bg-studio-surface p-4">
+                <div key={item.id} className="metric-enter rounded-xl border border-white/[.05] bg-studio-surface p-4">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-medium">{item.name}</span>
-                    <ReadinessDot readiness={item.readiness} />
+                    <ReadinessDot readiness={item.readiness} live={item.open_issues.some((issue) => issue.status === 'REPAIRING')} />
                   </div>
                   <p className="mt-1 text-[9px] font-mono uppercase tracking-wider text-zinc-700">{item.type}{item.room ? ` · ${item.room.name}` : ''}</p>
                 </div>
@@ -161,11 +173,21 @@ export default function FacilitiesPage() {
   );
 }
 
-function IssueRow({ issue, flare, onAdvance }: { issue: Issue; flare: boolean; onAdvance: (status: string) => void }) {
+function IssueRow({ issue, flareSignal, onAdvance }: { issue: Issue; flareSignal: string | null; onAdvance: (status: string) => void }) {
   const next = NEXT_STATUS[issue.status];
+  // REPAIRING pulses continuously — "controlled movement showing ongoing
+  // intervention" (§18) is a property of the state itself, not a one-off
+  // reaction to the update that caused it.
+  const repairing = issue.status === 'REPAIRING';
   return (
-    <div className={`flex flex-wrap items-center gap-4 rounded-xl border p-4 transition-colors ${flare ? 'border-dome/40 bg-dome/[.06]' : 'border-white/[.05] bg-studio-surface'}`}>
-      <i className="signal-dot" style={{ '--signal': issue.severity === 'CRITICAL' ? '#f87171' : issue.severity === 'DEGRADED' ? '#facc15' : '#71717a' } as CSSProperties} />
+    <div
+      className={`metric-enter flex flex-wrap items-center gap-4 rounded-xl border p-4 transition-colors ${flareSignal ? 'border-white/[.14]' : 'border-white/[.05] bg-studio-surface'}`}
+      style={flareSignal ? { borderColor: `${flareSignal}66`, backgroundColor: `${flareSignal}14` } : undefined}
+    >
+      <i
+        className={`signal-dot${repairing ? ' signal-pulse' : ''}`}
+        style={{ '--signal': repairing ? '#5A9BCB' : issue.severity === 'CRITICAL' ? '#f87171' : issue.severity === 'DEGRADED' ? '#facc15' : '#71717a' } as CSSProperties}
+      />
       <div className="min-w-0 flex-1">
         <p className="text-xs font-medium">{issue.room?.name ?? issue.equipment?.name ?? 'Facility'} — {issue.symptom}</p>
         <p className="mt-1 text-[9px] text-zinc-700">
