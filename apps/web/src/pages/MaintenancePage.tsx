@@ -27,11 +27,22 @@ export default function MaintenancePage() {
   const [search,setSearch]=useState('');
   const { data, isLoading, error } = useQuery<Summary>({ queryKey:['maintenance-summary'], queryFn:async()=>(await api.get('/maintenance/summary')).data, refetchInterval:30_000 });
   const maxActivity = Math.max(1, ...(data?.activity.flatMap(d => [d.creators,d.bookings]) ?? [1]));
-  const attention = data ? [
-    ...(data.business.failed_payments ? [{severity:'Critical', title:`${data.business.failed_payments} failed payment${data.business.failed_payments === 1 ? '' : 's'}`, detail:'Review payment exceptions and recovery status.', tone:'#ef4444',href:'/maintenance/finance'}] : []),
-    ...(data.business.pending_bookings ? [{severity:'Review', title:`${data.business.pending_bookings} pending booking${data.business.pending_bookings === 1 ? '' : 's'}`, detail:'Studio confirmation is still required.', tone:'#f59e0b',href:'/maintenance/bookings'}] : []),
-    ...(data.business.processing_payments ? [{severity:'Monitor', title:`${data.business.processing_payments} payment${data.business.processing_payments === 1 ? '' : 's'} processing`, detail:'Watch for delayed provider confirmation.', tone:'#5A9BCB',href:'/maintenance/finance'}] : []),
-  ] : [];
+  // Sourced from the real signal engine (lib/businessSignals.ts) instead of
+  // being recomputed here client-side — this used to inline its own 3-rule
+  // check against `data.business`, which is exactly the "compute aggregates
+  // client-side instead of using the analytics endpoint" pattern CLAUDE.md
+  // warns against. /maintenance/signals is the single source now; this card
+  // is just a capped preview of it.
+  const { data: signalsData } = useQuery<{ signals: Array<{ id:string; priority:'CRITICAL'|'ATTENTION'|'OPPORTUNITY'|'WATCH'; headline:string; action_hint:string; href:string }> }>({
+    queryKey: ['maintenance-signals-preview'], queryFn: async () => (await api.get('/maintenance/signals')).data, refetchInterval: 30_000,
+  });
+  const PRIORITY_TONE: Record<string, string> = { CRITICAL: '#ef4444', ATTENTION: '#f59e0b', OPPORTUNITY: '#C9A84C', WATCH: '#5A9BCB' };
+  const PRIORITY_LABEL: Record<string, string> = { CRITICAL: 'Critical', ATTENTION: 'Review', OPPORTUNITY: 'Opportunity', WATCH: 'Monitor' };
+  const allSignals = signalsData?.signals ?? [];
+  const attention = allSignals.slice(0, 4).map((signal) => ({
+    severity: PRIORITY_LABEL[signal.priority], title: signal.headline, detail: signal.action_hint,
+    tone: PRIORITY_TONE[signal.priority], href: signal.href,
+  }));
   const destinations=useMemo(()=>nav.filter(item=>item.to&&item.label.toLowerCase().includes(search.toLowerCase())),[search]);
   const trimmedSearch = search.trim();
   const { data: searchData } = useQuery<SearchResults>({
@@ -62,7 +73,7 @@ export default function MaintenancePage() {
 
         <div className="mt-3 grid gap-3 xl:grid-cols-[1.45fr_1fr]">
           <article className="rounded-2xl border border-white/[.065] bg-studio-surface p-6"><div className="flex items-center justify-between"><div><h2 className="text-sm font-semibold">Network activity</h2><p className="mt-1 text-xs text-zinc-700">Creator registrations and booking demand</p></div><Activity size={16} className="text-dome"/></div><div className="mt-8 flex h-40 items-end gap-3">{data.activity.map(day=><div key={day.date} className="flex h-full flex-1 flex-col justify-end gap-1"><div className="rounded-t bg-dome/70" style={{height:`${Math.max(3,day.bookings/maxActivity*100)}%`}}/><div className="rounded-t bg-[#C9A84C]/70" style={{height:`${Math.max(3,day.creators/maxActivity*100)}%`}}/><span className="mt-2 text-center text-[8px] font-mono text-zinc-800">{new Date(`${day.date}T12:00:00`).toLocaleDateString(undefined,{weekday:'short'})}</span></div>)}</div><div className="mt-5 flex gap-5 text-[9px] text-zinc-700"><span><i className="mr-2 inline-block h-2 w-2 rounded-sm bg-dome/70"/>Bookings</span><span><i className="mr-2 inline-block h-2 w-2 rounded-sm bg-[#C9A84C]/70"/>Creators</span></div></article>
-          <article className="rounded-2xl border border-white/[.065] bg-studio-surface p-6"><div className="flex items-center justify-between"><div><h2 className="text-sm font-semibold">Attention queue</h2><p className="mt-1 text-xs text-zinc-700">Items requiring platform oversight</p></div><AlertTriangle size={16} className={attention.length?'text-amber-400':'text-emerald-500'}/></div><div className="mt-6 space-y-2">{attention.length?attention.map(item=><button key={item.title} className="flex w-full items-start gap-3 rounded-xl border border-white/[.05] bg-white/[.018] p-4 text-left"><i className="mt-1 h-2 w-2 shrink-0 rounded-full" style={{background:item.tone}}/><span className="min-w-0 flex-1"><span className="block text-[9px] font-mono uppercase tracking-wider" style={{color:item.tone}}>{item.severity}</span><b className="mt-1 block text-xs font-medium">{item.title}</b><small className="mt-1 block text-[10px] leading-4 text-zinc-700">{item.detail}</small></span><ChevronRight size={13} className="mt-1 text-zinc-800"/></button>):<div className="rounded-xl border border-emerald-500/10 bg-emerald-500/[.03] p-5"><p className="text-xs text-emerald-400">No urgent platform actions</p><p className="mt-2 text-[10px] text-zinc-700">Payments, bookings and systems are within normal conditions.</p></div>}</div></article>
+          <article className="rounded-2xl border border-white/[.065] bg-studio-surface p-6"><div className="flex items-center justify-between"><div><h2 className="text-sm font-semibold">Attention queue</h2><p className="mt-1 text-xs text-zinc-700">Items requiring platform oversight</p></div><AlertTriangle size={16} className={attention.length?'text-amber-400':'text-emerald-500'}/></div><div className="mt-6 space-y-2">{attention.length?attention.map(item=><button key={item.title} onClick={()=>navigate(item.href)} className="flex w-full items-start gap-3 rounded-xl border border-white/[.05] bg-white/[.018] p-4 text-left transition hover:border-white/[.1]"><i className="mt-1 h-2 w-2 shrink-0 rounded-full" style={{background:item.tone}}/><span className="min-w-0 flex-1"><span className="block text-[9px] font-mono uppercase tracking-wider" style={{color:item.tone}}>{item.severity}</span><b className="mt-1 block text-xs font-medium">{item.title}</b><small className="mt-1 block text-[10px] leading-4 text-zinc-700">{item.detail}</small></span><ChevronRight size={13} className="mt-1 text-zinc-800"/></button>):<div className="rounded-xl border border-emerald-500/10 bg-emerald-500/[.03] p-5"><p className="text-xs text-emerald-400">No urgent platform actions</p><p className="mt-2 text-[10px] text-zinc-700">Payments, bookings and systems are within normal conditions.</p></div>}{allSignals.length>attention.length&&<button onClick={()=>navigate('/maintenance/signals')} className="mt-1 w-full text-center text-[10px] text-zinc-600 hover:text-white">View all {allSignals.length} signals →</button>}</div></article>
         </div><p className="mt-5 text-right text-[8px] font-mono text-zinc-800">Updated {new Date(data.generated_at).toLocaleString()}</p>
       </>}
     </section>

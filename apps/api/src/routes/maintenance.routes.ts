@@ -4,6 +4,12 @@ import { prisma } from '../lib/prisma';
 import { auditMaintenanceAccess } from '../lib/adminAudit';
 import { findWalletDrift } from '../lib/walletLedger';
 import { reconcileFinancialLedger } from '../lib/financialReconciliation';
+import { BUSINESS_DEFINITIONS } from '../lib/businessDefinitions';
+import {
+  activationGapSignal, failedPaymentsSignal, idleStudiosSignal, ledgerHealthSignal,
+  pendingBookingsSignal, processingPaymentsSignal, revenueActivationSignal, sortSignals,
+  walletDriftSignal,
+} from '../lib/businessSignals';
 
 export const maintenanceRouter = Router();
 
@@ -339,7 +345,10 @@ maintenanceRouter.get('/health', async (_req, res, next) => {
     const [webhookProcessing, webhookFailed, webhookProcessed, users, admins, adminsWithoutMfa, recentAuditEvents] = await Promise.all([
       prisma.stripeWebhookEvent.count({ where: { status: 'PROCESSING' } }),
       prisma.stripeWebhookEvent.count({ where: { status: 'FAILED' } }),
-      prisma.stripeWebhookEvent.count({ where: { status: 'PROCESSED' } }),
+      // Was 'PROCESSED' — the webhook handler actually writes 'COMPLETED'
+      // (webhooks.routes.ts) on success, so this count was structurally 0
+      // regardless of real traffic. Fixed so this panel can reflect reality.
+      prisma.stripeWebhookEvent.count({ where: { status: 'COMPLETED' } }),
       prisma.user.count(), prisma.user.count({ where: { role: 'OIANO_ADMIN' } }),
       prisma.user.count({ where: { role: 'OIANO_ADMIN', mfa_enabled: false } }),
       prisma.adminAuditLog.count({ where: { created_at: { gte: oneDayAgo } } }),
@@ -380,4 +389,55 @@ maintenanceRouter.get('/growth', async (_req, res, next) => {
     const pct=(value:number)=>total?Math.round(value/total*100):0;
     res.json({funnel:[{stage:'Artist accounts',count:total,rate:100},{stage:'Passport started',count:passportStarted,rate:pct(passportStarted)},{stage:'Passport ready',count:passportReady,rate:pct(passportReady)},{stage:'First booking',count:booked,rate:pct(booked)},{stage:'Paid booking',count:paid,rate:pct(paid)},{stage:'Session completed',count:completed,rate:pct(completed)},{stage:'Repeat creator',count:repeat,rate:pct(repeat)}],monthly,signals:{new_artists_30d:artists.filter(a=>a.created_at>=daysAgo(30)).length,new_artists_prior_30d:artists.filter(a=>a.created_at>=daysAgo(60)&&a.created_at<daysAgo(30)).length,visitor_tracking:false,acquisition_source:false}});
   } catch(error){next(error);}
+});
+
+// Read-only, deliberately non-executable: an operator can inspect exactly
+// what a metric means and where it's known to disagree with itself before
+// trusting any number built on it. See lib/businessDefinitions.ts.
+maintenanceRouter.get('/definitions', (_req, res) => {
+  res.json({ definitions: BUSINESS_DEFINITIONS });
+});
+
+// Deterministic, state-based signals — see lib/businessSignals.ts for why
+// this deliberately doesn't attempt trend/period-over-period comparisons.
+// Reuses the same reconciliation functions /finance already trusts
+// (findWalletDrift, reconcileFinancialLedger) rather than recomputing them.
+maintenanceRouter.get('/signals', async (_req, res, next) => {
+  try {
+    const [
+      failedPayments, processingPayments, walletDrift, ledgerReconciliation,
+      pendingCount, oldestPending, studios, totalArtists, artistsNeverBooked,
+      gmvPaid, studiosWithFee,
+    ] = await Promise.all([
+      prisma.payment.count({ where: { status: 'FAILED' } }),
+      prisma.payment.count({ where: { status: 'PROCESSING' } }),
+      findWalletDrift(),
+      reconcileFinancialLedger(),
+      prisma.booking.count({ where: { status: 'PENDING' } }),
+      prisma.booking.findFirst({
+        where: { status: 'PENDING' }, orderBy: { created_at: 'asc' },
+        select: { id: true, created_at: true, studio: { select: { name: true } } },
+      }),
+      prisma.studio.findMany({ select: { id: true, name: true, _count: { select: { bookings: true } } } }),
+      prisma.artist.count(),
+      prisma.artist.count({ where: { bookings: { none: {} } } }),
+      prisma.payment.aggregate({ where: { status: 'PAID' }, _sum: { amount_usd: true } }),
+      prisma.studio.count({ where: { platform_fee_bps: { gt: 0 } } }),
+    ]);
+
+    const idleStudios = studios.filter((studio) => studio._count.bookings === 0).map((studio) => ({ id: studio.id, name: studio.name }));
+
+    const signals = sortSignals([
+      failedPaymentsSignal(failedPayments),
+      walletDriftSignal(walletDrift),
+      ledgerHealthSignal(ledgerReconciliation),
+      processingPaymentsSignal(processingPayments),
+      pendingBookingsSignal(pendingCount, oldestPending ? { id: oldestPending.id, created_at: oldestPending.created_at, studio_name: oldestPending.studio.name } : null),
+      idleStudiosSignal(idleStudios),
+      activationGapSignal(totalArtists, artistsNeverBooked),
+      revenueActivationSignal(Number(gmvPaid._sum.amount_usd ?? 0), studiosWithFee, studios.length),
+    ].filter((signal): signal is NonNullable<typeof signal> => signal !== null));
+
+    res.json({ generated_at: new Date().toISOString(), healthy: signals.length === 0, signals });
+  } catch (error) { next(error); }
 });
