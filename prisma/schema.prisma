@@ -464,6 +464,12 @@ model ArtistPassport {
   ai_summary_public       Boolean        @default(true) // false = hidden from engineers
   profile_views           Int            @default(0) // incremented on non-owner views
   location                String?
+  // PLACE GIVES CONTEXT, IT ISN'T IDENTITY BY DEFAULT — location has always
+  // been silently public on the passport response below; this makes that a
+  // real, explicit choice instead of an accident. Defaults false so a value
+  // entered anywhere (onboarding included) is private until the artist
+  // deliberately opts to publish it.
+  location_public         Boolean        @default(false)
   social_links            Json           @default("{}")
   collaboration_interests String[]       @default([])
   issued_at               DateTime       @default(now())

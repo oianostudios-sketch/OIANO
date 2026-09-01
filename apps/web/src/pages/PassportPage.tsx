@@ -60,6 +60,7 @@ export default function PassportPage() {
   const [socialCanScroll, setSocialCanScroll] = useState(false);
   const [linksDraft, setLinksDraft] = useState<Record<string, string>>({});
   const [locationDraft, setLocationDraft] = useState('');
+  const [locationPublicDraft, setLocationPublicDraft] = useState(false);
   const [collaborationDraft, setCollaborationDraft] = useState('');
   const [releaseOpen, setReleaseOpen] = useState(false);
   const [editingReleaseId, setEditingReleaseId] = useState<string | null>(null);
@@ -103,6 +104,7 @@ export default function PassportPage() {
     mutationFn: () => api.patch('/passport/portfolio', {
       social_links: Object.fromEntries(Object.entries(linksDraft).filter(([, value]) => value.trim())),
       location: locationDraft.trim(),
+      location_public: locationPublicDraft,
       collaboration_interests: collaborationDraft.split(',').map(value => value.trim()).filter(Boolean),
     }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['passport'] }); setEditingLinks(false); toast.success('Links updated'); },
@@ -194,6 +196,7 @@ export default function PassportPage() {
   function openProfessionalDetails() {
     setLinksDraft(socialLinks);
     setLocationDraft((passport as any)?.location ?? '');
+    setLocationPublicDraft(Boolean((passport as any)?.location_public));
     setCollaborationDraft(((passport as any)?.collaboration_interests ?? []).join(', '));
     setEditingLinks(true);
   }
@@ -665,7 +668,11 @@ export default function PassportPage() {
         <Modal onClose={() => setEditingLinks(false)} ariaLabel="Social and streaming links" maxHeight="85vh">
             <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, marginBottom: 5 }}>Professional details</h2>
             <p style={{ color: '#666', fontSize: 12, marginBottom: 18 }}>Add context for collaborators, then paste complete public links.</p>
-            <label style={{ display: 'block', color: '#888', fontSize: 11, marginBottom: 12 }}>Creative base / location<input value={locationDraft} onChange={(event) => setLocationDraft(event.target.value)} placeholder="Lagos · London · New York" maxLength={120} style={{ width: '100%', marginTop: 5, background: '#080808', border: '1px solid #252525', borderRadius: 8, padding: '10px 12px', color: '#fff' }} /></label>
+            <label style={{ display: 'block', color: '#888', fontSize: 11, marginBottom: 8 }}>Creative base / location<input value={locationDraft} onChange={(event) => setLocationDraft(event.target.value)} placeholder="Lagos · London · New York" maxLength={120} style={{ width: '100%', marginTop: 5, background: '#080808', border: '1px solid #252525', borderRadius: 8, padding: '10px 12px', color: '#fff' }} /></label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#888', fontSize: 11, marginBottom: 18, cursor: 'pointer' }}>
+              <input type="checkbox" checked={locationPublicDraft} onChange={(event) => setLocationPublicDraft(event.target.checked)} style={{ margin: 0 }} />
+              Show location on my public Passport
+            </label>
             <label style={{ display: 'block', color: '#888', fontSize: 11, marginBottom: 18 }}>Open to collaborating on<input value={collaborationDraft} onChange={(event) => setCollaborationDraft(event.target.value)} placeholder="Features, songwriting, live shows" style={{ width: '100%', marginTop: 5, background: '#080808', border: '1px solid #252525', borderRadius: 8, padding: '10px 12px', color: '#fff' }} /></label>
             {['instagram','tiktok','youtube','spotify','apple_music','soundcloud','bandcamp','website'].map((platform) => (
               <label key={platform} style={{ display: 'block', color: '#888', fontSize: 11, marginBottom: 12, textTransform: 'capitalize' }}>

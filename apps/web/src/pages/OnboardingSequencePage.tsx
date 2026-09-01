@@ -27,7 +27,7 @@ const GOLD = '#d3b35c';
 const SUNSET = '#E8823A';
 const GENRES = [
   'Hip-Hop', 'R&B', 'Afrobeats', 'Pop', 'Electronic', 'Trap',
-  'Drill', 'Soul', 'Gospel', 'Jazz', 'Rock', 'Amapiano',
+  'Drill', 'Soul', 'Gospel', 'Jazz', 'Rock', 'Amapiano', 'Dancehall',
 ];
 // A demonstrated pattern, not a claim of global genre-taxonomy completeness —
 // see the Identity Formation Audit's Implementation Plan. Extending this
@@ -90,6 +90,7 @@ function IdentityStep({ onAdvance }: { onAdvance: (s: Partial<SharedState>) => v
   const [showAlias, setShowAlias] = useState(false);
   const [sounds, setSounds] = useState<string[]>([]);
   const [customSound, setCustomSound] = useState('');
+  const [location, setLocation] = useState('');
   const [shapeGenre, setShapeGenre] = useState<string | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [showAllGenres, setShowAllGenres] = useState(false);
@@ -139,16 +140,23 @@ function IdentityStep({ onAdvance }: { onAdvance: (s: Partial<SharedState>) => v
     setSaving(true);
     const trimmedName = name.trim();
     const trimmedAlias = alias.trim();
+    const trimmedLocation = location.trim();
     const { token, setAuth } = useAuthStore.getState();
-    api.patch('/passport/profile', {
-      name: trimmedName || undefined,
-      alias: trimmedAlias || undefined,
-      creative_dna: { genres: sounds.slice(0, 1), influences: sounds.slice(1) },
-    })
+    const saves = [
+      api.patch('/passport/profile', {
+        name: trimmedName || undefined,
+        alias: trimmedAlias || undefined,
+        creative_dna: { genres: sounds.slice(0, 1), influences: sounds.slice(1) },
+      }),
+    ];
+    // Private by default (location_public omitted → schema default false) —
+    // entering a city here must never silently publish it on the passport.
+    if (trimmedLocation) saves.push(api.patch('/passport/portfolio', { location: trimmedLocation }));
+    Promise.all(saves)
       .then(() => refreshMe(setAuth, token))
       .catch((err) => console.error('[onboarding] profile save failed:', err?.message))
       .finally(() => setSaving(false));
-    onAdvance({ name: trimmedName, alias: trimmedAlias || null, sounds, avatarUrl: avatarPreview });
+    onAdvance({ name: trimmedName, alias: trimmedAlias || null, sounds, location: trimmedLocation || null, avatarUrl: avatarPreview });
   }
 
   return (
@@ -253,6 +261,22 @@ function IdentityStep({ onAdvance }: { onAdvance: (s: Partial<SharedState>) => v
             ))}
           </div>
         )}
+
+        <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: '.14em', color: '#555', textTransform: 'uppercase', margin: '28px 0 10px' }}>
+          Where are you creating from?
+        </p>
+        <input
+          value={location}
+          onChange={(e) => setLocation(e.target.value)}
+          placeholder="City, Country (optional)"
+          style={{
+            width: '100%', maxWidth: 280, boxSizing: 'border-box', textAlign: 'center',
+            background: 'transparent', border: 'none', borderBottom: '1px solid #202020',
+            color: '#ccc', fontSize: 13, fontFamily: "'DM Sans', sans-serif",
+            padding: '6px 0', outline: 'none',
+          }}
+        />
+        <p style={{ fontSize: 10.5, color: '#444', margin: '6px 0 0' }}>Private by default — this won't appear on your public passport.</p>
 
         {sounds.length > 0 && (
           <button type="button" onClick={continueOn} disabled={saving} style={{
@@ -456,8 +480,13 @@ function FormationStep({ state, onDone }: { state: SharedState; onDone: () => vo
         {state.alias || state.name || 'Artist'}
       </p>
       {state.sounds.length > 0 && (
-        <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.06em', color: '#888', marginBottom: 24 }}>
+        <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.06em', color: '#888', marginBottom: state.location ? 4 : 24 }}>
           {state.sounds.join(' · ')}
+        </p>
+      )}
+      {state.location && (
+        <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.06em', color: '#666', marginBottom: 24 }}>
+          {state.location}
         </p>
       )}
 

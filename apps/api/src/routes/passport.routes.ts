@@ -32,6 +32,7 @@ const profileUpdateSchema = z.object({
 const socialPlatforms = ['instagram', 'tiktok', 'youtube', 'spotify', 'apple_music', 'soundcloud', 'bandcamp', 'website'] as const;
 const portfolioSchema = z.object({
   location: z.string().trim().max(120).optional(),
+  location_public: z.boolean().optional(),
   collaboration_interests: z.array(z.string().trim().min(1).max(60)).max(12).optional(),
   social_links: z.record(z.enum(socialPlatforms), z.string().url().max(500)).optional(),
 }).strict();
@@ -145,7 +146,8 @@ passportRouter.get('/public/:code', async (req, res, next) => {
         avatar_url: artist.avatar_url, status: artist.status, created_at: artist.created_at,
         passport: {
           passport_code: passport.passport_code, creative_dna: passport.creative_dna,
-          location: passport.location, social_links: passport.social_links,
+          location: passport.location_public ? passport.location : null,
+          social_links: passport.social_links,
           collaboration_interests: passport.collaboration_interests,
         },
         releases: artist.releases,

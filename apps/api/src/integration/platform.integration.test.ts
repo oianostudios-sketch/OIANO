@@ -61,6 +61,31 @@ test('auth, booking payment, and rights operate through real database transactio
   assert.ok(signup.body.token);
   const artistToken = signup.body.token as string;
   const artistId = signup.body.user.artist.id as string;
+  const passportCode = signup.body.user.artist.passport.passport_code as string;
+
+  // location must stay private until the artist explicitly opts in — this
+  // is the exact gap the geo-foundation work closed on the public endpoint.
+  const setLocation = await request('/passport/portfolio', {
+    method: 'PATCH',
+    headers: { authorization: `Bearer ${artistToken}` },
+    body: JSON.stringify({ location: 'Freetown, Sierra Leone' }),
+  });
+  assert.equal(setLocation.response.status, 200);
+  assert.equal(setLocation.body.location_public, false, 'location_public must default to false');
+
+  const publicBeforeOptIn = await request(`/passport/public/${passportCode}`);
+  assert.equal(publicBeforeOptIn.response.status, 200);
+  assert.equal(publicBeforeOptIn.body.artist.passport.location, null, 'location must not be public before opt-in');
+
+  const optIn = await request('/passport/portfolio', {
+    method: 'PATCH',
+    headers: { authorization: `Bearer ${artistToken}` },
+    body: JSON.stringify({ location_public: true }),
+  });
+  assert.equal(optIn.response.status, 200);
+
+  const publicAfterOptIn = await request(`/passport/public/${passportCode}`);
+  assert.equal(publicAfterOptIn.body.artist.passport.location, 'Freetown, Sierra Leone', 'location must appear once published');
 
   const login = await request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
   assert.equal(login.response.status, 200);
