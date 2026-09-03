@@ -112,7 +112,13 @@ studioRouter.get('/current', authenticate, async (req: any, res, next) => {
         orderBy: { starts_at: 'desc' },
         select: { studio_id: true },
       }) : null;
-      studio = latest ? await prisma.studio.findUnique({ where: { id: latest.studio_id } }) : null;
+      studio = latest
+        ? await prisma.studio.findUnique({ where: { id: latest.studio_id } })
+        // An artist with no booking history yet has no studio to resolve from —
+        // fall back to the same default the onboarding Calendar step already
+        // books against, so "no studio" isn't a dead end for pages (Calendar,
+        // Dashboard) that need somewhere real to point at.
+        : await prisma.studio.findUnique({ where: { slug: DEFAULT_STUDIO_SLUG } });
     }
     if (!studio) return res.json(null);
     const detailed = await prisma.studio.findUnique({

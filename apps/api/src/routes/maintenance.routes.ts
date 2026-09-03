@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { auditMaintenanceAccess } from '../lib/adminAudit';
 import { findWalletDrift } from '../lib/walletLedger';
 import { reconcileFinancialLedger } from '../lib/financialReconciliation';
+import { deriveRegionFromTimezone } from '@oiano/shared';
 import { BUSINESS_DEFINITIONS } from '../lib/businessDefinitions';
 import {
   activationGapSignal, failedPaymentsSignal, idleStudiosSignal, ledgerHealthSignal,
@@ -384,7 +385,14 @@ maintenanceRouter.get('/growth', async (_req, res, next) => {
     const now = new Date(); const daysAgo=(days:number)=>new Date(now.getTime()-days*86_400_000);
     const artists=await prisma.artist.findMany({select:{id:true,created_at:true,passport:{select:{profile_strength:true}},bookings:{select:{status:true,payment:{select:{status:true}},created_at:true}}}});
     const total=artists.length, passportStarted=artists.filter(a=>(a.passport?.profile_strength??0)>0).length, passportReady=artists.filter(a=>(a.passport?.profile_strength??0)>=70).length;
-    const booked=artists.filter(a=>a.bookings.length>0).length, paid=artists.filter(a=>a.bookings.some(b=>b.payment?.status==='PAID')).length, completed=artists.filter(a=>a.bookings.some(b=>b.status==='COMPLETED')).length, repeat=artists.filter(a=>a.bookings.filter(b=>!['CANCELLED','NO_SHOW'].includes(b.status)).length>1).length;
+    const booked=artists.filter(a=>a.bookings.length>0).length, paid=artists.filter(a=>a.bookings.some(b=>b.payment?.status==='PAID')).length, completed=artists.filter(a=>a.bookings.some(b=>b.status==='COMPLETED')).length;
+    // Repeat creator must be a real subset of "session completed" — this is
+    // the next funnel stage after it, and each stage's count needs to be
+    // <= the one before it for the funnel to mean what it visually claims.
+    // Was: 2+ non-cancelled bookings, which counts two still-PENDING
+    // requests as "repeat" with zero sessions ever finished — that let this
+    // stage read higher than "Session completed" directly above it.
+    const repeat=artists.filter(a=>a.bookings.filter(b=>b.status==='COMPLETED').length>1).length;
     const monthly=Array.from({length:6},(_,index)=>{const start=new Date(now.getFullYear(),now.getMonth()-(5-index),1);const end=new Date(now.getFullYear(),now.getMonth()-(4-index),1);return{month:start.toLocaleDateString('en-US',{month:'short'}),creators:artists.filter(a=>a.created_at>=start&&a.created_at<end).length,bookings:artists.flatMap(a=>a.bookings).filter(b=>b.created_at>=start&&b.created_at<end).length};});
     const pct=(value:number)=>total?Math.round(value/total*100):0;
     res.json({funnel:[{stage:'Artist accounts',count:total,rate:100},{stage:'Passport started',count:passportStarted,rate:pct(passportStarted)},{stage:'Passport ready',count:passportReady,rate:pct(passportReady)},{stage:'First booking',count:booked,rate:pct(booked)},{stage:'Paid booking',count:paid,rate:pct(paid)},{stage:'Session completed',count:completed,rate:pct(completed)},{stage:'Repeat creator',count:repeat,rate:pct(repeat)}],monthly,signals:{new_artists_30d:artists.filter(a=>a.created_at>=daysAgo(30)).length,new_artists_prior_30d:artists.filter(a=>a.created_at>=daysAgo(60)&&a.created_at<daysAgo(30)).length,visitor_tracking:false,acquisition_source:false}});
@@ -439,5 +447,70 @@ maintenanceRouter.get('/signals', async (_req, res, next) => {
     ].filter((signal): signal is NonNullable<typeof signal> => signal !== null));
 
     res.json({ generated_at: new Date().toISOString(), healthy: signals.length === 0, signals });
+  } catch (error) { next(error); }
+});
+
+// Geo Business Intelligence, honestly scoped: Studio.timezone is real,
+// populated, IANA-standard data — grouping by it (via deriveRegionFromTimezone)
+// costs nothing new and invents nothing. Artist-level geo is the opposite:
+// ArtistPassport.location is real but essentially unpopulated and mostly
+// private by design, so it's reported as its own honest confidence state
+// rather than silently folded into (or omitted from) the market rollup.
+maintenanceRouter.get('/markets', async (_req, res, next) => {
+  try {
+    const studios = await prisma.studio.findMany({
+      select: {
+        id: true, name: true, timezone: true, currency: true, platform_fee_bps: true,
+        bookings: {
+          where: { status: { notIn: ['CANCELLED', 'NO_SHOW'] } },
+          select: { artist_id: true, payment: { select: { status: true, amount_usd: true, refunded_usd: true } } },
+        },
+      },
+    });
+
+    type StudioRow = typeof studios[number];
+    const byRegion = new Map<string, { continent: string; city: string; studios: StudioRow[] }>();
+    for (const studio of studios) {
+      const region = deriveRegionFromTimezone(studio.timezone);
+      const bucket = byRegion.get(region.label) ?? { continent: region.continent, city: region.city, studios: [] as StudioRow[] };
+      bucket.studios.push(studio);
+      byRegion.set(region.label, bucket);
+    }
+
+    const markets = [...byRegion.entries()].map(([region, bucket]) => {
+      const bookings = bucket.studios.flatMap((studio) => studio.bookings);
+      const gmvCollected = bookings.reduce((sum, booking) => {
+        const payment = booking.payment;
+        if (!payment || !['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(payment.status)) return sum;
+        return sum + Number(payment.amount_usd) - Number(payment.refunded_usd);
+      }, 0);
+      return {
+        region, continent: bucket.continent,
+        studios: bucket.studios.map((studio) => ({ id: studio.id, name: studio.name, currency: studio.currency })),
+        studio_count: bucket.studios.length,
+        bookings: bookings.length,
+        gmv_collected_usd: Math.round(gmvCollected * 100) / 100,
+        artists_reachable: new Set(bookings.map((booking) => booking.artist_id)).size,
+        revenue_activated: bucket.studios.some((studio) => studio.platform_fee_bps > 0),
+      };
+    }).sort((a, b) => b.gmv_collected_usd - a.gmv_collected_usd);
+
+    const [totalArtists, withLocation, withPublicLocation] = await Promise.all([
+      prisma.artist.count(),
+      prisma.artistPassport.count({ where: { AND: [{ location: { not: null } }, { location: { not: '' } }] } }),
+      prisma.artistPassport.count({ where: { location_public: true } }),
+    ]);
+
+    res.json({
+      generated_at: new Date().toISOString(),
+      markets,
+      single_studio_markets: markets.filter((market) => market.studio_count === 1).length,
+      artist_geo: {
+        total_artists: totalArtists,
+        with_location: withLocation,
+        with_public_location: withPublicLocation,
+        status: withPublicLocation === 0 ? 'INSUFFICIENT_DATA' : 'PARTIAL',
+      },
+    });
   } catch (error) { next(error); }
 });

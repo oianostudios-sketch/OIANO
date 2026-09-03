@@ -197,7 +197,7 @@ export default function CalendarPage() {
   });
   const bookings: any[] = raw.data ?? raw ?? [];
 
-  const { data: studio } = useQuery({
+  const { data: studio, isLoading: studioLoading } = useQuery({
     queryKey: ['studio'],
     queryFn: async () => (await api.get('/studio/current')).data,
     staleTime: 300_000,
@@ -679,8 +679,10 @@ export default function CalendarPage() {
       )}
 
       {/* Content */}
-      {rooms.length === 0 ? (
+      {studioLoading ? (
         <div style={{ textAlign:'center', padding:'60px', color:'#555', fontSize:13 }}>Loading rooms…</div>
+      ) : rooms.length === 0 ? (
+        <ArtistEmptyState compact icon={CalendarPlus2} title="No studio to show yet" description="Book your first session to set up your calendar." actionLabel={(isAdmin||isArtist) ? 'Explore studio dates' : undefined} onAction={(isAdmin||isArtist) ? () => navigate('/book') : undefined} />
       ) : (
         <>
           {view === 'day'   && <DayView />}

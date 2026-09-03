@@ -1,4 +1,4 @@
-import { BarChart3, Building2, CalendarCheck, HeartPulse, LayoutDashboard, LogOut, Radar, ShieldCheck, UserCog, Users, WalletCards } from 'lucide-react';
+import { BarChart3, Building2, CalendarCheck, Globe2, HeartPulse, LayoutDashboard, LogOut, Radar, ShieldCheck, UserCog, Users, WalletCards } from 'lucide-react';
 import { ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import OianoBrand from './OianoBrand';
@@ -7,6 +7,7 @@ import { useAuthStore } from '../store/auth.store';
 export const maintenanceSections = [
   { label:'Overview', icon:LayoutDashboard, to:'/maintenance' },
   { label:'Signals', icon:Radar, to:'/maintenance/signals' },
+  { label:'Markets', icon:Globe2, to:'/maintenance/markets' },
   { label:'Studios', icon:Building2, to:'/maintenance/studios' },
   { label:'Studio Operators', icon:UserCog, to:'/maintenance/operators' },
   { label:'Creators', icon:Users, to:'/maintenance/creators' },

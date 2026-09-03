@@ -118,11 +118,15 @@ async function computePulseData(studioId: string, studio: any) {
           _count: { _all: true },
         }),
 
-        // Artists active in last 30 days (IDs only)
+        // Artists active in last 30 days (IDs only) — a cancelled booking
+        // isn't real activity; without this filter a cancellation kept an
+        // artist out of the "haven't been in 30+ days" nudge below,
+        // understating who actually needs re-engagement.
         prisma.booking.findMany({
           where: {
             studio_id: studioId,
             starts_at: { gte: thirtyDaysAgo },
+            status: { notIn: ['CANCELLED', 'NO_SHOW'] },
           },
           select: { artist_id: true },
           distinct: ['artist_id'],

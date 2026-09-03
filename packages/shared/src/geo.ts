@@ -16,3 +16,22 @@ export interface GeoContext {
   currency: string | null;
   locale: string | null;
 }
+
+// The first real (non-documentation-only) use of this file: derive a coarse,
+// honest region label from an IANA timezone id — real data Studio already
+// stores, not a new field, not a geocoding call. IANA ids are Continent/City
+// by convention, so this is exact where it applies and never invents a
+// country. This is OPERATING LOCATION (where a studio runs), not identity —
+// same "place gives context" boundary as everywhere else in this file.
+export interface DerivedRegion {
+  continent: string;
+  city: string;
+  label: string;
+}
+
+export function deriveRegionFromTimezone(timezone: string): DerivedRegion {
+  const parts = timezone.split('/');
+  const continent = parts[0] || 'Unknown';
+  const city = (parts[parts.length - 1] || timezone).replace(/_/g, ' ');
+  return { continent, city, label: `${city}, ${continent}` };
+}

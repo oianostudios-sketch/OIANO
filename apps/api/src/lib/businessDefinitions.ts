@@ -40,11 +40,18 @@ export const BUSINESS_DEFINITIONS: BusinessDefinition[] = [
     data_source: 'Studio.created_at — same pattern as new_artist, not currently surfaced anywhere.',
   },
   {
-    key: 'active_artist', label: 'Active artist', status: 'PARTIAL',
-    definition: 'No single definition exists today. Three different, mutually inconsistent ones already coexist in the codebase.',
-    formula: 'See known_conflicts — do not add a fourth without resolving the existing three first.',
-    data_source: 'network-metrics.routes.ts, pulse.routes.ts, network-exchange.routes.ts',
-    known_conflicts: '(1) network-metrics.routes.ts: distinct artist_id on non-cancelled/no-show bookings in last 30 days. (2) pulse.routes.ts: distinct artist_id on ANY booking (no status filter) in last 30 days — a cancelled booking still counts. (3) network-exchange.routes.ts: Artist.status === "AVAILABLE_FOR_BOOKING" network-wide — a self-reported flag set at signup, never derived from booking history.',
+    key: 'active_artist', label: 'Active artist', status: 'SUPPORTED',
+    definition: 'An artist with at least one non-cancelled, non-no-show booking within the window. Resolved from three previously-inconsistent definitions (see limitations) to this one, now applied everywhere "active" or "booked here" activity is reported.',
+    formula: 'count(distinct artist_id) among bookings where status NOT IN (CANCELLED, NO_SHOW), within the window',
+    data_source: 'network-metrics.routes.ts (artists_served, studio-scoped), pulse.routes.ts (30-day inactive-artist nudge), network-exchange.routes.ts (unique_artists_30d and artists_30d)',
+    limitations: 'Previously, pulse.routes.ts and both network-exchange.routes.ts call sites had no status filter at all — a cancelled booking counted as "active," which specifically understated pulse\'s "artists haven\'t been in 30+ days" re-engagement nudge (a cancelled-only artist was wrongly excluded from it). All three were changed to match network-metrics.routes.ts\'s existing, already-correct filter rather than the reverse, since excluding cancelled/no-show is the more honest reading of "active" and only required changing the minority pattern. Deliberately NOT unified with available_artists (below) — that is a different concept (self-reported openness to booking, not historical activity) and conflating the two would be a new, worse inconsistency.',
+  },
+  {
+    key: 'available_artists', label: 'Available artists', status: 'SUPPORTED',
+    definition: 'Network-wide count of Artist.status === "AVAILABLE_FOR_BOOKING" — a self-reported, one-tap toggle, independent of any time window or booking history. Answers "how many artists are currently open to work," not "how many have been active."',
+    formula: 'count(Artist.status = AVAILABLE_FOR_BOOKING)',
+    data_source: 'network-exchange.routes.ts (STUDIO_ADMIN market view)',
+    limitations: 'Defaults to AVAILABLE_FOR_BOOKING at signup regardless of whether the artist has ever booked anything or even finished onboarding — treat as a stated preference, not a quality or engagement signal.',
   },
   {
     key: 'active_studio', label: 'Active studio', status: 'UNSUPPORTED',
@@ -95,10 +102,10 @@ export const BUSINESS_DEFINITIONS: BusinessDefinition[] = [
   },
   {
     key: 'repeat_customer', label: 'Repeat customer', status: 'PARTIAL',
-    definition: 'An artist with more than one non-cancelled/no-show booking, network-wide.',
-    formula: 'count(artist_id) among bookings where status NOT IN (CANCELLED, NO_SHOW) > 1',
-    data_source: 'maintenance.routes.ts /growth funnel ("Repeat creator" stage) — this is the reference formula used by activationGapSignal and the growth funnel.',
-    limitations: 'StudioCircleMember.session_count is a separate, studio-scoped repeat-booking counter built for the public Passport/consent feature, not for BI — it is also incomplete (missed by the same file-delivery completion path noted under booking_completed). Do not treat it as network-wide.',
+    definition: 'An artist with more than one COMPLETED booking, network-wide.',
+    formula: 'count(artist_id) among bookings where status = COMPLETED > 1',
+    data_source: 'maintenance.routes.ts /growth funnel ("Repeat creator" stage).',
+    limitations: "Originally counted 2+ non-cancelled bookings regardless of completion, which let an artist with two still-PENDING requests count as \"repeat\" — visibly broke the growth funnel's own monotonicity (this stage read HIGHER than \"Session completed\" directly above it, since PENDING is easier to reach than COMPLETED). Fixed to require completion so each funnel stage is a real subset of the one before it. StudioCircleMember.session_count is a separate, studio-scoped repeat-booking counter built for the public Passport/consent feature, not for BI — it is also incomplete (missed by the same file-delivery completion path noted under booking_completed). Do not treat it as network-wide.",
   },
   {
     key: 'first_booking', label: 'First booking', status: 'SUPPORTED',
@@ -184,6 +191,20 @@ export const BUSINESS_DEFINITIONS: BusinessDefinition[] = [
     definition: 'Room-hours (room_count × operating_hours) is the only available supply proxy, subject to the same limitations as studio_utilization.',
     formula: 'room_count × operating_hours',
     data_source: 'Same as studio_utilization.',
+  },
+  {
+    key: 'market', label: 'Market / region', status: 'PARTIAL',
+    definition: "A coarse region label derived from each studio's own IANA timezone (e.g. \"Africa/Freetown\" → \"Freetown, Africa\") — real, already-stored data, not a new field or a geocoding call. Describes STUDIO OPERATING LOCATION, never artist origin or identity.",
+    formula: 'deriveRegionFromTimezone(Studio.timezone), studios grouped by the resulting label',
+    data_source: 'packages/shared/src/geo.ts (deriveRegionFromTimezone), maintenance.routes.ts /markets',
+    limitations: "Today every derived region contains exactly one studio, so a market and its one studio are currently indistinguishable — real supply-vs-demand comparison WITHIN a region needs more than one studio in it. City-level precision only (no ISO country code); two studios in the same country but different IANA zone entries would not be grouped together.",
+  },
+  {
+    key: 'artist_geo_distribution', label: 'Artist geographic distribution', status: 'UNSUPPORTED',
+    definition: 'Aggregating where artists are based is not honestly supportable yet: 0 of 13 existing artists have ever set a location, and the field is private by default.',
+    formula: 'N/A',
+    data_source: 'ArtistPassport.location + location_public',
+    limitations: 'Reported as an explicit INSUFFICIENT_DATA state on the Markets page rather than omitted or estimated — this will remain UNSUPPORTED, not silently improved, until real adoption exists to aggregate.',
   },
 ];
 
