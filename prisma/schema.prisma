@@ -579,6 +579,7 @@ model Booking {
   deliverables          Deliverable[]
   completion_requests   SessionCompletionRequest[]
   maintenance_issues    MaintenanceIssue[]
+  weave_evidence        WeaveEvidence[]
   created_at            DateTime                   @default(now())
   updated_at            DateTime                   @updatedAt
 
@@ -1216,4 +1217,103 @@ model Feedback {
 
   @@index([status, created_at])
   @@map("feedback")
+}
+
+// ─── Oiano Weave — network model foundation ─────────────────────────────────
+// Deliberately prefixed WeaveNode/WeaveConnection, not Node/Connection:
+// PassportConnection (below) already uses "Connection" for an unrelated
+// artist-to-artist DM/request feature (initiator/recipient, PENDING/
+// ACCEPTED/DECLINED) — weak, self-declared evidence, exactly what this layer
+// is NOT. Keeping the names visually distinct in the schema and generated
+// client matters more here than matching the brief's prose exactly.
+//
+// A WeaveNode is a growing creative entity (Artist or Studio for V1),
+// independent of any single relationship. Not a copy of Artist/Studio data:
+// WeaveNode.id is deliberately the SAME id as the underlying Artist.id /
+// Studio.id (both uuid, globally unique across tables), so this stays a thin
+// type-tagged registry rather than a second identity record — and it means
+// a future User with both an Artist row and a Producer row naturally gets
+// two independent WeaveNodes, never one Node standing in for a whole User.
+// No back-relation is added on Artist/Studio themselves — a WeaveNode's
+// existence is resolved by id lookup, not a Prisma relation, so this
+// migration never touches either model.
+enum WeaveNodeType {
+  ARTIST
+  STUDIO
+}
+
+enum WeaveNodeStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model WeaveNode {
+  id         String          @id
+  type       WeaveNodeType
+  status     WeaveNodeStatus @default(ACTIVE)
+  created_at DateTime        @default(now())
+  updated_at DateTime        @updatedAt
+
+  connections_from WeaveConnection[] @relation("SourceNode")
+  connections_to   WeaveConnection[] @relation("TargetNode")
+
+  @@index([type])
+  @@map("weave_nodes")
+}
+
+// A meaningful, evidence-backed relationship between two WeaveNodes. Never
+// authoritative by itself — every WeaveConnection must carry at least one
+// WeaveEvidence row citing the real domain record that proves it. V1 has
+// exactly one type, derived only from completed Bookings; RECORDED_AT is
+// stored directionally (source=Artist, target=Studio) so a lookup from
+// either side is one indexed query with no duplicate reverse row to keep in
+// sync.
+enum WeaveConnectionType {
+  RECORDED_AT
+}
+
+model WeaveConnection {
+  id                String              @id @default(uuid())
+  source_node_id    String
+  source_node       WeaveNode           @relation("SourceNode", fields: [source_node_id], references: [id])
+  target_node_id    String
+  target_node       WeaveNode           @relation("TargetNode", fields: [target_node_id], references: [id])
+  type              WeaveConnectionType
+  // Explainable growth signal, not an opaque score — "worked together N
+  // times," incremented only when new evidence is actually added.
+  // Starts at 0, not 1: syncConnectionFromBooking always increments after
+  // creating a connection's first evidence row too, so a @default(1) here
+  // would silently double-count the first piece of evidence on every new
+  // connection (found via the backfill script's first real run).
+  activity_count    Int                 @default(0)
+  first_activity_at DateTime
+  last_activity_at  DateTime
+  evidence          WeaveEvidence[]
+  created_at        DateTime            @default(now())
+  updated_at        DateTime            @updatedAt
+
+  @@unique([source_node_id, target_node_id, type])
+  @@index([target_node_id, type])
+  @@map("weave_connections")
+}
+
+// One row per real record a WeaveConnection is built from — kept separate
+// from the connection itself so evidence can be added over time and a
+// connection left with no evidence is a detectable, explainable state
+// rather than a silent orphan. booking_id only for V1, following the same
+// "add a nullable typed column, don't invent a polymorphic ref" convention
+// ProjectParticipant/RightsShare already use elsewhere in this schema — the
+// next evidence type (e.g. an APPROVED RightsShare, once a Producer
+// WeaveNode exists) adds a column here, not a new table.
+model WeaveEvidence {
+  id            String          @id @default(uuid())
+  connection_id String
+  connection    WeaveConnection @relation(fields: [connection_id], references: [id], onDelete: Cascade)
+  booking_id    String
+  booking       Booking         @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+  created_at    DateTime        @default(now())
+
+  @@unique([connection_id, booking_id])
+  @@index([booking_id])
+  @@map("weave_connection_evidence")
 }

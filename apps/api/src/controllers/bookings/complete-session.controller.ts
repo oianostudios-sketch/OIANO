@@ -8,6 +8,7 @@ import { broadcastAll, broadcastToUser, createNotification } from '../../routes/
 import { sendSessionComplete } from '../../services/email.service';
 import { resolveStaffStudio } from '../../middleware/studioScope.middleware';
 import { syncStudioCircleMembership } from '../../services/studio-circle.service';
+import { syncConnectionFromBooking } from '../../lib/weave/sync';
 
 // POST /api/bookings/:id/complete — the session completion screen.
 // Single entry point that replaces the old "flip status, then separately
@@ -260,6 +261,8 @@ export async function completeSession(req: Request, res: Response, next: NextFun
 
       syncStudioCircleMembership(booking.studio_id, booking.artist_id)
         .catch((e) => console.error('[circle] completion sync failed:', e?.message));
+      syncConnectionFromBooking(booking.id)
+        .catch((e) => console.error('[weave] connection sync failed:', e?.message));
 
       if (booking.project_id) {
         (prisma as any).project.update({

@@ -14,6 +14,7 @@ import { createNotification } from '../routes/notifications.routes';
 import { Prisma } from '@prisma/client';
 import { resolveStaffStudio } from '../middleware/studioScope.middleware';
 import { syncStudioCircleMembership } from '../services/studio-circle.service';
+import { syncConnectionFromBooking } from '../lib/weave/sync';
 import { applyWalletDelta } from '../lib/walletLedger';
 import { recordBookingPayment } from '../lib/financialLedger';
 import { getNextAction, getSessionSummary } from '../intelligence/intelligence.service';
@@ -525,6 +526,7 @@ export async function updateBookingStatus(req: Request, res: Response, next: Nex
       }).catch((e) => console.error('[activity] session.completed emit failed:', e?.message));
 
       await syncStudioCircleMembership(booking.studio_id, booking.artist_id);
+      syncConnectionFromBooking(booking.id).catch((e) => console.error('[weave] connection sync failed:', e?.message));
     }
 
     if (status === 'CONFIRMED') {
@@ -688,6 +690,7 @@ export async function deliverSessionFiles(req: Request, res: Response, next: Nex
     // Move booking to COMPLETED if still CONFIRMED/IN_PROGRESS
     if (['CONFIRMED','IN_PROGRESS'].includes(booking.status)) {
       await prisma.booking.update({ where: { id: booking.id }, data: { status: 'COMPLETED' } });
+      syncConnectionFromBooking(booking.id).catch((e) => console.error('[weave] connection sync failed:', e?.message));
     }
 
     // In-app notification to artist

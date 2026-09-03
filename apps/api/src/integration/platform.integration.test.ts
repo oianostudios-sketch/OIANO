@@ -98,6 +98,29 @@ test('auth, booking payment, and rights operate through real database transactio
   });
   const producerLogin = await request('/auth/login', { method: 'POST', body: JSON.stringify({ email: producerUser.email, password }) });
   assert.equal(producerLogin.response.status, 200);
+
+  const creativeSignup = await request('/auth/signup', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: `creative-${runId}@example.test`, password, name: 'Integration Multi Creative', role: 'PRODUCER',
+      primary_discipline: 'SONGWRITER', disciplines: ['SONGWRITER', 'VOCALIST'],
+    }),
+  });
+  assert.equal(creativeSignup.response.status, 201);
+  assert.equal(creativeSignup.body.user.producer.primary_discipline, 'SONGWRITER');
+  assert.deepEqual(creativeSignup.body.user.producer.disciplines, ['SONGWRITER', 'VOCALIST']);
+  assert.equal(creativeSignup.body.user.producer.onboarding_complete, false);
+  const creativeProfileUpdate = await request('/producer/me', {
+    method: 'PATCH', headers: { authorization: `Bearer ${creativeSignup.body.token}` },
+    body: JSON.stringify({ primary_discipline: 'VOCALIST', disciplines: ['SONGWRITER', 'VOCALIST'], services: ['Songwriting', 'Session performance'], location: 'Remote', onboarding_complete: true }),
+  });
+  assert.equal(creativeProfileUpdate.response.status, 200);
+  assert.equal(creativeProfileUpdate.body.primary_discipline, 'VOCALIST');
+  const invalidPrimary = await request('/producer/me', {
+    method: 'PATCH', headers: { authorization: `Bearer ${creativeSignup.body.token}` },
+    body: JSON.stringify({ primary_discipline: 'MIX_ENGINEER', disciplines: ['SONGWRITER'] }),
+  });
+  assert.equal(invalidPrimary.response.status, 400);
   const project = await prisma.project.create({ data: { producer_id: producerUser.producer!.id, artist_id: artistId, title: 'Integration Project' } });
 
   const startsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
@@ -219,6 +242,38 @@ test('auth, booking payment, and rights operate through real database transactio
   assert.equal(completion.body.updatedBooking.status, 'COMPLETED');
   assert.equal(completion.body.rightsAgreement.shares.length, 2);
   assert.equal(completion.body.rightsAgreement.decisions.length, 2);
+
+  // Oiano Weave: completing a booking must derive a RECORDED_AT connection
+  // between the Artist and Studio Nodes, with this booking as its evidence.
+  // syncConnectionFromBooking runs fire-and-forget from the completion
+  // route, so poll briefly rather than assume it's already landed.
+  const weaveConnection = await (async () => {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const found = await prisma.weaveConnection.findUnique({
+        where: { source_node_id_target_node_id_type: { source_node_id: artistId, target_node_id: studio.id, type: 'RECORDED_AT' } },
+        include: { evidence: true },
+      });
+      if (found) return found;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return null;
+  })();
+  assert.ok(weaveConnection, 'expected a RECORDED_AT WeaveConnection between the artist and studio after completion');
+  assert.equal(weaveConnection!.activity_count, 1);
+  assert.ok(weaveConnection!.evidence.some((row) => row.booking_id === bookingId));
+  const artistNode = await prisma.weaveNode.findUnique({ where: { id: artistId } });
+  const studioNode = await prisma.weaveNode.findUnique({ where: { id: studio.id } });
+  assert.equal(artistNode?.type, 'ARTIST');
+  assert.equal(studioNode?.type, 'STUDIO');
+
+  // Calling the sync again for the same booking must not double-count —
+  // idempotency is the whole point of deriving Connections from truth
+  // rather than incrementally tracking them.
+  const { syncConnectionFromBooking } = await import('../lib/weave/sync');
+  await syncConnectionFromBooking(bookingId);
+  const resynced = await prisma.weaveConnection.findUnique({ where: { id: weaveConnection!.id }, include: { evidence: true } });
+  assert.equal(resynced?.activity_count, 1, 're-syncing the same completed booking must not inflate activity_count');
+  assert.equal(resynced?.evidence.length, 1, 're-syncing the same completed booking must not create duplicate evidence');
   assert.equal(await prisma.sessionCompletionRequest.count({ where: { booking_id: bookingId } }), 1);
 
   const artistMetrics = await request('/network-metrics', { headers: { authorization: `Bearer ${artistToken}` } });
@@ -278,6 +333,10 @@ test('auth, booking payment, and rights operate through real database transactio
   assert.ok(operatorMetrics.body.metrics.some((metric: any) => metric.key === 'completed_sessions'));
   const artistAdminAttempt = await request('/admin/analytics', { headers: { authorization: `Bearer ${artistToken}` } });
   assert.equal(artistAdminAttempt.response.status, 403);
+  const creativeAdminAttempt = await request('/admin/analytics', { headers: { authorization: `Bearer ${creativeSignup.body.token}` } });
+  assert.equal(creativeAdminAttempt.response.status, 403);
+  const operatorProducerAttempt = await request('/producer/me', { headers: { authorization: `Bearer ${adminLogin.body.token}` } });
+  assert.equal(operatorProducerAttempt.response.status, 403);
 
   const maintenanceUser = await prisma.user.create({
     data: { email: `maintenance-${runId}@example.test`, role: 'OIANO_ADMIN', password_hash: await bcrypt.hash(password, 4) },
