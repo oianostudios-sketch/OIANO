@@ -7,7 +7,7 @@ import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
 import { isR2Configured, uploadToR2, deleteFromR2 } from '../lib/r2';
-import { getImageUpload } from '../lib/imageUpload';
+import { getImageUpload, normalizeImageUpload, writeNormalizedImageLocally } from '../lib/imageUpload';
 import { getAudioUpload } from '../lib/audioUpload';
 import { generatePassportCode } from '../lib/passport';
 import { auditSuccessfulMutation } from '../lib/adminAudit';
@@ -57,18 +57,19 @@ producerRouter.patch('/avatar', requireRole('PRODUCER'), async (req: any, res, n
 
       let publicUrl: string;
 
-      if (isR2Configured && (file as any).buffer) {
+      const normalized = await normalizeImageUpload(file);
+      if (isR2Configured) {
         publicUrl = await uploadToR2(
-          (file as any).buffer,
+          normalized.buffer,
           `avatars/${producer.id}`,
-          file.originalname || 'avatar.jpg',
-          file.mimetype,
+          normalized.filename,
+          normalized.mimeType,
         );
         if (producer.avatar_url?.startsWith('http')) {
           await deleteFromR2(producer.avatar_url);
         }
       } else {
-        publicUrl = `/uploads/avatars/${(file as any).filename}`;
+        publicUrl = writeNormalizedImageLocally('avatars', normalized.filename, normalized.buffer);
         if (producer.avatar_url?.startsWith('/uploads/')) {
           const oldPath = path.join(process.cwd(), producer.avatar_url);
           if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
