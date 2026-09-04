@@ -1,14 +1,19 @@
 name: CI
 
-# SCALE_READINESS_ROADMAP.md Tier 0.4 — until now, every deploy was
-# unverified: no typecheck, no test run, no build check happened
-# automatically. Deliberately minimal: no database service, no live secrets.
-# Every test in the suite is a pure unit test (confirmed before writing this
-# workflow — none of them touch Prisma or a real network call), and neither
-# typecheck nor build executes application code at runtime (env validation
-# only runs when the compiled server actually starts), so none of that is
-# needed here. If that ever changes, this workflow needs a Postgres service
-# and secrets added alongside it — don't assume it'll keep working for free.
+# SCALE_READINESS_ROADMAP.md Tier 0.4 — until this existed, every deploy was
+# unverified: no typecheck, no test run, no build check happened automatically.
+#
+# Two jobs, deliberately split by what they need. `verify` runs without a
+# database: the API's unit suites and the web suite (vitest on jsdom) touch
+# neither Prisma nor the network, and typecheck and build never execute
+# application code. `integration` gets a real Postgres service, applies every
+# migration, and additionally boots the compiled server to prove the artifact
+# render.yaml launches actually starts.
+#
+# node-version is pinned rather than left to the runner default: jsdom's undici
+# dependency calls webidl.util.markAsUncloneable, which does not exist in
+# Node 20, so the entire web suite failed to load there. package.json's engines
+# field carries the floor (>=22); this pin is the version actually tested.
 
 on:
   push:
@@ -29,7 +34,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - run: npm ci
@@ -107,7 +112,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - run: npm ci
