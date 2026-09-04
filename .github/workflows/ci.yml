@@ -18,6 +18,11 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      # prisma validate resolves env("DATABASE_URL") in the datasource block, so
+      # the variable must exist even though nothing here connects to a database.
+      # Syntactically valid and deliberately unreachable.
+      DATABASE_URL: postgresql://validate:validate@127.0.0.1:5432/validate_only
     steps:
       - uses: actions/checkout@v4
 
@@ -39,6 +44,12 @@ jobs:
       # never touches a real database.
       - name: Generate Prisma client
         run: npx prisma generate
+
+      # @oiano/shared resolves through its "main": "dist/index.js", and dist/ is
+      # gitignored with no prepare script, so npm ci never produces it. Typecheck,
+      # tests and build all import it — this must come first.
+      - name: Build shared package
+        run: npm run build --workspace=packages/shared
 
       - name: Typecheck API
         run: npm run typecheck --workspace=apps/api
@@ -87,6 +98,11 @@ jobs:
 
       - name: Generate Prisma client
         run: npx prisma generate
+
+      # The integration suite boots the real Express app, whose routes import
+      # @oiano/shared — see the note in the verify job above.
+      - name: Build shared package
+        run: npm run build --workspace=packages/shared
 
       - name: Database-backed platform integration tests
         run: npm run test:integration --workspace=apps/api
