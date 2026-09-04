@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import { authenticate } from '../middleware/auth.middleware';
 import { resolveStaffStudio } from '../middleware/studioScope.middleware';
 import { AppError } from '../lib/errors';
+import { RIGHTS_AGREEMENT_APPROVED, PROMOTIONAL_CONSENT_APPROVED } from '../lib/rightsDecisionState';
 
 export const networkMetricsRouter = Router();
 networkMetricsRouter.use(authenticate);
@@ -93,8 +94,8 @@ networkMetricsRouter.get('/', async (req: any, res, next) => {
         prisma.studio.count(), prisma.artist.count(), prisma.producer.count(),
         prisma.booking.count({ where: { status: 'COMPLETED' } }),
         prisma.projectCredit.count({ where: { status: 'CONFIRMED' } }),
-        prisma.rightsAgreement.count({ where: { status: 'ACCEPTED' } }),
-        prisma.promotionalConsent.count({ where: { status: 'ACCEPTED' } }),
+        prisma.rightsAgreement.count({ where: { status: RIGHTS_AGREEMENT_APPROVED } }),
+        prisma.promotionalConsent.count({ where: { status: PROMOTIONAL_CONSENT_APPROVED } }),
       ]);
       return res.json(response('OIANO', [
         { key: 'active_studios', label: 'Studios', value: studios, detail: 'Studio infrastructure on the network' },

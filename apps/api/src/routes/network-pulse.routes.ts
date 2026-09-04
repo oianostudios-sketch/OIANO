@@ -12,6 +12,7 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { authenticate } from '../middleware/auth.middleware';
+import { RIGHTS_AGREEMENT_APPROVED } from '../lib/rightsDecisionState';
 
 export const networkPulseRouter = Router();
 networkPulseRouter.use(authenticate);
@@ -19,21 +20,21 @@ networkPulseRouter.use(authenticate);
 networkPulseRouter.get('/pulse', async (_req: any, res, next) => {
   try {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const [studios, artists, producers, completedToday, completedTotal, confirmedCredits, acceptedRights] = await Promise.all([
+    const [studios, artists, producers, completedToday, completedTotal, confirmedCredits, approvedRights] = await Promise.all([
       prisma.studio.count(),
       prisma.artist.count(),
       prisma.producer.count(),
       prisma.booking.count({ where: { status: 'COMPLETED', updated_at: { gte: since } } }),
       prisma.booking.count({ where: { status: 'COMPLETED' } }),
       prisma.projectCredit.count({ where: { status: 'CONFIRMED' } }),
-      prisma.rightsAgreement.count({ where: { status: 'ACCEPTED' } }),
+      prisma.rightsAgreement.count({ where: { status: RIGHTS_AGREEMENT_APPROVED } }),
     ]);
     res.json({
       studios,
       creatives: artists + producers,
       sessions_completed_today: completedToday,
       sessions_completed_total: completedTotal,
-      trusted_records: confirmedCredits + acceptedRights,
+      trusted_records: confirmedCredits + approvedRights,
       generated_at: new Date().toISOString(),
     });
   } catch (err) { next(err); }

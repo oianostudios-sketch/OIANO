@@ -353,6 +353,87 @@ test('auth, booking payment, and rights operate through real database transactio
   assert.equal(maintenanceMetrics.response.status, 200);
   assert.equal(maintenanceMetrics.body.pole, 'OIANO');
   assert.ok(maintenanceMetrics.body.metrics.some((metric: any) => metric.key === 'trusted_records'));
+  const oianoTrustedBefore = maintenanceMetrics.body.metrics
+    .find((metric: any) => metric.key === 'trusted_records').value as number;
+
+  // Rights agreements and promotional consents both settle on APPROVED. Three
+  // network counters used to query 'ACCEPTED' — a value nothing in this system
+  // has ever written — so every approved agreement and consent was silently
+  // excluded from the "trusted records" totals. Asserting the key exists (just
+  // above) never caught it, because the key existed and the value was wrong.
+  // Drive both lifecycles through the real endpoints and assert the totals move.
+  const pulseBefore = await request('/network/pulse', { headers: { authorization: `Bearer ${artistToken}` } });
+  assert.equal(pulseBefore.response.status, 200);
+  const pulseTrustedBefore = pulseBefore.body.trusted_records as number;
+
+  const agreementId = completion.body.rightsAgreement.id as string;
+  const artistRightsApproval = await request(`/artist-projects/${project.id}/rights-agreements/${agreementId}`, {
+    method: 'PATCH',
+    headers: { authorization: `Bearer ${artistToken}` },
+    body: JSON.stringify({ action: 'APPROVE' }),
+  });
+  assert.equal(artistRightsApproval.response.status, 200);
+  // One holder approving is not enough — the agreement only settles once every
+  // named holder has answered, so it must still be PROPOSED here.
+  assert.equal(artistRightsApproval.body.status, 'PROPOSED');
+
+  // The producer holds the second named share. Settle it through the same
+  // production path the routes use, so the persisted value is produced by
+  // agreementStatusFromDecisions rather than by a literal in this test.
+  const producerDecision = await prisma.rightsDecision.findFirstOrThrow({
+    where: { agreement_id: agreementId, status: 'PENDING' },
+  });
+  const { respondToNamedRightsShare } = await import('../lib/rightsDecision');
+  const settledAgreement = await respondToNamedRightsShare({
+    agreementId, userId: producerDecision.holder_user_id, action: 'APPROVE',
+  });
+  assert.equal(settledAgreement.status, 'APPROVED', 'a fully approved agreement must persist APPROVED, never ACCEPTED');
+  assert.equal(await prisma.rightsAgreement.count({ where: { id: agreementId, status: 'ACCEPTED' } }), 0);
+
+  const consentRequest = await request(`/producer/projects/${project.id}/promotional-consents`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${producerLogin.body.token}` },
+    body: JSON.stringify({ subject: 'Integration Artist', purpose: 'Announce the release', channels: ['INSTAGRAM'], assets: ['NAME'] }),
+  });
+  assert.equal(consentRequest.response.status, 201);
+  assert.equal(consentRequest.body.status, 'REQUESTED');
+
+  // Only the project's own artist may answer a promotional consent request.
+  const foreignConsentAttempt = await request(`/artist-projects/${project.id}/promotional-consents/${consentRequest.body.id}`, {
+    method: 'PATCH',
+    headers: { authorization: `Bearer ${entered.body.token}` },
+    body: JSON.stringify({ action: 'APPROVE' }),
+  });
+  assert.equal(foreignConsentAttempt.response.status, 404);
+
+  const consentApproval = await request(`/artist-projects/${project.id}/promotional-consents/${consentRequest.body.id}`, {
+    method: 'PATCH',
+    headers: { authorization: `Bearer ${artistToken}` },
+    body: JSON.stringify({ action: 'APPROVE' }),
+  });
+  assert.equal(consentApproval.response.status, 200);
+  assert.equal(consentApproval.body.status, 'APPROVED', 'granted promotional consent must persist APPROVED, never ACCEPTED');
+  assert.equal(await prisma.promotionalConsent.count({ where: { id: consentRequest.body.id, status: 'ACCEPTED' } }), 0);
+
+  // Approving again from the settled state is not a valid transition.
+  const repeatConsentApproval = await request(`/artist-projects/${project.id}/promotional-consents/${consentRequest.body.id}`, {
+    method: 'PATCH',
+    headers: { authorization: `Bearer ${artistToken}` },
+    body: JSON.stringify({ action: 'APPROVE' }),
+  });
+  assert.equal(repeatConsentApproval.response.status, 409);
+
+  // Both counters must now see the records they previously could never match.
+  const pulseAfter = await request('/network/pulse', { headers: { authorization: `Bearer ${artistToken}` } });
+  assert.equal(pulseAfter.response.status, 200);
+  assert.equal(pulseAfter.body.trusted_records, pulseTrustedBefore + 1, 'an approved rights agreement must count as a trusted record');
+
+  const oianoMetricsAfter = await request('/network-metrics', { headers: { authorization: `Bearer ${maintenanceToken}` } });
+  assert.equal(oianoMetricsAfter.response.status, 200);
+  const oianoTrustedAfter = oianoMetricsAfter.body.metrics
+    .find((metric: any) => metric.key === 'trusted_records').value as number;
+  assert.equal(oianoTrustedAfter, oianoTrustedBefore + 2, 'approved rights and consent must both reach the OIANO trusted-records total');
+
   const artistMaintenanceAttempt = await request('/maintenance/summary', { headers: { authorization: `Bearer ${artistToken}` } });
   assert.equal(artistMaintenanceAttempt.response.status, 403);
 
