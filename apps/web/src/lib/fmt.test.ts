@@ -8,11 +8,18 @@ import { fmtCurrency, fmtDateShort, fmtDuration, fmtTime } from './fmt';
 const SESSION_START = '2026-03-15T18:00:00.000Z';
 const SESSION_END = '2026-03-15T21:30:00.000Z';
 
+// Intl separates the time from AM/PM with a narrow no-break space (U+202F) on
+// some ICU versions and an ordinary space on others, so the exact glyph tracks
+// the Node build rather than anything this app does — it differs between a
+// local Node 24 and CI's Node 20. Normalise every space-like character: the
+// behaviour under test is the timezone shift, not ICU's spacing convention.
+const spaces = (value: string) => value.replace(/[\s  ]+/g, ' ');
+
 describe('time formatting', () => {
   it('renders the time in the studio timezone, not the viewer local zone', () => {
-    expect(fmtTime(SESSION_START, 'UTC')).toBe('06:00 PM');
-    expect(fmtTime(SESSION_START, 'America/New_York')).toBe('02:00 PM');
-    expect(fmtTime(SESSION_START, 'Asia/Tokyo')).toBe('03:00 AM');
+    expect(spaces(fmtTime(SESSION_START, 'UTC'))).toBe('06:00 PM');
+    expect(spaces(fmtTime(SESSION_START, 'America/New_York'))).toBe('02:00 PM');
+    expect(spaces(fmtTime(SESSION_START, 'Asia/Tokyo'))).toBe('03:00 AM');
   });
 
   it('renders the date in the studio timezone', () => {
