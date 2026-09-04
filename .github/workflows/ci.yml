@@ -107,3 +107,30 @@ jobs:
 
       - name: Database-backed platform integration tests
         run: npm run test:integration --workspace=apps/api
+
+      # The suite above imports the app in-process; it never proves the artifact
+      # Render actually launches exists or starts. render.yaml's startCommand is
+      # `node dist/index.js`, so build it and boot it against the real Postgres
+      # service exactly as production does. NODE_ENV=test only stops dotenv
+      # overriding these values (app.ts:47) — there is no .env on a runner.
+      - name: Boot the compiled API and check /health
+        env:
+          DATABASE_URL: postgresql://oiano:integration-only@localhost:5432/oiano_test
+          JWT_SECRET: integration-only-jwt-secret-change-me
+          MFA_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          FRONTEND_URL: http://localhost:5173
+          STRIPE_ENABLED: 'false'
+          OIANO_AI_ENABLED: 'false'
+          NODE_ENV: test
+          PORT: '4010'
+        run: |
+          npm run build --workspace=apps/api
+          test -f apps/api/dist/index.js || { echo 'build produced no entrypoint for startCommand'; exit 1; }
+          node apps/api/dist/index.js &
+          API_PID=$!
+          for _ in $(seq 1 30); do
+            curl -sf http://127.0.0.1:4010/health >/dev/null && break
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:4010/health | tee /dev/stderr | grep -q '"database":"connected"'
+          kill "$API_PID"
