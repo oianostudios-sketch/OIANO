@@ -124,7 +124,16 @@ producerRouter.patch('/me', requireRole('PRODUCER'), async (req: any, res, next)
       alias:           z.string().max(80).optional(),
       bio:             z.string().max(1000).optional(),
       open_to_collabs: z.boolean().optional(),
+      primary_discipline: z.string().min(1).max(60).optional(),
+      disciplines:     z.array(z.string().min(1).max(60)).min(1).max(6).optional(),
+      services:        z.array(z.string().min(1).max(100)).max(20).optional(),
+      location:        z.string().max(120).nullable().optional(),
+      onboarding_complete: z.boolean().optional(),
     }).parse(req.body);
+
+    if (data.primary_discipline && data.disciplines && !data.disciplines.includes(data.primary_discipline)) {
+      throw new AppError('Primary discipline must be one of the selected disciplines', 400);
+    }
 
     const producer = await db.producer.update({
       where: { user_id: req.userId },

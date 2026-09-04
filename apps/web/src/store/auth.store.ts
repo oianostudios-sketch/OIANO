@@ -18,6 +18,14 @@ interface User {
     passport?: { passport_code: string; profile_strength: number };
     wallet?: { balance_usd: number };
   };
+  producer?: {
+    id: string;
+    name: string;
+    alias?: string | null;
+    primary_discipline?: string;
+    disciplines?: string[];
+    onboarding_complete?: boolean;
+  };
 }
 
 interface AuthState {

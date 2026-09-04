@@ -8,6 +8,7 @@ const SignatureUniverse3D = lazy(() => import('../components/SignatureUniverse3D
 import OianoBrand from '../components/OianoBrand';
 import EnterBrandLockup from '../components/EnterBrandLockup';
 import { ACCOUNT_PROFILES, homePathForRole } from '../lib/accountArchitecture';
+import { CREATIVE_DISCIPLINES, type CreativeDiscipline } from '../lib/creativeDisciplines';
 
 function UniverseFallback() {
   return <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle at 48% 42%, rgba(58,111,142,.18), transparent 24%), radial-gradient(circle at 52% 48%, rgba(201,168,76,.08), transparent 44%), #020304' }} />;
@@ -44,6 +45,7 @@ export default function EnterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [signupRole, setSignupRole] = useState<'ARTIST' | 'PRODUCER'>('ARTIST');
+  const [disciplines, setDisciplines] = useState<CreativeDiscipline[]>([]);
   const [mfa, setMfa] = useState<{challenge:string;setup:boolean;secret?:string;uri?:string}|null>(null);
   const [mfaCode, setMfaCode] = useState('');
   const requestedNext = searchParams.get('next');
@@ -57,6 +59,9 @@ export default function EnterPage() {
         email,
         password,
         ...(mode === 'signup' ? { role: signupRole } : {}),
+        ...(mode === 'signup' && signupRole === 'PRODUCER' ? {
+          primary_discipline: disciplines[0], disciplines,
+        } : {}),
       });
       if (data.mfa_required) { setMfa({challenge:data.challenge,setup:data.mfa_setup,secret:data.secret,uri:data.otpauth_uri}); setLoading(false); return; }
       completeLogin(data);
@@ -71,6 +76,7 @@ export default function EnterPage() {
       setConverging(true);
       setTimeout(() => {
         if (mode === 'signup' && data.user.role === 'ARTIST') navigate(`/onboarding${safeNext ? `?next=${encodeURIComponent(safeNext)}` : ''}`);
+        else if (mode === 'signup' && data.user.role === 'PRODUCER') navigate('/professional/onboarding');
         else if (data.user.role === 'ARTIST' && safeNext) navigate(safeNext);
         else if (data.user.role === 'ARTIST') navigate('/calendar');
         else navigate(homePathForRole(data.user.role));
@@ -159,6 +165,16 @@ export default function EnterPage() {
                 <Sparkles size={16}/><span><strong>{ACCOUNT_PROFILES.CREATIVE_PROFESSIONAL.label}</strong><span>Produce, engineer, write, perform and receive credit.</span></span>
               </button>
             </div>
+            {signupRole === 'PRODUCER' && <fieldset style={{border:0,padding:0,margin:'0 0 16px'}}>
+              <legend style={{fontSize:10,color:'#858585',letterSpacing:'.1em',textTransform:'uppercase',marginBottom:9}}>What do you contribute? Choose all that apply.</legend>
+              <div style={{display:'flex',flexWrap:'wrap',gap:7}}>
+                {CREATIVE_DISCIPLINES.map((discipline) => {
+                  const active = disciplines.includes(discipline.id);
+                  return <button key={discipline.id} type="button" aria-pressed={active} onClick={() => setDisciplines((current) => active ? current.filter((id) => id !== discipline.id) : current.length < 6 ? [...current, discipline.id] : current)} style={{border:`1px solid ${active?'rgba(90,155,203,.65)':'#292929'}`,background:active?'rgba(90,155,203,.13)':'#101010',color:active?'#bfe3f7':'#777',borderRadius:999,padding:'7px 10px',fontSize:10,cursor:'pointer'}}>{discipline.label}</button>;
+                })}
+              </div>
+              <p style={{fontSize:9,color:'#505050',lineHeight:1.5,margin:'9px 0 0'}}>The first choice becomes your primary discipline. Studio ownership and staff access are added separately through verified studio onboarding.</p>
+            </fieldset>}
             <div className="enter-account-note" aria-label="Managed account access">
               <div><Building2 size={13}/><span><b>Studio</b><br/>Verified operator onboarding</span></div>
               <div><Wrench size={13}/><span><b>OIANO Platform</b><br/>Invite-only system access</span></div>
@@ -170,7 +186,7 @@ export default function EnterPage() {
               <div className="enter-field"><label htmlFor="enter-password">Password</label><input id="enter-password" className="enter-input" style={{paddingRight:48}} type={showPassword?'text':'password'} placeholder={mode === 'signup' ? 'At least 8 characters' : 'Your password'} value={password} minLength={mode === 'signup' ? 8 : undefined} required autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} onChange={(event)=>setPassword(event.target.value)} onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)}/><button type="button" className="enter-eye" onClick={()=>setShowPassword(value=>!value)} aria-label={showPassword?'Hide password':'Show password'}>{showPassword?<EyeOff size={16}/>:<Eye size={16}/>}</button></div>
               {mode === 'signin' && <Link to="/forgot-password" style={{alignSelf:'flex-end',marginTop:-7,color:'#666',fontSize:10,textDecoration:'none'}}>Forgot password?</Link>}
             </div>
-            <button type="submit" className="enter-submit" disabled={loading||!email||!password||(mode === 'signup' && password.length < 8)}>{loading?<span className="animate-pulse">Preparing your workspace…</span>:<>{mode === 'signup' ? (returningToBooking ? 'Create account and continue' : `Create ${signupRole === 'ARTIST' ? 'artist' : 'creative professional'} account`) : (returningToBooking ? 'Sign in and continue' : 'Sign in')}<ArrowRight size={16}/></>}</button>
+            <button type="submit" className="enter-submit" disabled={loading||!email||!password||(mode === 'signup' && password.length < 8)||(mode === 'signup'&&signupRole==='PRODUCER'&&!disciplines.length)}>{loading?<span className="animate-pulse">Preparing your workspace…</span>:<>{mode === 'signup' ? (returningToBooking ? 'Create account and continue' : `Create ${signupRole === 'ARTIST' ? 'artist' : 'creative professional'} account`) : (returningToBooking ? 'Sign in and continue' : 'Sign in')}<ArrowRight size={16}/></>}</button>
           </form>
           <div className="enter-status"><Check size={13} color="#79966f" style={{marginTop:1,flexShrink:0}}/><span>{mode === 'signup' ? (signupRole === 'ARTIST' ? 'Includes your Artist Passport, studio access and secure project workspace.' : 'Includes your professional Passport, projects, credits and collaboration workspace.') : 'OIANO opens the home experience assigned to your account and responsibilities.'}</span></div>
           <p style={{margin:'24px 0 0',color:'#3f3f46',fontSize:9,lineHeight:1.6,textAlign:'center'}}>By continuing, you agree to the <Link to="/legal/terms" style={{color:'#71717a'}}>Terms</Link> and acknowledge the <Link to="/legal/privacy" style={{color:'#71717a'}}>Privacy Policy</Link>. <Link to="/legal/cancellations" style={{color:'#71717a'}}>Refunds</Link> · <Link to="/legal/rights" style={{color:'#71717a'}}>Rights notice</Link>.</p>

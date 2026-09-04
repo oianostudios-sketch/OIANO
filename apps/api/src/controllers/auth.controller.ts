@@ -18,6 +18,16 @@ const SignupSchema = z.object({
   name: z.string().min(1).optional(),
   alias: z.string().optional(),
   role: z.enum(['ARTIST', 'PRODUCER']).optional().default('ARTIST'),
+  primary_discipline: z.enum([
+    'PRODUCER', 'RECORDING_ENGINEER', 'MIX_ENGINEER', 'MASTERING_ENGINEER',
+    'SONGWRITER', 'COMPOSER', 'MUSICIAN', 'VOCALIST', 'DJ',
+    'CREATIVE_DIRECTOR', 'PHOTOGRAPHER', 'VIDEOGRAPHER',
+  ]).optional(),
+  disciplines: z.array(z.enum([
+    'PRODUCER', 'RECORDING_ENGINEER', 'MIX_ENGINEER', 'MASTERING_ENGINEER',
+    'SONGWRITER', 'COMPOSER', 'MUSICIAN', 'VOCALIST', 'DJ',
+    'CREATIVE_DIRECTOR', 'PHOTOGRAPHER', 'VIDEOGRAPHER',
+  ])).max(6).optional(),
 });
 
 const LoginSchema = z.object({
@@ -95,6 +105,10 @@ export async function signup(req: Request, res: Response, next: NextFunction) {
     const password_hash = await bcrypt.hash(data.password, 10);
     const role = data.role ?? 'ARTIST';
     const name = data.name?.trim() || data.email.split('@')[0];
+    const disciplines = data.disciplines?.length ? Array.from(new Set(data.disciplines)) : ['PRODUCER'];
+    const primaryDiscipline = data.primary_discipline && disciplines.includes(data.primary_discipline)
+      ? data.primary_discipline
+      : disciplines[0];
 
     const passportCode = await generatePassportCode();
 
@@ -130,6 +144,8 @@ export async function signup(req: Request, res: Response, next: NextFunction) {
             create: {
               name,
               alias: data.alias ?? null,
+              primary_discipline: primaryDiscipline,
+              disciplines,
               passport: {
                 create: {
                   passport_code: passportCode,

@@ -823,8 +823,14 @@ model Producer {
   projects        Project[]
   tracks          Track[]
   open_to_collabs Boolean           @default(true)
+  primary_discipline String         @default("PRODUCER")
+  disciplines       Json           @default("[\"PRODUCER\"]")
+  services           Json           @default("[]")
+  location           String?
+  onboarding_complete Boolean       @default(false)
   created_at      DateTime          @default(now())
 
+  @@index([primary_discipline])
   @@map("producers")
 }
 
