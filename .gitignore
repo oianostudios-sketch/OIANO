@@ -37,3 +37,6 @@ packages/shared/dist/
 
 # Local agent tool config (not product code)
 .codex/
+
+# CI diagnostic capture (see .github/workflows/ci.yml)
+test-output.txt

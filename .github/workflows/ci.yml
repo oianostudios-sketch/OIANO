@@ -60,8 +60,21 @@ jobs:
 
       # Root `test` runs the API security and intelligence suites plus the web
       # suite (vitest, jsdom) — see the root package.json script.
+      #
+      # On failure the tail of the output is re-emitted as an ::error::
+      # annotation. Run logs need repo-admin auth to fetch, but annotations are
+      # readable from the public API, so a failure here can be diagnosed without
+      # privileged access instead of guessed at.
       - name: API and web tests
-        run: npm test
+        run: |
+          set +e
+          npm test > test-output.txt 2>&1
+          status=$?
+          cat test-output.txt
+          if [ "$status" -ne 0 ]; then
+            printf '::error::%s\n' "$(tail -c 4000 test-output.txt | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | sed -e ':a' -e 'N' -e '$!ba' -e 's/\n/%0A/g')"
+          fi
+          exit "$status"
 
       - name: Build
         run: npm run build
