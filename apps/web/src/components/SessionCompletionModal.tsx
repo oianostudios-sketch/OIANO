@@ -241,10 +241,15 @@ export default function SessionCompletionModal({ booking, onClose }: SessionComp
                       className="text-zinc-600 hover:text-red-400 mt-2"><X size={14} /></button>
                   </div>
                 ))}
-                <div className="flex items-center justify-between">
-                  <button type="button" onClick={() => setShares((rows) => [...rows, { holder_name: '', holder_type: 'PARTICIPANT', holder_ref_id: '', role: '', percentage: '' }])}
-                    className="text-xs text-dome flex items-center gap-1"><Plus size={12} /> Add holder</button>
-                  <span className={`text-xs font-mono ${sharesValid ? 'text-emerald-400' : 'text-orange-400'}`}>{shareTotal.toFixed(1)}% of 100%</span>
+                <div>
+                  <div className="flex items-center justify-between">
+                    <button type="button" onClick={() => setShares((rows) => [...rows, { holder_name: '', holder_type: 'PARTICIPANT', holder_ref_id: '', role: '', percentage: '' }])}
+                      className="text-xs text-dome flex items-center gap-1"><Plus size={12} /> Add holder</button>
+                    <span className={`text-xs font-mono ${sharesValid ? 'text-emerald-400' : 'text-orange-400'}`}>{shareTotal.toFixed(1)}% of 100%</span>
+                  </div>
+                  <div className="meter mt-2">
+                    <div className="meter-fill" style={{ width: `${Math.min(100, shareTotal)}%`, '--signal': sharesValid ? '#34d399' : '#fb923c' } as React.CSSProperties} />
+                  </div>
                 </div>
                 {!rightsValid && <p className="text-orange-400 text-[10px]">Add at least two complete holders whose shares total exactly 100%.</p>}
                 <p className="text-zinc-700 text-[10px]">Every holder is linked to an accepted OIANO identity and confirms their share separately. This record does not replace legal advice.</p>

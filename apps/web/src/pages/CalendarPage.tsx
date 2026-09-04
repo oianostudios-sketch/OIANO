@@ -301,12 +301,12 @@ export default function CalendarPage() {
             return (
               <div key={room.id} style={{ width:COL_W, flexShrink:0, padding:'8px 10px', borderLeft:'1px solid #1e1e1e' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                  <span style={{ width:8, height:8, borderRadius:'50%', background:rc, display:'inline-block', flexShrink:0 }} />
+                  <span className="signal-dot" style={{ '--signal': rc, width:8, height:8 } as React.CSSProperties} />
                   <span style={{ fontSize:12, fontWeight:600, color:'#ccc', whiteSpace:'nowrap' }}>{room.name}</span>
                 </div>
                 {/* Util bar */}
-                <div style={{ marginTop:4, height:2, background:'#1e1e1e', borderRadius:2, overflow:'hidden' }}>
-                  <div style={{ width:`${util}%`, height:'100%', background:rc, borderRadius:2 }} />
+                <div className="meter" style={{ marginTop:4 }}>
+                  <div className="meter-fill" style={{ width:`${util}%`, '--signal': rc } as React.CSSProperties} />
                 </div>
                 <div style={{ fontSize:9, color:'#555', fontFamily:'monospace', marginTop:2 }}>{util}% booked</div>
               </div>
@@ -391,8 +391,8 @@ export default function CalendarPage() {
               top:`${nowPctVal}%`, pointerEvents:'none',
             }}>
               <div style={{ height:1, background:'#ef4444', opacity:0.8 }}>
-                <div style={{ width:8, height:8, borderRadius:'50%', background:'#ef4444',
-                  position:'absolute', left:-4, top:-3.5 }} />
+                <span className="signal-dot signal-pulse" style={{ '--signal': '#ef4444', width:8, height:8,
+                  position:'absolute', left:-4, top:-3.5 } as React.CSSProperties} />
               </div>
             </div>
           )}

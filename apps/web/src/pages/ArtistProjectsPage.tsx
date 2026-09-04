@@ -105,7 +105,7 @@ export default function ArtistProjectsPage() {
                   <div className="mb-3 flex items-center justify-between"><span className="text-[9px] font-mono uppercase tracking-widest" style={{ color: PHASE_COLORS[project.phase] }}>{PHASE_LABELS[project.phase]}</span><span className="text-[9px] text-zinc-700">{relativeDate(project.updated_at)}</span></div>
                   <p className="truncate text-sm font-semibold text-zinc-100">{project.title}</p>
                   <p className="mt-1 truncate text-[11px] text-zinc-600">{project.producer?.alias ?? project.producer?.name ?? 'Producer to be assigned'}</p>
-                  <div className="mt-4 h-1 overflow-hidden rounded-full bg-white/[.05]"><div className="h-full rounded-full" style={{ width: `${((PHASES.indexOf(project.phase) + 1) / PHASES.length) * 100}%`, background: PHASE_COLORS[project.phase] }} /></div>
+                  <div className="meter mt-4"><div className="meter-fill" style={{ width: `${((PHASES.indexOf(project.phase) + 1) / PHASES.length) * 100}%`, '--signal': PHASE_COLORS[project.phase] } as React.CSSProperties} /></div>
                 </button>;
               })}
             </aside>

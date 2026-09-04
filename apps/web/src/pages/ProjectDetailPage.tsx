@@ -200,7 +200,7 @@ export default function ProjectDetailPage() {
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.4rem' }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: phaseConf.color, flexShrink: 0 }} />
+              <span className="signal-dot" style={{ '--signal': phaseConf.color, width: 8, height: 8 } as React.CSSProperties} />
               <span style={{ fontSize: '0.72rem', color: phaseConf.color, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600 }}>
                 {phaseConf.label}
               </span>
@@ -406,7 +406,7 @@ export default function ProjectDetailPage() {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: STATUS_HEX[b.status as BookingStatus] ?? '#555', flexShrink: 0 }} />
+                  <span className={`signal-dot${b.status === 'IN_PROGRESS' ? ' signal-pulse' : ''}`} style={{ '--signal': STATUS_HEX[b.status as BookingStatus] ?? '#555' } as React.CSSProperties} />
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: '0.85rem', color: '#eee', fontWeight: 500 }}>{fmtDate(b.starts_at)}</div>
                     <div style={{ fontSize: '0.72rem', color: '#666' }}>

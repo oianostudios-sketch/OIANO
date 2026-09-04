@@ -10,7 +10,7 @@ import ArtistReviewForm from '../components/ArtistReviewForm';
 import SessionCompletionModal from '../components/SessionCompletionModal';
 import SessionInsightCard from '../components/SessionInsightCard';
 import { useToast } from '../components/Toast';
-import { BookingStatus, STATUS_TAILWIND, STATUS_DOT_TAILWIND, STATUS_MESSAGE } from '../lib/bookingStatus';
+import { BookingStatus, STATUS_TAILWIND, STATUS_HEX, STATUS_MESSAGE } from '../lib/bookingStatus';
 
 
 // ── Stripe pay button ─────────────────────────────────────────────────────────
@@ -253,7 +253,10 @@ export default function BookingDetailPage() {
         <div className={`rounded-xl border px-6 py-5 animate-surface ${STATUS_TAILWIND[booking.status as BookingStatus] ?? 'border-studio-border'}`}>
           <div className="flex items-center justify-between mb-2">
             <p className="label-mono flex items-center gap-2">
-              <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT_TAILWIND[booking.status as BookingStatus] ?? 'bg-zinc-500'}`} />
+              <span
+                className={`signal-dot${booking.status === 'IN_PROGRESS' ? ' signal-pulse' : ''}`}
+                style={{ '--signal': STATUS_HEX[booking.status as BookingStatus] ?? '#6b7280' } as React.CSSProperties}
+              />
               Status
             </p>
             <span className="text-sm font-semibold font-mono">{booking.status}</span>
@@ -330,10 +333,13 @@ export default function BookingDetailPage() {
             </div>
             <div className="text-right">
               <p className="text-zinc-500 text-xs">Payment status</p>
-              <span className={`text-sm font-medium font-mono ${
+              <span className={`inline-flex items-center gap-2 text-sm font-medium font-mono ${
                 booking.payment?.status === 'PAID' ? 'text-green-400' :
                 booking.payment?.status === 'PARTIAL' ? 'text-yellow-400' : 'text-zinc-400'
-              }`}>{booking.payment?.status ?? 'UNPAID'}</span>
+              }`}>
+                <span className="signal-dot" style={{ '--signal': booking.payment?.status === 'PAID' ? '#4ade80' : booking.payment?.status === 'PARTIAL' ? '#facc15' : '#71717a' } as React.CSSProperties} />
+                {booking.payment?.status ?? 'UNPAID'}
+              </span>
             </div>
           </div>
 

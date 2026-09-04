@@ -497,7 +497,8 @@ export default function ArtistProfilePage() {
                         {b.engineer?.name && ` · ${b.engineer.name}`}
                       </p>
                     </div>
-                    <span style={{ fontSize:10, padding:'3px 10px', borderRadius:20, border:`1px solid ${STATUS_HEX[b.status as BookingStatus] ?? '#333'}33`, color: STATUS_HEX[b.status as BookingStatus] ?? '#555', background:`${STATUS_HEX[b.status as BookingStatus] ?? '#555'}0a`, fontFamily:"'JetBrains Mono',monospace", flexShrink:0 }}>
+                    <span style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:10, padding:'3px 10px', borderRadius:20, border:`1px solid ${STATUS_HEX[b.status as BookingStatus] ?? '#333'}33`, color: STATUS_HEX[b.status as BookingStatus] ?? '#555', background:`${STATUS_HEX[b.status as BookingStatus] ?? '#555'}0a`, fontFamily:"'JetBrains Mono',monospace", flexShrink:0 }}>
+                      <span className={`signal-dot${b.status === 'IN_PROGRESS' ? ' signal-pulse' : ''}`} style={{ '--signal': STATUS_HEX[b.status as BookingStatus] ?? '#555', width:5, height:5 } as React.CSSProperties} />
                       {STATUS_LABEL[b.status] ?? b.status}
                     </span>
                   </div>
