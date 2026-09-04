@@ -10,7 +10,7 @@
     "dev:api": "npm run dev --workspace=apps/api",
     "dev:web": "npm run dev --workspace=apps/web",
     "build": "npm run build --workspace=packages/shared && npm run build --workspace=apps/api && npm run build --workspace=apps/web",
-    "test": "npm run test:security --workspace=apps/api && npm run test:intelligence --workspace=apps/api",
+    "test": "npm run test:security --workspace=apps/api && npm run test:intelligence --workspace=apps/api && npm run test --workspace=apps/web",
     "security:secrets": "node scripts/check-repository-secrets.js",
     "operations:verify": "node scripts/verify-production-readiness.js",
     "operations:backup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/backup-database.ps1",
@@ -21,8 +21,8 @@
     "db:seed": "npm run db:seed --workspace=apps/api",
     "db:seed:ecosystem": "npm run db:seed:ecosystem --workspace=apps/api",
     "dev:trigger": "npm run dev:trigger --workspace=apps/api",
-    "db:studio": "npm run db:studio --workspace=apps/api"
-    ,"qa:reset-demo-passwords": "ts-node -r tsconfig-paths/register scripts/reset-local-demo-passwords.ts"
+    "db:studio": "npm run db:studio --workspace=apps/api",
+    "qa:reset-demo-passwords": "ts-node -r tsconfig-paths/register scripts/reset-local-demo-passwords.ts"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",

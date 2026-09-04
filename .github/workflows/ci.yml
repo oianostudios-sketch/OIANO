@@ -58,7 +58,9 @@ jobs:
       - name: Typecheck web
         run: npm run typecheck --workspace=apps/web
 
-      - name: API tests
+      # Root `test` runs the API security and intelligence suites plus the web
+      # suite (vitest, jsdom) — see the root package.json script.
+      - name: API and web tests
         run: npm test
 
       - name: Build
