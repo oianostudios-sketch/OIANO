@@ -21,8 +21,9 @@ jobs:
     env:
       # prisma validate resolves env("DATABASE_URL") in the datasource block, so
       # the variable must exist even though nothing here connects to a database.
-      # Syntactically valid and deliberately unreachable.
-      DATABASE_URL: postgresql://validate:validate@127.0.0.1:5432/validate_only
+      # Deliberately credential-free and unreachable — check-repository-secrets
+      # rejects any postgres URL carrying a user:password pair.
+      DATABASE_URL: postgresql://127.0.0.1:5432/validate_only
     steps:
       - uses: actions/checkout@v4
 

@@ -34,3 +34,6 @@ packages/shared/dist/
 # out of git entirely as defense in depth (see the July 2026 credential audit)
 /run-migration-pg.js
 /update-passwords.js
+
+# Local agent tool config (not product code)
+.codex/

@@ -44,6 +44,8 @@ export function validateEnv() {
       'SENTRY_DSN', 'SUPPORT_EMAIL', 'PRIVACY_EMAIL', 'SECURITY_EMAIL',
       'OPERATIONS_ON_CALL', 'BACKUP_OUTPUT_DIR', 'BACKUP_RESTORE_TESTED_AT',
       'LEGAL_ENTITY_NAME', 'LEGAL_ENTITY_ADDRESS', 'GOVERNING_LAW',
+      'R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY',
+      'R2_BUCKET_NAME', 'R2_PUBLIC_URL', 'SENDGRID_API_KEY', 'SENDGRID_FROM_EMAIL',
     ];
     for (const name of operational) {
       if (!String(process.env[name] ?? '').trim()) violations.push(`${name} is required in production`);
