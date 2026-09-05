@@ -434,6 +434,67 @@ test('auth, booking payment, and rights operate through real database transactio
     .find((metric: any) => metric.key === 'trusted_records').value as number;
   assert.equal(oianoTrustedAfter, oianoTrustedBefore + 2, 'approved rights and consent must both reach the OIANO trusted-records total');
 
+  // Completing a booking by delivering files is a third completion path, and it
+  // used to record none of the consequences the other two did: no
+  // session.completed event, so nothing reached the artist's feed or SSE, and no
+  // studio-circle update, so the projection under-counted their sessions. All
+  // three paths now go through recordBookingCompleted, so assert the delivery
+  // path produces the same facts rather than trusting that it still calls it.
+  const circleBefore = await prisma.studioCircleMember.findUnique({
+    where: { studio_id_artist_id: { studio_id: studio.id, artist_id: artistId } },
+    select: { session_count: true },
+  });
+
+  const deliveryStart = new Date(Date.now() + 21 * 24 * 60 * 60 * 1000);
+  deliveryStart.setMinutes(0, 0, 0);
+  const deliveryBooking = await request('/bookings', {
+    method: 'POST',
+    headers: { authorization: `Bearer ${artistToken}` },
+    body: JSON.stringify({
+      studio_id: studio.id, room_id: room.id, service_id: service.id,
+      starts_at: deliveryStart.toISOString(),
+      ends_at: new Date(deliveryStart.getTime() + 60 * 60 * 1000).toISOString(),
+    }),
+  });
+  assert.equal(deliveryBooking.response.status, 201);
+  const deliveredBookingId = deliveryBooking.body.id as string;
+
+  const confirmSecond = await request(`/bookings/${deliveredBookingId}/status`, {
+    method: 'PATCH',
+    headers: { authorization: `Bearer ${adminLogin.body.token}` },
+    body: JSON.stringify({ status: 'CONFIRMED' }),
+  });
+  assert.equal(confirmSecond.response.status, 200);
+
+  const delivery = await request(`/bookings/${deliveredBookingId}/deliver`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${adminLogin.body.token}` },
+    body: JSON.stringify({ file_urls: ['https://files.example.test/mix-v1.wav'], notes: 'First mix delivered' }),
+  });
+  assert.equal(delivery.response.status, 200);
+
+  const deliveredBooking = await prisma.booking.findUniqueOrThrow({ where: { id: deliveredBookingId } });
+  assert.equal(deliveredBooking.status, 'COMPLETED');
+
+  const completionEvent = await prisma.activityEvent.findFirst({
+    where: { type: 'session.completed', artist_id: artistId },
+    orderBy: { created_at: 'desc' },
+  });
+  assert.ok(completionEvent, 'delivering files must record a session.completed event');
+  assert.equal((completionEvent!.payload as any)?.booking_id, deliveredBookingId);
+
+  const circleAfter = await prisma.studioCircleMember.findUniqueOrThrow({
+    where: { studio_id_artist_id: { studio_id: studio.id, artist_id: artistId } },
+  });
+  assert.equal(
+    circleAfter.session_count,
+    (circleBefore?.session_count ?? 0) + 1,
+    'a delivery-completed session must count toward studio circle membership',
+  );
+
+  const deliveredEvidence = await prisma.weaveEvidence.findFirst({ where: { booking_id: deliveredBookingId } });
+  assert.ok(deliveredEvidence, 'a delivery-completed booking must become Weave evidence');
+
   const artistMaintenanceAttempt = await request('/maintenance/summary', { headers: { authorization: `Bearer ${artistToken}` } });
   assert.equal(artistMaintenanceAttempt.response.status, 403);
 

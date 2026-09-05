@@ -3,12 +3,10 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../lib/errors';
-import { emitActivityEvent } from '../../lib/activityEvents';
 import { broadcastAll, broadcastToUser, createNotification } from '../../routes/notifications.routes';
 import { sendSessionComplete } from '../../services/email.service';
 import { resolveStaffStudio } from '../../middleware/studioScope.middleware';
-import { syncStudioCircleMembership } from '../../services/studio-circle.service';
-import { syncConnectionFromBooking } from '../../lib/weave/sync';
+import { recordBookingCompleted } from '../../lib/bookingCompletion';
 
 // POST /api/bookings/:id/complete — the session completion screen.
 // Single entry point that replaces the old "flip status, then separately
@@ -254,15 +252,7 @@ export async function completeSession(req: Request, res: Response, next: NextFun
     // already-COMPLETED booking must not re-notify the artist that their
     // session is complete a second time.
     if (!wasAlreadyCompleted) {
-      emitActivityEvent('session.completed', {
-        artist_id: booking.artist_id,
-        booking_id: booking.id,
-      }).catch((e) => console.error('[activity] session.completed emit failed:', e?.message));
-
-      syncStudioCircleMembership(booking.studio_id, booking.artist_id)
-        .catch((e) => console.error('[circle] completion sync failed:', e?.message));
-      syncConnectionFromBooking(booking.id)
-        .catch((e) => console.error('[weave] connection sync failed:', e?.message));
+      void recordBookingCompleted(booking);
 
       if (booking.project_id) {
         (prisma as any).project.update({

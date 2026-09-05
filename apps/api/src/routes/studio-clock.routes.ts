@@ -1,7 +1,16 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { attachStudioScope, resolveStaffStudio } from '../middleware/studioScope.middleware';
+
+// The only request body in the API that was read straight off req.body, against
+// the project's own rule that Zod validates every body. An unbounded note went
+// on to be concatenated into a stored column.
+const ActivityPingSchema = z.object({
+  note: z.string().trim().max(500).optional(),
+  source: z.string().trim().max(40).optional(),
+});
 
 type SessionStatus = 'active' | 'ending_soon' | 'overtime' | 'idle';
 
@@ -140,24 +149,31 @@ studioClockRouter.get('/', authenticate, requireRole('STUDIO_ADMIN', 'ENGINEER')
 // Records the save as a session log note so the studio clock stays live.
 studioClockRouter.post('/sessions/:id/activity', authenticate, requireRole('STUDIO_ADMIN', 'ENGINEER'), async (req, res, next) => {
   try {
-    const { note, source } = req.body as { note?: string; source?: string };
+    const { note, source } = ActivityPingSchema.parse(req.body);
     const bookingId = req.params.id;
 
     const studio = await resolveStaffStudio((req as any).userId);
     const booking = await prisma.booking.findFirst({ where: { id: bookingId, studio_id: studio.id } });
     if (!booking) return res.status(404).json({ error: 'Session not found' });
 
-    // Upsert a session log — ensures the log exists, then appends a note entry
+    // The clock reports operating state; the session log is owned by the session
+    // domain, and the completion flow writes the engineer's real notes into the
+    // same column. `notes: { set: ... }` replaced that column outright, so every
+    // DAW save destroyed whatever was already recorded — the log only ever held
+    // the most recent ping. Append instead, and only ever add a line.
+    const entry = note ? `[${new Date().toISOString()}] ${source ?? 'daw'}: ${note}` : null;
+    const existing = entry
+      ? await prisma.sessionLog.findUnique({ where: { booking_id: bookingId }, select: { notes: true } })
+      : null;
+
     await prisma.sessionLog.upsert({
       where: { booking_id: bookingId },
-      update: {
-        ...(note ? { notes: { set: `[${new Date().toLocaleTimeString()}] ${source ?? 'daw'}: ${note}` } } : {}),
-      },
+      update: entry ? { notes: existing?.notes ? `${existing.notes}\n${entry}` : entry } : {},
       create: {
         booking_id: bookingId,
         artist_id: booking.artist_id,
         started_at: booking.starts_at,
-        notes: note ? `[${new Date().toLocaleTimeString()}] ${source ?? 'daw'}: ${note}` : '',
+        notes: entry ?? '',
       },
     });
 
