@@ -4,6 +4,7 @@ import { prisma } from '../../lib/prisma';
 import { AppError } from '../../lib/errors';
 import { broadcastAll } from '../../routes/notifications.routes';
 import { resolveStaffStudio } from '../../middleware/studioScope.middleware';
+import { upsertSessionLog } from '../../lib/sessionLog';
 import { evaluateStudioPolicies, policiesAffectedByChanges, type PolicyContract } from '../../lib/studioPolicyEngine';
 
 const RescheduleSchema = z.object({
@@ -102,16 +103,7 @@ export async function updateSessionNotes(req: Request, res: Response, next: Next
     const studio = await resolveStaffStudio((req as any).userId);
     const booking = await prisma.booking.findFirst({ where: { id: req.params.id, studio_id: studio.id } });
     if (!booking) throw new AppError('Booking not found', 404);
-    const log = await prisma.sessionLog.upsert({
-      where: { booking_id: booking.id },
-      update: { ...data },
-      create: {
-        booking_id: booking.id,
-        artist_id: booking.artist_id,
-        started_at: booking.starts_at,
-        ...data,
-      },
-    });
+    const log = await upsertSessionLog(booking, data);
     res.json(log);
   } catch (error) {
     next(error);

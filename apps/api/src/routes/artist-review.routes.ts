@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import { authenticate } from '../middleware/auth.middleware';
 import { AppError } from '../lib/errors';
+import { upsertSessionLog } from '../lib/sessionLog';
 import { z } from 'zod';
 
 export const artistReviewRouter = Router({ mergeParams: true });
@@ -20,29 +21,20 @@ artistReviewRouter.patch('/', async (req: any, res: Response, next: NextFunction
 
     const booking = await prisma.booking.findUnique({
       where: { id: req.params.id },
-      select: { artist_id: true, status: true, engineer_id: true },
+      // id and starts_at come along so the session log's identity and start
+      // time are derived from the booking rather than left unset here.
+      select: { id: true, artist_id: true, starts_at: true, status: true, engineer_id: true },
     });
     if (!booking) throw new AppError('Booking not found', 404);
     if (req.user.artistId !== booking.artist_id) throw new AppError('Forbidden', 403);
     if (booking.status !== 'COMPLETED') throw new AppError('Can only review a completed session', 400);
     if (!booking.engineer_id) throw new AppError('No engineer on this booking', 400);
 
-    const log = await prisma.sessionLog.upsert({
-      where:  { booking_id: req.params.id },
-      create: {
-        booking_id:        req.params.id,
-        artist_id:         booking.artist_id,
-        artist_rating,
-        artist_testimonial: artist_testimonial ?? null,
-        tracks_worked: [],
-      },
-      update: {
-        artist_rating,
-        artist_testimonial: artist_testimonial ?? null,
-      },
-      select: { artist_rating: true, artist_testimonial: true },
+    const log = await upsertSessionLog(booking, {
+      artist_rating,
+      artist_testimonial: artist_testimonial ?? null,
     });
 
-    res.json(log);
+    res.json({ artist_rating: log.artist_rating, artist_testimonial: log.artist_testimonial });
   } catch (err) { next(err); }
 });

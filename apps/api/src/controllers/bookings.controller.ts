@@ -14,6 +14,7 @@ import { createNotification } from '../routes/notifications.routes';
 import { Prisma } from '@prisma/client';
 import { resolveStaffStudio } from '../middleware/studioScope.middleware';
 import { recordBookingCompleted } from '../lib/bookingCompletion';
+import { upsertSessionLog } from '../lib/sessionLog';
 import { applyWalletDelta } from '../lib/walletLedger';
 import { recordBookingPayment } from '../lib/financialLedger';
 import { getNextAction, getSessionSummary } from '../intelligence/intelligence.service';
@@ -508,17 +509,7 @@ export async function updateBookingStatus(req: Request, res: Response, next: Nex
 
     // Auto-create SessionLog on completion
     if (status === 'COMPLETED') {
-      await prisma.sessionLog.upsert({
-        where: { booking_id: booking.id },
-        update: { ended_at: new Date() },
-        create: {
-          booking_id: booking.id,
-          artist_id: booking.artist_id,
-          started_at: booking.starts_at,
-          ended_at: new Date(),
-        },
-      });
-
+      await upsertSessionLog(booking, { ended_at: new Date() });
       await recordBookingCompleted(booking);
     }
 
@@ -633,17 +624,7 @@ export async function deliverSessionFiles(req: Request, res: Response, next: Nex
 
     // Delivery URLs belong to immutable deliverable versions, not the list of
     // track titles worked during a session. Keep those two data domains apart.
-    await prisma.sessionLog.upsert({
-      where:  { booking_id: booking.id },
-      update: { notes: data.notes ?? undefined, ended_at: new Date() },
-      create: {
-        booking_id:    booking.id,
-        artist_id:     booking.artist_id,
-        started_at:    booking.starts_at,
-        ended_at:      new Date(),
-        notes:         data.notes,
-      },
-    });
+    await upsertSessionLog(booking, { notes: data.notes ?? undefined, ended_at: new Date() });
 
     // Every delivery is an immutable version. Re-delivery never overwrites the
     // artist's review history or the files attached to an earlier version.

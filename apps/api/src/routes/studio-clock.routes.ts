@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { attachStudioScope, resolveStaffStudio } from '../middleware/studioScope.middleware';
+import { appendSessionLogNote, upsertSessionLog } from '../lib/sessionLog';
 
 // The only request body in the API that was read straight off req.body, against
 // the project's own rule that Zod validates every body. An unbounded note went
@@ -156,26 +157,15 @@ studioClockRouter.post('/sessions/:id/activity', authenticate, requireRole('STUD
     const booking = await prisma.booking.findFirst({ where: { id: bookingId, studio_id: studio.id } });
     if (!booking) return res.status(404).json({ error: 'Session not found' });
 
-    // The clock reports operating state; the session log is owned by the session
-    // domain, and the completion flow writes the engineer's real notes into the
-    // same column. `notes: { set: ... }` replaced that column outright, so every
-    // DAW save destroyed whatever was already recorded — the log only ever held
-    // the most recent ping. Append instead, and only ever add a line.
-    const entry = note ? `[${new Date().toISOString()}] ${source ?? 'daw'}: ${note}` : null;
-    const existing = entry
-      ? await prisma.sessionLog.findUnique({ where: { booking_id: bookingId }, select: { notes: true } })
-      : null;
-
-    await prisma.sessionLog.upsert({
-      where: { booking_id: bookingId },
-      update: entry ? { notes: existing?.notes ? `${existing.notes}\n${entry}` : entry } : {},
-      create: {
-        booking_id: bookingId,
-        artist_id: booking.artist_id,
-        started_at: booking.starts_at,
-        notes: entry ?? '',
-      },
-    });
+    // The clock reports operating state; the session log belongs to the session
+    // domain, which is why this goes through that domain's writer rather than
+    // touching the row directly. Appending is a named operation there, so the
+    // destructive write this used to perform is no longer expressible here.
+    if (note) {
+      await appendSessionLogNote(booking, `[${new Date().toISOString()}] ${source ?? 'daw'}: ${note}`);
+    } else {
+      await upsertSessionLog(booking);
+    }
 
     res.json({ ok: true, recorded_at: new Date().toISOString() });
   } catch (err) {

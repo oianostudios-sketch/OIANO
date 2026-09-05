@@ -495,6 +495,34 @@ test('auth, booking payment, and rights operate through real database transactio
   const deliveredEvidence = await prisma.weaveEvidence.findFirst({ where: { booking_id: deliveredBookingId } });
   assert.ok(deliveredEvidence, 'a delivery-completed booking must become Weave evidence');
 
+  // The clock's DAW ping and the delivery flow write the same session-log
+  // column. The ping used to replace it, so each save destroyed the delivered
+  // notes and every earlier ping. Both writers now go through the session-log
+  // domain, where appending is its own operation — assert the log accumulates.
+  for (const take of ['take one', 'take two']) {
+    const ping = await request(`/studio-clock/sessions/${deliveredBookingId}/activity`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${adminLogin.body.token}` },
+      body: JSON.stringify({ note: take, source: 'daw' }),
+    });
+    assert.equal(ping.response.status, 200);
+  }
+
+  const pingedLog = await prisma.sessionLog.findUniqueOrThrow({ where: { booking_id: deliveredBookingId } });
+  assert.match(pingedLog.notes ?? '', /First mix delivered/, 'a DAW ping must not destroy the delivered session notes');
+  assert.match(pingedLog.notes ?? '', /take one/);
+  assert.match(pingedLog.notes ?? '', /take two/, 'each ping must append rather than replace the previous one');
+  assert.ok(pingedLog.started_at, 'the session log must carry the booking start time whichever writer created it');
+
+  // Bodies are parsed at this boundary now — an over-long note is rejected
+  // rather than concatenated into the stored column.
+  const oversizedPing = await request(`/studio-clock/sessions/${deliveredBookingId}/activity`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${adminLogin.body.token}` },
+    body: JSON.stringify({ note: 'x'.repeat(5000) }),
+  });
+  assert.equal(oversizedPing.response.status, 400);
+
   const artistMaintenanceAttempt = await request('/maintenance/summary', { headers: { authorization: `Bearer ${artistToken}` } });
   assert.equal(artistMaintenanceAttempt.response.status, 403);
 

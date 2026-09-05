@@ -7,6 +7,7 @@ import { broadcastAll, broadcastToUser, createNotification } from '../../routes/
 import { sendSessionComplete } from '../../services/email.service';
 import { resolveStaffStudio } from '../../middleware/studioScope.middleware';
 import { recordBookingCompleted } from '../../lib/bookingCompletion';
+import { upsertSessionLog } from '../../lib/sessionLog';
 
 // POST /api/bookings/:id/complete — the session completion screen.
 // Single entry point that replaces the old "flip status, then separately
@@ -137,17 +138,7 @@ export async function completeSession(req: Request, res: Response, next: NextFun
         data: { status: 'COMPLETED' },
       });
 
-      await tx.sessionLog.upsert({
-        where: { booking_id: booking.id },
-        update: { ...data.session_notes, ended_at: new Date() },
-        create: {
-          booking_id: booking.id,
-          artist_id: booking.artist_id,
-          started_at: booking.starts_at,
-          ended_at: new Date(),
-          ...data.session_notes,
-        },
-      });
+      await upsertSessionLog(booking, { ...data.session_notes, ended_at: new Date() }, tx);
 
       let deliverable = null;
       if (data.deliverables) {
