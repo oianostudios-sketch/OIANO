@@ -219,6 +219,7 @@ model Studio {
   communication_threads CommunicationThread[]
   equipment            Equipment[]
   maintenance_issues   MaintenanceIssue[]
+  payouts              StudioPayout[]
   created_at           DateTime             @default(now())
 
   @@map("studios")
@@ -1322,4 +1323,32 @@ model WeaveEvidence {
   @@unique([connection_id, booking_id])
   @@index([booking_id])
   @@map("weave_connection_evidence")
+}
+
+// ─── Studio payouts ─────────────────────────────────────────────────────────
+// Money leaving OIANO. STUDIO_PAYABLE accrued in the ledger from the first
+// booking and had no way out — this is the settlement record.
+//
+// The row exists so a payout is never inferred from a Stripe call alone: it is
+// created in the same transaction that debits the payable, which is what stops
+// two concurrent requests from both seeing the same outstanding balance and
+// paying it twice. status tracks the external half, which can fail after the
+// ledger has already moved; a FAILED payout is reversed by a compensating
+// ledger transaction rather than by editing the original.
+model StudioPayout {
+  id                 String   @id @default(uuid())
+  studio_id          String
+  studio             Studio   @relation(fields: [studio_id], references: [id])
+  amount_usd         Decimal  @db.Decimal(12, 2)
+  currency           String   @default("USD")
+  status             String   @default("PENDING") // PENDING | PAID | FAILED
+  stripe_transfer_id String?
+  failure_reason     String?
+  requested_by       String
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  @@index([studio_id, created_at])
+  @@index([status])
+  @@map("studio_payouts")
 }

@@ -635,6 +635,69 @@ test('auth, booking payment, and rights operate through real database transactio
   assert.equal(feeLedger.entries.filter((e) => e.account_code === 'PLATFORM_REVENUE').length, 1,
     'PLATFORM_REVENUE must be credited exactly once per payment');
 
+  // Payouts: money leaving OIANO. STUDIO_PAYABLE accrued from the first booking
+  // and had no way out. The transfer itself needs Stripe, but everything that can
+  // lose money — the balance, the reservation, the double-payout guard and the
+  // failure reversal — is ledger arithmetic and is proven here.
+  const { outstandingPayableUsd, reserveStudioPayout, releaseFailedPayout } =
+    await import('../lib/studioPayout');
+
+  const payableBefore = await outstandingPayableUsd(registeredStudio.id);
+  assert.ok(payableBefore > 0, 'a paid booking must leave the studio a payable balance');
+  assert.equal(payableBefore, Number(studioEntry!.amount_usd), 'the payable must equal the studio net credited');
+
+  // A studio must not be able to request a payout before it can receive one.
+  const noAccountPayout = await request('/payouts', {
+    method: 'POST', headers: { authorization: `Bearer ${studioSignup.body.token}` },
+  });
+  assert.equal(noAccountPayout.response.status, 409, 'a payout needs a connected account first');
+
+  const balanceView = await request('/payouts/balance', { headers: { authorization: `Bearer ${studioSignup.body.token}` } });
+  assert.equal(balanceView.response.status, 200);
+  assert.equal(balanceView.body.outstanding_usd, payableBefore);
+  assert.equal(balanceView.body.payouts_enabled, false);
+
+  // Reserving settles the payable atomically with the payout record.
+  const reserved = await reserveStudioPayout({ studioId: registeredStudio.id, requestedBy: ownerUser.id });
+  assert.equal(reserved.outstanding, payableBefore);
+  assert.equal(await outstandingPayableUsd(registeredStudio.id), 0, 'reserving must clear the payable');
+
+  const payoutLedger = await prisma.financialTransaction.findUniqueOrThrow({
+    where: { source_type_source_id: { source_type: 'STUDIO_PAYOUT', source_id: reserved.payout.id } },
+    include: { entries: true },
+  });
+  const payoutDebits = payoutLedger.entries.filter((e) => e.direction === 'DEBIT').reduce((s, e) => s + Number(e.amount_usd), 0);
+  const payoutCredits = payoutLedger.entries.filter((e) => e.direction === 'CREDIT').reduce((s, e) => s + Number(e.amount_usd), 0);
+  assert.equal(payoutDebits, payoutCredits, 'a payout transaction must balance');
+  assert.equal(payoutDebits, payableBefore);
+
+  // The guard that matters: a second request finds nothing left, because the
+  // reservation already moved the ledger — not because of a lock or a status flag.
+  await assert.rejects(
+    () => reserveStudioPayout({ studioId: registeredStudio.id, requestedBy: ownerUser.id }),
+    /Nothing is currently payable/,
+    'the same balance must not be payable twice',
+  );
+
+  // The rail refusing must return the money to the payable, without editing the
+  // original transaction.
+  const released = await releaseFailedPayout(reserved.payout.id, 'card_declined');
+  assert.equal(released.status, 'FAILED');
+  assert.equal(await outstandingPayableUsd(registeredStudio.id), payableBefore, 'a failed payout must restore the payable');
+  const originalStillIntact = await prisma.financialTransaction.findUniqueOrThrow({
+    where: { source_type_source_id: { source_type: 'STUDIO_PAYOUT', source_id: reserved.payout.id } },
+    include: { entries: true },
+  });
+  assert.equal(originalStillIntact.entries.length, payoutLedger.entries.length, 'the original payout entries must not be edited');
+
+  // Releasing twice must not credit the studio twice.
+  await releaseFailedPayout(reserved.payout.id, 'card_declined');
+  assert.equal(await outstandingPayableUsd(registeredStudio.id), payableBefore, 'releasing twice must not inflate the payable');
+
+  // Payouts are scoped to the caller's own studio — an artist has no balance at all.
+  const artistPayoutAttempt = await request('/payouts/balance', { headers: { authorization: `Bearer ${artistToken}` } });
+  assert.equal(artistPayoutAttempt.response.status, 403, 'only a studio operator may read a payout balance');
+
   // Commercial terms are the studio's own business. GET /api/studio is public.
   const publicStudio = await request('/studio');
   assert.equal(publicStudio.response.status, 200);

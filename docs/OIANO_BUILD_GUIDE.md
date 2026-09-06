@@ -32,8 +32,8 @@ Overall = mean of the three loops.
 |---|---|---|
 | 1 — Studio self-onboarding | Signup creates Studio + first STUDIO_ADMIN | **100%** |
 | 2 — Platform fee | `platform_fee_bps` becomes real; `PLATFORM_REVENUE` credited | **100%** |
-| 3 — Payouts | Connect onboarding + settle `STUDIO_PAYABLE` | **0%** (ceiling 75%) |
-| | | **Overall 67%** |
+| 3 — Payouts | Connect onboarding + settle `STUDIO_PAYABLE` | **75%** (at ceiling) |
+| | | **Overall 92%** |
 
 ### Loop 1 evidence
 
@@ -65,6 +65,41 @@ Overall = mean of the three loops.
   stripped; a studio's own operators read their rate from `/current`, artists cannot.
 - Mutation-checked: setting the default rate back to 0 fails
   *"a self-registered studio must carry a platform fee"*.
+
+### Loop 3 evidence — 75%, held at the ceiling
+
+`StudioPayout` model + migration `20260906120000_studio_payouts`,
+`lib/studioPayout.ts`, `routes/payouts.routes.ts` mounted at `/api/payouts`.
+
+**Proven on fresh Postgres (the half that can lose money):**
+
+- The outstanding payable is read from the ledger, never cached, and equals the
+  studio net credited by the booking.
+- Reserving a payout writes the payout row and debits the payable **in one
+  transaction**, clearing it to zero.
+- **The double-payout guard**: a second reservation finds nothing payable and is
+  rejected. This works because the reservation moved the ledger — not because of a
+  lock or a status flag.
+- A payout transaction balances: debits equal credits equal the payable.
+- A failed payout is reversed with a **compensating** entry that restores the
+  payable, leaving the original transaction's entries untouched.
+- Releasing twice does not credit the studio twice.
+- `/payouts/balance` is 403 for an artist; a payout without a connected account is
+  409 before any Stripe call.
+- Mutation-checked: removing the payable debit from the reservation fails
+  *"reserving must clear the payable"* — the exact double-payout condition.
+
+**Not proven, and why the grade stops at 75%:** Stripe is not authorised in this
+environment and `STRIPE_ENABLED` is `false`, so `accounts.create`,
+`accountLinks.create` and `transfers.create` have never executed. The transfer
+carries an idempotency key derived from the payout id, and the route reverses the
+reservation on failure — both are correct by inspection and **unverified in fact**.
+Grading them complete would be a claim I cannot support.
+
+**To close the remaining 25%:** with Stripe test keys and `STRIPE_ENABLED=true`,
+exercise Connect onboarding, a successful transfer, a forced transfer failure
+(confirming the payable is restored), and a replayed request against the same
+payout id (confirming the idempotency key prevents a second transfer).
 
 ---
 
