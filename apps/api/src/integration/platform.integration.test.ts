@@ -526,6 +526,58 @@ test('auth, booking payment, and rights operate through real database transactio
   const artistMaintenanceAttempt = await request('/maintenance/summary', { headers: { authorization: `Bearer ${artistToken}` } });
   assert.equal(artistMaintenanceAttempt.response.status, 403);
 
+  // The passport is the accumulated proof of work performed through OIANO, so a
+  // session that has not happened must never appear on it. The public passport
+  // counted CONFIRMED and IN_PROGRESS bookings as delivered sessions — publishing
+  // a booking scheduled for next month, with its hours — and profile_strength
+  // counted every booking including cancellations. At this point in the run the
+  // artist has completed sessions and also holds a future CONFIRMED booking, so
+  // the two are genuinely distinguishable.
+  const completedCount = await prisma.booking.count({ where: { artist_id: artistId, status: 'COMPLETED' } });
+  assert.ok(completedCount > 0, 'the artist must have completed work by now');
+
+  // Create the unperformed work explicitly rather than relying on whatever the
+  // surrounding run happens to have left behind — a session scheduled for next
+  // month, and a cancellation, neither of which is proof of anything.
+  const futureStart = new Date(Date.now() + 45 * 24 * 60 * 60 * 1000);
+  futureStart.setMinutes(0, 0, 0);
+  await prisma.booking.create({
+    data: {
+      studio_id: studio.id, artist_id: artistId, room_id: room.id, service_id: service.id,
+      starts_at: futureStart, ends_at: new Date(futureStart.getTime() + 4 * 60 * 60 * 1000),
+      status: 'CONFIRMED', total_usd: 200,
+    },
+  });
+  await prisma.booking.create({
+    data: {
+      studio_id: studio.id, artist_id: artistId, room_id: room.id, service_id: service.id,
+      starts_at: new Date(futureStart.getTime() + 86_400_000),
+      ends_at: new Date(futureStart.getTime() + 86_400_000 + 3 * 60 * 60 * 1000),
+      status: 'CANCELLED', total_usd: 150,
+    },
+  });
+
+  const publicPassport = await request(`/passport/public/${passportCode}`);
+  assert.equal(publicPassport.response.status, 200);
+  assert.equal(
+    publicPassport.body.stats.sessions,
+    completedCount,
+    'the public passport must count only sessions that actually happened',
+  );
+
+  const ownPortfolio = await request('/passport/portfolio', { headers: { authorization: `Bearer ${artistToken}` } });
+  assert.equal(ownPortfolio.response.status, 200);
+  assert.equal(ownPortfolio.body.stats.sessions, completedCount, 'the artist\'s own view must agree');
+
+  // profile_strength was computed from three different booking sets depending on
+  // which endpoint last recalculated it. Reading two of those paths in sequence
+  // must now produce the same score.
+  const scoreFromPortfolio = ownPortfolio.body.score as number;
+  const passportAfterRead = await request('/passport', { headers: { authorization: `Bearer ${artistToken}` } });
+  assert.equal(passportAfterRead.response.status, 200);
+  const persisted = await prisma.artistPassport.findFirstOrThrow({ where: { artist_id: artistId } });
+  assert.equal(persisted.profile_strength, scoreFromPortfolio, 'profile strength must not depend on which endpoint last ran');
+
   // A studio must be able to join without anyone touching the database. Until
   // this existed, prisma.studio.create lived only in seed scripts, so every
   // studio required an operator — the single largest reason OIANO could not run

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
+import { PERFORMED_SESSION_WHERE, summariseVerifiedWork } from '../lib/verifiedWork';
 import { isR2Configured, uploadToR2, deleteFromR2 } from '../lib/r2';
 import { getImageUpload, normalizeImageUpload, writeNormalizedImageLocally } from '../lib/imageUpload';
 import QRCode from 'qrcode';
@@ -93,7 +94,9 @@ function portfolioBreakdown(artist: any) {
 async function recalculatePortfolioScore(artistId: string) {
   const artist = await prisma.artist.findUnique({
     where: { id: artistId },
-    include: { passport: true, releases: true, projects: true, bookings: true },
+    // Only performed work may contribute to the score. This included every
+    // booking, so a cancelled or no-show session raised profile_strength.
+    include: { passport: true, releases: true, projects: true, bookings: { where: PERFORMED_SESSION_WHERE } },
   });
   if (!artist?.passport) return 0;
   const score = portfolioScore(artist);
@@ -112,7 +115,7 @@ passportRouter.get('/public/:code', async (req, res, next) => {
           include: {
             releases: { orderBy: [{ is_featured: 'desc' }, { release_date: 'desc' }] },
             projects: { where: { is_public: true }, orderBy: { updated_at: 'desc' } },
-            bookings: { where: { status: { in: ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED'] } }, select: { starts_at: true, ends_at: true, status: true } },
+            bookings: { where: PERFORMED_SESSION_WHERE, select: { starts_at: true, ends_at: true, status: true } },
           },
         },
       },
@@ -135,11 +138,13 @@ passportRouter.get('/public/:code', async (req, res, next) => {
     if (passport.profile_views !== uniqueViews) {
       await prisma.artistPassport.update({ where: { id: passport.id }, data: { profile_views: uniqueViews } });
     }
-    const score = portfolioScore(artist);
-    if (artist.passport.profile_strength !== score) {
-      await prisma.artistPassport.update({ where: { id: artist.passport.id }, data: { profile_strength: score } });
-      artist.passport.profile_strength = score;
-    }
+    // This handler hydrates projects filtered to is_public, because that is what
+    // a visitor may see. Scoring from that subset and persisting the result meant
+    // any anonymous view permanently lowered the artist's profile strength by the
+    // weight of their private work. A viewer's scope must never decide what an
+    // artist's record is worth — recalculate from the complete record instead.
+    const score = await recalculatePortfolioScore(artist.id);
+    artist.passport.profile_strength = score;
     res.json({
       artist: {
         id: artist.id, name: artist.name, alias: artist.alias, bio: artist.bio,
@@ -158,8 +163,7 @@ passportRouter.get('/public/:code', async (req, res, next) => {
         releases: artist.releases.length,
         active_projects: artist.projects.filter((project) => project.phase !== 'DELIVERED').length,
         completed_projects: artist.projects.filter((project) => project.phase === 'DELIVERED').length,
-        sessions: artist.bookings.length,
-        hours: Math.round(artist.bookings.reduce((sum, booking) => sum + (booking.ends_at.getTime() - booking.starts_at.getTime()) / 3_600_000, 0)),
+        ...summariseVerifiedWork(artist.bookings),
       },
     });
   } catch (err) { next(err); }
@@ -223,7 +227,7 @@ passportRouter.get('/portfolio', async (req: any, res, next) => {
         wallet: true,
         releases: { orderBy: [{ is_featured: 'desc' }, { release_date: 'desc' }] },
         projects: { orderBy: { updated_at: 'desc' } },
-        bookings: { where: { status: { in: ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED'] } } },
+        bookings: { where: PERFORMED_SESSION_WHERE },
       },
     });
     if (!artist?.passport) throw new AppError('Passport not found', 404);
@@ -231,7 +235,9 @@ passportRouter.get('/portfolio', async (req: any, res, next) => {
     const completedProjects = artist.projects.filter((p) => p.phase === 'DELIVERED');
     res.json({
       artist: { ...artist, projects: artist.projects.filter((p) => p.is_public) },
-      score: portfolioScore(artist),
+      // Same authoritative computation as everywhere else, so the number an
+      // artist reads here is the number that is stored.
+      score: await recalculatePortfolioScore(artist.id),
       score_breakdown: portfolioBreakdown(artist),
       project_options: artist.projects.map((project) => ({
         id: project.id, title: project.title, phase: project.phase,
@@ -241,7 +247,7 @@ passportRouter.get('/portfolio', async (req: any, res, next) => {
         releases: artist.releases.length,
         active_projects: activeProjects.length,
         completed_projects: completedProjects.length,
-        sessions: artist.bookings.length,
+        sessions: summariseVerifiedWork(artist.bookings).sessions,
       },
     });
   } catch (err) { next(err); }
