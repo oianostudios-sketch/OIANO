@@ -7,6 +7,7 @@ import { prisma } from '../lib/prisma';
 import { generatePassportCode } from '../lib/passport';
 import { AppError } from '../lib/errors';
 import { emitActivityEvent } from '../lib/activityEvents';
+import { registerStudioWithOwner } from '../lib/studioOnboarding';
 import { writeAdminAudit } from '../lib/adminAudit';
 import { encryptTotp, newTotpSecret, tryDecryptTotp, verifyTotp } from '../lib/totp';
 import { issuePasswordResetToken, verifyPasswordResetToken, passwordVersionMatches } from '../lib/passwordResetToken';
@@ -17,7 +18,12 @@ const SignupSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters'),
   name: z.string().min(1).optional(),
   alias: z.string().optional(),
-  role: z.enum(['ARTIST', 'PRODUCER']).optional().default('ARTIST'),
+  role: z.enum(['ARTIST', 'PRODUCER', 'STUDIO_ADMIN']).optional().default('ARTIST'),
+  // Required when role is STUDIO_ADMIN — the studio being registered. Without a
+  // signup path for these, every studio had to be inserted by an operator with
+  // database access, which is what kept OIANO from running on its own.
+  studio_name: z.string().trim().min(2).max(120).optional(),
+  studio_timezone: z.string().trim().min(1).max(64).optional(),
   primary_discipline: z.enum([
     'PRODUCER', 'RECORDING_ENGINEER', 'MIX_ENGINEER', 'MASTERING_ENGINEER',
     'SONGWRITER', 'COMPOSER', 'MUSICIAN', 'VOCALIST', 'DJ',
@@ -105,6 +111,22 @@ export async function signup(req: Request, res: Response, next: NextFunction) {
     const password_hash = await bcrypt.hash(data.password, 10);
     const role = data.role ?? 'ARTIST';
     const name = data.name?.trim() || data.email.split('@')[0];
+
+    // A studio registers itself and its first operator together. Kept before the
+    // artist/producer path because it creates a Studio as well as a User, which
+    // needs a transaction rather than the nested create used below.
+    if (role === 'STUDIO_ADMIN') {
+      if (!data.studio_name) throw new AppError('A studio name is required to register a studio', 400);
+      const { user: studioOwner } = await registerStudioWithOwner({
+        email: data.email,
+        password_hash,
+        ownerName: name,
+        studioName: data.studio_name,
+        timezone: data.studio_timezone,
+      });
+      const studioToken = signToken(studioOwner.id, studioOwner.role, studioOwner.auth_version);
+      return res.status(201).json({ token: studioToken, user: sanitizeUser(studioOwner) });
+    }
     const disciplines = data.disciplines?.length ? Array.from(new Set(data.disciplines)) : ['PRODUCER'];
     const primaryDiscipline = data.primary_discipline && disciplines.includes(data.primary_discipline)
       ? data.primary_discipline

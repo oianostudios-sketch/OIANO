@@ -526,6 +526,77 @@ test('auth, booking payment, and rights operate through real database transactio
   const artistMaintenanceAttempt = await request('/maintenance/summary', { headers: { authorization: `Bearer ${artistToken}` } });
   assert.equal(artistMaintenanceAttempt.response.status, 403);
 
+  // A studio must be able to join without anyone touching the database. Until
+  // this existed, prisma.studio.create lived only in seed scripts, so every
+  // studio required an operator — the single largest reason OIANO could not run
+  // on its own.
+  const studioSignup = await request('/auth/signup', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: `studio-owner-${runId}@example.test`,
+      password,
+      name: 'Studio Owner',
+      role: 'STUDIO_ADMIN',
+      studio_name: `Northside Rooms ${runId}`,
+      studio_timezone: 'Europe/London',
+    }),
+  });
+  assert.equal(studioSignup.response.status, 201);
+  assert.equal(studioSignup.body.user.role, 'STUDIO_ADMIN');
+  assert.ok(studioSignup.body.token, 'a registering studio must be signed in immediately');
+
+  const registeredStudio = await prisma.studio.findFirstOrThrow({
+    where: { name: `Northside Rooms ${runId}` },
+  });
+  assert.match(registeredStudio.slug, /^northside-rooms-/, 'slug must be derived from the studio name');
+  assert.equal(registeredStudio.timezone, 'Europe/London');
+
+  const ownerUser = await prisma.user.findUniqueOrThrow({
+    where: { email: `studio-owner-${runId}@example.test` },
+    include: { studio_staff: true },
+  });
+  assert.equal(ownerUser.studio_staff.length, 1, 'the registering operator must be staff of their own studio');
+  assert.equal(ownerUser.studio_staff[0].studio_id, registeredStudio.id);
+  assert.equal(ownerUser.active_studio_id, registeredStudio.id, 'the new studio must already be the active one');
+
+  // The point of the whole loop: this operator can run their studio immediately,
+  // with no provisioning step and no "Active studio selection required" prompt.
+  const ownerClock = await request('/studio-clock', {
+    headers: { authorization: `Bearer ${studioSignup.body.token}` },
+  });
+  assert.equal(ownerClock.response.status, 200, 'a freshly registered studio must be operable at once');
+
+  // Two studios may legitimately share a name; the second must still get its own
+  // address rather than colliding or failing.
+  const twinSignup = await request('/auth/signup', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: `studio-twin-${runId}@example.test`,
+      password,
+      name: 'Twin Owner',
+      role: 'STUDIO_ADMIN',
+      studio_name: `Northside Rooms ${runId}`,
+    }),
+  });
+  assert.equal(twinSignup.response.status, 201);
+  const twinCount = await prisma.studio.count({ where: { name: `Northside Rooms ${runId}` } });
+  assert.equal(twinCount, 2, 'a duplicate studio name must still register');
+  const slugs = (await prisma.studio.findMany({
+    where: { name: `Northside Rooms ${runId}` }, select: { slug: true },
+  })).map((s) => s.slug);
+  assert.equal(new Set(slugs).size, 2, 'each studio must get a distinct slug');
+
+  // Registering a studio without naming it is a client error, not a half-created studio.
+  const namelessStudio = await request('/auth/signup', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: `studio-nameless-${runId}@example.test`, password, role: 'STUDIO_ADMIN',
+    }),
+  });
+  assert.equal(namelessStudio.response.status, 400);
+  assert.equal(await prisma.user.count({ where: { email: `studio-nameless-${runId}@example.test` } }), 0,
+    'a rejected studio registration must not leave a user behind');
+
   const artistUser = await prisma.user.findUniqueOrThrow({ where: { email } });
   const resetToken = issuePasswordResetToken(artistUser.id, artistUser.password_hash!);
   const reset = await request('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token: resetToken, password: 'ReplacementPass123!' }) });
