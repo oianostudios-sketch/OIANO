@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/auth.store';
@@ -44,12 +44,9 @@ function minsUntil(iso: string) {
   return rem ? `${h}h ${rem}m` : `${h}h`;
 }
 
-function totalHours(bookings: any[]) {
-  return bookings.reduce((sum, b) => {
-    if (!b.starts_at || !b.ends_at) return sum;
-    return sum + (new Date(b.ends_at).getTime() - new Date(b.starts_at).getTime()) / 3_600_000;
-  }, 0);
-}
+// totalHours() lived here and summed booking durations in the browser. Studio
+// hours are now counted once on the server, from performed work only, so the
+// dashboard and the passport cannot report different totals.
 
 // ── Animated counter ──────────────────────────────────────────────────────────
 
@@ -265,6 +262,17 @@ export default function DashboardPage() {
     queryFn: async () => (await api.get('/studio/current')).data,
   });
 
+  // The server's account of this creator's situation. What is next, what is
+  // moving, what is owed and what has actually been done are decided once, on
+  // the server, instead of being re-derived from raw lists by every surface
+  // that needs them — which is how the same question got different answers on
+  // different pages.
+  const { data: context } = useQuery({
+    queryKey: ['context'],
+    queryFn: async () => (await api.get('/context')).data,
+    staleTime: 30_000,
+  });
+
   async function handleTopUp() {
     setTopUpLoading(true);
     try {
@@ -280,36 +288,41 @@ export default function DashboardPage() {
   // persisted login snapshot can be stale after profile or avatar changes.
   const artist   = portfolioData?.artist ?? user?.artist;
   const passport = artist?.passport;
-  const balance  = Number(artist?.wallet?.balance_usd ?? 0);
+  // Wallet balance and profile strength come from context, which reads them from
+  // the ledger and the full artist record. Falling back to the portfolio payload
+  // keeps the page working during the first render, before context resolves.
+  const balance  = Number(context?.money?.wallet_balance_usd ?? artist?.wallet?.balance_usd ?? 0);
 
   const profileScore = portfolioData?.score ?? (passport as any)?.profile_strength ?? 0;
   const allBookings = Array.isArray(bookings) ? bookings : (bookings as any)?.data ?? [];
 
-  const upcoming = useMemo(() =>
-    allBookings.filter((b: any) => ['PENDING','CONFIRMED'].includes(b.status) && b.starts_at)
-      .sort((a: any, b: any) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime()),
-  [allBookings]);
-
-  const completed = allBookings.filter((b: any) => b.status === 'COMPLETED');
+  // The booking list is still fetched — the strip below renders real rows — but
+  // the page no longer decides from it which session is next or what counts as
+  // done. Those answers come from the server so every surface agrees.
   const recent    = allBookings
     .filter((b: any) => b.starts_at)
     .sort((a: any, b: any) => new Date(b.starts_at).getTime() - new Date(a.starts_at).getTime())
     .slice(0, 5);
 
-  const nextSession = upcoming[0] ?? null;
+  const completedCount = context?.progress?.sessions ?? allBookings.filter((b: any) => b.status === 'COMPLETED').length;
+  const nextSession = context?.next_session ?? null;
+  const activeProjectCount = context?.in_motion?.active_projects
+    ?? (portfolioData?.project_options ?? []).filter((p: any) => p.is_active && p.phase !== 'DELIVERED').length;
   const activeProjects = (portfolioData?.project_options ?? [])
     .filter((project: any) => project.is_active && project.phase !== 'DELIVERED');
   const nextProject = activeProjects[0] ?? null;
   const primaryAction = nextSession
     ? { to: `/bookings/${nextSession.id}`, eyebrow: 'Your next move', label: 'Prepare for your session', detail: `${fmtDateShort(nextSession.starts_at)} at ${fmtTime(nextSession.starts_at)}`, cta: 'Prepare for session' }
-    : activeProjects.length > 0
-      ? { to: '/projects', eyebrow: 'Keep the momentum', label: 'Review your active work', detail: `${activeProjects.length} project${activeProjects.length === 1 ? '' : 's'} currently moving`, cta: 'Review project' }
+    : activeProjectCount > 0
+      ? { to: '/projects', eyebrow: 'Keep the momentum', label: 'Review your active work', detail: `${activeProjectCount} project${activeProjectCount === 1 ? '' : 's'} currently moving`, cta: 'Review project' }
       : { to: '/book', eyebrow: 'Your next move', label: 'Start your next studio session', detail: 'Choose the room, people, and time for your next record', cta: 'Explore studio dates' };
 
   // Animated stats
   const cSessions  = useCounter(allBookings.length);
-  const cHours     = useCounter(Math.round(totalHours(completed)));
-  const cCompleted = useCounter(completed.length);
+  // Studio hours are counted from performed work only, the same rule the passport
+  // uses — a booked-but-unplayed session is not time spent in a studio.
+  const cHours     = useCounter(context?.progress?.hours ?? 0);
+  const cCompleted = useCounter(completedCount);
 
   const creativeDNA  = (passport as any)?.creative_dna ?? {};
   const genres       = creativeDNA.genres ?? [];
@@ -473,7 +486,7 @@ export default function DashboardPage() {
 
             <Link className="db-signal-card" to="/projects" style={{ minHeight: 180, display: 'flex', flexDirection: 'column', padding: 17, borderRadius: 16, textDecoration: 'none', background: 'linear-gradient(145deg, rgba(18,21,24,.94), rgba(10,12,14,.92))', border: '1px solid rgba(255,255,255,.075)' }}>
               <span style={{ fontSize: 9, color: '#596168', fontFamily: 'monospace', letterSpacing: '0.12em' }}>ACTIVE WORK</span>
-              <strong style={{ marginTop: 'auto', color: '#d3b35c', fontFamily: "'Playfair Display', serif", fontWeight: 500, fontSize: 25 }}>{activeProjects.length}</strong>
+              <strong style={{ marginTop: 'auto', color: '#d3b35c', fontFamily: "'Playfair Display', serif", fontWeight: 500, fontSize: 25 }}>{activeProjectCount}</strong>
               <span style={{ marginTop: 4, color: '#7d7a72', fontSize: 10, lineHeight: 1.4 }}>{nextProject?.title ?? 'Start building your catalogue'}</span>
             </Link>
 

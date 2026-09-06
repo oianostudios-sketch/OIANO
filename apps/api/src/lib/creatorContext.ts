@@ -38,11 +38,25 @@ export interface NextAction {
   at?: string;
 }
 
+/** The session a creator is heading toward, chosen here rather than by each client. */
+export interface NextSession {
+  id: string;
+  starts_at: string;
+  ends_at: string;
+  status: string;
+  studio_name: string | null;
+  room_name: string | null;
+  service_name: string | null;
+}
+
 export interface CreatorContext {
   who: { id: string; role: string; name: string | null };
   next: NextAction;
   /** Everything else worth acting on, already ranked. `next` is always attention[0] when present. */
   attention: NextAction[];
+  /** Work currently moving. Counts, not lists — a client that needs the rows still fetches them. */
+  in_motion: { upcoming_sessions: number; active_projects: number };
+  next_session: NextSession | null;
   money: { outstanding_usd: number; wallet_balance_usd: number | null };
   progress: { sessions: number; hours: number };
   generated_at: string;
@@ -92,13 +106,23 @@ export async function buildCreatorContext(userId: string, role: string): Promise
   const attention: NextAction[] = [];
   let outstanding = 0;
   let progress = { sessions: 0, hours: 0 };
+  let inMotion = { upcoming_sessions: 0, active_projects: 0 };
+  let nextSession: NextSession | null = null;
 
   if (artist) {
     const [upcoming, unpaid, deliverables, performed] = await Promise.all([
       prisma.booking.findFirst({
-        where: { artist_id: artist.id, status: { in: ['CONFIRMED', 'IN_PROGRESS'] }, starts_at: { gte: now } },
+        // PENDING counts: a session awaiting studio confirmation is still the
+        // one the creator is heading toward, and the dashboard treated it that
+        // way client-side. Choosing it here means every surface agrees.
+        where: { artist_id: artist.id, status: { in: ['PENDING', 'CONFIRMED', 'IN_PROGRESS'] }, starts_at: { gte: now } },
         orderBy: { starts_at: 'asc' },
-        select: { id: true, starts_at: true, studio: { select: { name: true } } },
+        select: {
+          id: true, starts_at: true, ends_at: true, status: true,
+          studio: { select: { name: true } },
+          room: { select: { name: true } },
+          service: { select: { name: true } },
+        },
       }),
       prisma.payment.findMany({
         where: { booking: { artist_id: artist.id }, status: { in: ['UNPAID', 'FAILED'] } },
@@ -117,6 +141,26 @@ export async function buildCreatorContext(userId: string, role: string): Promise
 
     progress = summariseVerifiedWork(performed);
     outstanding = Math.round(unpaid.reduce((sum, p) => sum + Number(p.amount_usd), 0) * 100) / 100;
+
+    const [upcomingCount, activeProjects] = await Promise.all([
+      prisma.booking.count({
+        where: { artist_id: artist.id, status: { in: ['PENDING', 'CONFIRMED', 'IN_PROGRESS'] }, starts_at: { gte: now } },
+      }),
+      prisma.project.count({ where: { artist_id: artist.id, is_active: true, phase: { not: 'DELIVERED' } } }),
+    ]);
+    inMotion = { upcoming_sessions: upcomingCount, active_projects: activeProjects };
+
+    if (upcoming) {
+      nextSession = {
+        id: upcoming.id,
+        starts_at: upcoming.starts_at.toISOString(),
+        ends_at: upcoming.ends_at.toISOString(),
+        status: upcoming.status,
+        studio_name: upcoming.studio?.name ?? null,
+        room_name: upcoming.room?.name ?? null,
+        service_name: upcoming.service?.name ?? null,
+      };
+    }
 
     if (upcoming && upcoming.starts_at.getTime() - now.getTime() < HOURS_36) {
       attention.push({
@@ -206,6 +250,8 @@ export async function buildCreatorContext(userId: string, role: string): Promise
     who: { id: user.id, role: user.role, name: artist?.name ?? null },
     next,
     attention,
+    in_motion: inMotion,
+    next_session: nextSession,
     money: {
       outstanding_usd: outstanding,
       wallet_balance_usd: artist?.wallet ? Number(artist.wallet.balance_usd) : null,

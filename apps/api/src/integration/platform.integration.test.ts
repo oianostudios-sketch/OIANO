@@ -560,6 +560,16 @@ test('auth, booking payment, and rights operate through real database transactio
   assert.ok(contextUrgent.body.attention.some((a: any) => a.kind === 'BALANCE_DUE'), 'the balance must still be surfaced, just not first');
   assert.equal(contextUrgent.body.money.outstanding_usd, 100, 'outstanding money must be real, not a UI total');
 
+  // The dashboard reads these instead of deriving them from raw booking lists,
+  // so the server must pick the session and count what is moving.
+  assert.ok(contextUrgent.body.next_session, 'context must name the session the creator is heading toward');
+  assert.equal(contextUrgent.body.next_session.id, imminentBooking.id, 'the soonest upcoming session wins');
+  assert.ok(contextUrgent.body.next_session.starts_at, 'the client renders a countdown from this');
+  assert.ok(contextUrgent.body.next_session.room_name !== undefined, 'room is resolved server-side, not joined in the browser');
+  assert.ok(contextUrgent.body.in_motion.upcoming_sessions >= 1, 'work in motion must be counted');
+  assert.equal(typeof contextUrgent.body.in_motion.active_projects, 'number');
+  assert.equal(contextUrgent.body.progress.hours >= 0, true, 'studio hours come from performed work only');
+
   // Remove the time pressure and money becomes the most useful thing to do.
   await prisma.booking.update({ where: { id: imminentBooking.id }, data: { status: 'CANCELLED' } });
   const contextMoney = await request('/context', { headers: { authorization: `Bearer ${artistToken}` } });
