@@ -155,6 +155,8 @@ model User {
   policy_exceptions_requested PolicyException[] @relation("PolicyExceptionRequestedBy")
   policy_exceptions_approved  PolicyException[] @relation("PolicyExceptionApprovedBy")
   feedback                    Feedback[]
+  invitations_sent            CreatorInvitation[] @relation("CreatorInvitationInviter")
+  invitation_accepted         CreatorInvitation[] @relation("CreatorInvitationAccepter")
   communication_threads_created CommunicationThread[]      @relation("CommunicationThreadCreator")
   communication_threads_waiting CommunicationThread[]      @relation("CommunicationThreadWaitingOn")
   communication_participations  CommunicationParticipant[]
@@ -1367,4 +1369,33 @@ model StudioPayout {
   @@index([studio_id, created_at])
   @@index([status])
   @@map("studio_payouts")
+}
+
+// ─── Creator invitations ────────────────────────────────────────────────────
+// A creator bringing someone new to OIANO. Until this existed the adoption loop
+// had no INVITE stage at all: PassportConnection requires both parties to be
+// existing artists, and StudioStaffInvitation only admits studio staff. Nobody
+// already using OIANO could bring in anyone who was not already here.
+//
+// Follows StudioStaffInvitation exactly — random token, only its SHA-256 stored,
+// expiry, single use — because that pattern is already proven in this codebase
+// and an invitation link is a credential.
+model CreatorInvitation {
+  id          String    @id @default(uuid())
+  email       String
+  // Why they are being invited, in the inviter's words. Shown to the recipient.
+  note        String?
+  token_hash  String    @unique
+  status      String    @default("PENDING") // PENDING | ACCEPTED | REVOKED
+  invited_by  String
+  inviter     User      @relation("CreatorInvitationInviter", fields: [invited_by], references: [id])
+  accepted_by String?
+  accepter    User?     @relation("CreatorInvitationAccepter", fields: [accepted_by], references: [id])
+  expires_at  DateTime
+  accepted_at DateTime?
+  created_at  DateTime  @default(now())
+
+  @@index([invited_by, status, created_at])
+  @@index([email, status])
+  @@map("creator_invitations")
 }

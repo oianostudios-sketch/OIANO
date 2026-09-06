@@ -585,6 +585,101 @@ test('auth, booking payment, and rights operate through real database transactio
   const anonymousContext = await request('/context');
   assert.equal(anonymousContext.response.status, 401, 'context requires authentication');
 
+  // A creator bringing someone new to OIANO. Nothing could do this before:
+  // PassportConnection requires both parties to already be artists, and
+  // StudioStaffInvitation only admits studio staff, so the adoption loop had no
+  // INVITE stage at all.
+  const invite = await request('/invitations', {
+    method: 'POST',
+    headers: { authorization: `Bearer ${artistToken}` },
+    body: JSON.stringify({ email: `Invited-${runId}@Example.Test`, note: 'Come work on this with me' }),
+  });
+  assert.equal(invite.response.status, 201);
+  assert.equal(invite.body.email, `invited-${runId}@example.test`, 'emails are normalised at the boundary');
+  assert.ok(invite.body.invite_url.includes('invite='), 'the inviter gets a link to pass on');
+
+  // The link is a credential: only its hash is kept, so it cannot be recovered
+  // from the record afterwards.
+  const storedInvite = await prisma.creatorInvitation.findFirstOrThrow({ where: { id: invite.body.id } });
+  const rawToken = decodeURIComponent(invite.body.invite_url.split('invite=')[1]);
+  assert.notEqual(storedInvite.token_hash, rawToken, 'the raw token must never be stored');
+  assert.equal(storedInvite.token_hash.length, 64, 'the token is stored as a SHA-256 digest');
+
+  const listed = await request('/invitations', { headers: { authorization: `Bearer ${artistToken}` } });
+  assert.equal(listed.response.status, 200);
+  assert.ok(listed.body.some((i: any) => i.id === invite.body.id));
+  assert.equal(listed.body.every((i: any) => i.token_hash === undefined), true, 'listing must never return the token');
+
+  // Inviting yourself is not a growth loop.
+  const selfInvite = await request('/invitations', {
+    method: 'POST', headers: { authorization: `Bearer ${artistToken}` },
+    body: JSON.stringify({ email }),
+  });
+  assert.equal(selfInvite.response.status, 409);
+
+  // Accepting your own invitation is not either.
+  const selfAccept = await request('/invitations/accept', {
+    method: 'POST', headers: { authorization: `Bearer ${artistToken}` },
+    body: JSON.stringify({ token: rawToken }),
+  });
+  assert.equal(selfAccept.response.status, 409);
+
+  // A different creator accepts it, and the arrival is recorded.
+  const accepted = await request('/invitations/accept', {
+    method: 'POST', headers: { authorization: `Bearer ${entered.body.token}` },
+    body: JSON.stringify({ token: rawToken }),
+  });
+  assert.equal(accepted.response.status, 200);
+
+  const claimedInvite = await prisma.creatorInvitation.findFirstOrThrow({ where: { id: invite.body.id } });
+  assert.equal(claimedInvite.status, 'ACCEPTED');
+  assert.ok(claimedInvite.accepted_at, 'the arrival is timestamped');
+
+  // Single use. A replayed link must not be claimable twice.
+  const replay = await request('/invitations/accept', {
+    method: 'POST', headers: { authorization: `Bearer ${producerLogin.body.token}` },
+    body: JSON.stringify({ token: rawToken }),
+  });
+  assert.equal(replay.response.status, 410, 'an invitation is single use');
+
+  // Two people opening the same link at once. The sequential replay above is
+  // caught by the status read, so it proves nothing about the atomic claim —
+  // only simultaneous accepts exercise the filter on the update itself, which is
+  // what stops both from succeeding.
+  const raceInvite = await request('/invitations', {
+    method: 'POST', headers: { authorization: `Bearer ${artistToken}` },
+    body: JSON.stringify({ email: `race-${runId}@example.test` }),
+  });
+  assert.equal(raceInvite.response.status, 201);
+  const raceToken = decodeURIComponent(raceInvite.body.invite_url.split('invite=')[1]);
+
+  const bothAtOnce = await Promise.all([
+    request('/invitations/accept', {
+      method: 'POST', headers: { authorization: `Bearer ${producerLogin.body.token}` },
+      body: JSON.stringify({ token: raceToken }),
+    }),
+    request('/invitations/accept', {
+      method: 'POST', headers: { authorization: `Bearer ${creativeSignup.body.token}` },
+      body: JSON.stringify({ token: raceToken }),
+    }),
+  ]);
+  const succeeded = bothAtOnce.filter((r) => r.response.status === 200);
+  assert.equal(succeeded.length, 1, 'exactly one simultaneous claim may win an invitation');
+
+  const raced = await prisma.creatorInvitation.findFirstOrThrow({ where: { id: raceInvite.body.id } });
+  assert.equal(raced.status, 'ACCEPTED');
+  assert.ok(raced.accepted_by, 'the winner is recorded, and only one of them');
+
+  // A guessed token is indistinguishable from a spent one.
+  const guessed = await request('/invitations/accept', {
+    method: 'POST', headers: { authorization: `Bearer ${producerLogin.body.token}` },
+    body: JSON.stringify({ token: 'x'.repeat(43) }),
+  });
+  assert.equal(guessed.response.status, 410, 'probing must not reveal whether a token exists');
+
+  const anonymousInvite = await request('/invitations', { method: 'POST', body: JSON.stringify({ email: 'x@example.test' }) });
+  assert.equal(anonymousInvite.response.status, 401, 'only a signed-in creator may invite');
+
   await prisma.payment.deleteMany({ where: { booking_id: imminentBooking.id } });
   await prisma.booking.delete({ where: { id: imminentBooking.id } });
 

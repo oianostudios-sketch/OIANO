@@ -16,7 +16,8 @@ export type ActivityEventType =
   // Previously impossible to record: the subject was an Artist FK, so nothing
   // about a studio or a payout could be an event at all.
   | 'studio.registered'
-  | 'payout.paid';
+  | 'payout.paid'
+  | 'invitation.accepted';
 
 // What an event is about. ARTIST is the default because every event recorded
 // before this existed was about one.
