@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
 import { AppError } from './errors';
+import { platformFeeBpsForNewStudio } from './platformFee';
 
 // A studio and its first operator come into existence together. Before this,
 // nothing in the API created a Studio at all — `prisma.studio.create` appeared
@@ -51,6 +52,9 @@ export async function registerStudioWithOwner(input: RegisterStudioInput) {
           data: {
             slug,
             name: input.studioName,
+            // A studio that registers itself is on OIANO's terms from its first
+            // booking. Existing studios keep whatever rate they already have.
+            platform_fee_bps: platformFeeBpsForNewStudio(),
             ...(input.timezone ? { timezone: input.timezone } : {}),
           },
         });

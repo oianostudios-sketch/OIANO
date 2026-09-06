@@ -14,8 +14,15 @@ import { sendStudioInvitationEmail } from '../services/email.service';
 
 export const studioRouter = Router();
 
+// Spreading the studio row published every column on it. GET /api/studio is
+// unauthenticated, so that put commercial terms (platform_fee_bps) and the Stripe
+// Connect account id on a public endpoint — harmless only for as long as
+// stripe_account_id stayed null, which payouts change. Strip both here and let
+// the studio's own operators read their rate from /current instead.
 function presentStudio<T extends { hero_image_url?: string | null }>(studio: T) {
-  return { ...studio, image_url: studio.hero_image_url ?? '' };
+  const { stripe_account_id: _connectAccount, platform_fee_bps: _fee, ...safe } =
+    studio as T & { stripe_account_id?: string | null; platform_fee_bps?: number };
+  return { ...safe, image_url: studio.hero_image_url ?? '' };
 }
 
 // GET /api/studio
@@ -125,7 +132,15 @@ studioRouter.get('/current', authenticate, async (req: any, res, next) => {
       where: { id: studio.id },
       include: { rooms: true, engineers: true, services: true },
     });
-    res.json(detailed ? presentStudio(detailed) : null);
+    if (!detailed) return res.json(null);
+    // A studio's own operators must be able to see what OIANO charges them.
+    // Nobody else does — an artist resolving this studio gets the same shape
+    // without the commercial terms.
+    const isOwnOperator = req.userRole === 'STUDIO_ADMIN' || req.userRole === 'ENGINEER';
+    res.json({
+      ...presentStudio(detailed),
+      ...(isOwnOperator ? { platform_fee_bps: detailed.platform_fee_bps } : {}),
+    });
   } catch (error) { next(error); }
 });
 

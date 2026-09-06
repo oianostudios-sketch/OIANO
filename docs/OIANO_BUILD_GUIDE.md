@@ -31,9 +31,9 @@ Overall = mean of the three loops.
 | Loop | Scope | Grade |
 |---|---|---|
 | 1 — Studio self-onboarding | Signup creates Studio + first STUDIO_ADMIN | **100%** |
-| 2 — Platform fee | `platform_fee_bps` becomes real; `PLATFORM_REVENUE` credited | **0%** |
+| 2 — Platform fee | `platform_fee_bps` becomes real; `PLATFORM_REVENUE` credited | **100%** |
 | 3 — Payouts | Connect onboarding + settle `STUDIO_PAYABLE` | **0%** (ceiling 75%) |
-| | | **Overall 33%** |
+| | | **Overall 67%** |
 
 ### Loop 1 evidence
 
@@ -47,6 +47,24 @@ Overall = mean of the three loops.
   that leaves no user behind.
 - Mutation-checked: removing the slug-collision retry makes the twin registration
   return **409 instead of 201**, and the suite fails.
+
+### Loop 2 evidence
+
+- Domain: `lib/platformFee.ts` — the rate is a business decision, so it reads
+  `PLATFORM_FEE_BPS` from the environment with a documented 500 bps default and fails
+  loudly on a bad value. No ledger arithmetic changed; `bookingAllocation()` was
+  already correct and refunds already reverse the fee proportionally.
+- Wired: applied at studio registration. Existing studios keep their current rate —
+  changing commercial terms is not a side effect of a deploy.
+- Proven on fresh Postgres: a real booking against a self-registered studio credits
+  `PLATFORM_REVENUE` exactly once, the studio is credited its net, and
+  **studio net + platform fee = gross to the cent** at the studio's own rate.
+- **Exposure found and closed while building this.** `presentStudio()` spread the whole
+  studio row and `GET /api/studio` is unauthenticated, so commercial terms were public
+  and `stripe_account_id` would have leaked the moment Loop 3 populated it. Both are
+  stripped; a studio's own operators read their rate from `/current`, artists cannot.
+- Mutation-checked: setting the default rate back to 0 fails
+  *"a self-registered studio must carry a platform fee"*.
 
 ---
 

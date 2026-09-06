@@ -586,6 +586,69 @@ test('auth, booking payment, and rights operate through real database transactio
   })).map((s) => s.slug);
   assert.equal(new Set(slugs).size, 2, 'each studio must get a distinct slug');
 
+  // A registering studio is on OIANO's terms from its first booking. Before this,
+  // platform_fee_bps defaulted to 0 and was written by no route, so the fee was
+  // always zero and PLATFORM_REVENUE was never credited — the revenue model existed
+  // in the ledger and was inert.
+  assert.ok(registeredStudio.platform_fee_bps > 0, 'a self-registered studio must carry a platform fee');
+
+  const feeRoom = await prisma.room.create({ data: { studio_id: registeredStudio.id, name: 'Fee Room', hourly_rate: 100 } });
+  const feeService = await prisma.serviceOffering.create({
+    data: { studio_id: registeredStudio.id, category: 'RECORDING', name: 'Fee Session', min_price_usd: 100, max_price_usd: 100, unit: 'hour' },
+  });
+  await prisma.wallet.update({ where: { artist_id: artistId }, data: { balance_usd: 500 } });
+
+  const feeStart = new Date(Date.now() + 28 * 24 * 60 * 60 * 1000);
+  feeStart.setMinutes(0, 0, 0);
+  const feeBooking = await request('/bookings', {
+    method: 'POST',
+    headers: { authorization: `Bearer ${artistToken}` },
+    body: JSON.stringify({
+      studio_id: registeredStudio.id, room_id: feeRoom.id, service_id: feeService.id,
+      starts_at: feeStart.toISOString(),
+      ends_at: new Date(feeStart.getTime() + 60 * 60 * 1000).toISOString(),
+    }),
+  });
+  assert.equal(feeBooking.response.status, 201);
+
+  const feePayment = await prisma.payment.findFirstOrThrow({ where: { booking_id: feeBooking.body.id } });
+  const feeLedger = await prisma.financialTransaction.findUniqueOrThrow({
+    where: { source_type_source_id: { source_type: 'BOOKING_PAYMENT', source_id: feePayment.id } },
+    include: { entries: true },
+  });
+
+  const gross = Number(feeLedger.entries.filter((e) => e.direction === 'DEBIT').reduce((s, e) => s + Number(e.amount_usd), 0));
+  const platformEntry = feeLedger.entries.find((e) => e.account_code === 'PLATFORM_REVENUE');
+  const studioEntry = feeLedger.entries.find((e) => e.account_code === 'STUDIO_PAYABLE');
+
+  assert.ok(platformEntry, 'a booking at a non-zero rate must credit PLATFORM_REVENUE');
+  assert.equal(platformEntry!.direction, 'CREDIT');
+  assert.ok(studioEntry, 'the studio must still be credited its net');
+  // The split must account for every cent: gross = studioNet + platformFee.
+  assert.equal(
+    Number(studioEntry!.amount_usd) + Number(platformEntry!.amount_usd),
+    gross,
+    'studio net plus platform fee must equal gross',
+  );
+  const expectedFee = Math.round(gross * registeredStudio.platform_fee_bps / 10000 * 100) / 100;
+  assert.equal(Number(platformEntry!.amount_usd), expectedFee, 'the fee must match the studio rate');
+  assert.equal(feeLedger.entries.filter((e) => e.account_code === 'PLATFORM_REVENUE').length, 1,
+    'PLATFORM_REVENUE must be credited exactly once per payment');
+
+  // Commercial terms are the studio's own business. GET /api/studio is public.
+  const publicStudio = await request('/studio');
+  assert.equal(publicStudio.response.status, 200);
+  assert.equal(publicStudio.body?.platform_fee_bps, undefined, 'the public studio endpoint must not publish commercial terms');
+  assert.equal(publicStudio.body?.stripe_account_id, undefined, 'the public studio endpoint must never publish a Connect account id');
+
+  const ownStudioView = await request('/studio/current', { headers: { authorization: `Bearer ${studioSignup.body.token}` } });
+  assert.equal(ownStudioView.response.status, 200);
+  assert.equal(ownStudioView.body.platform_fee_bps, registeredStudio.platform_fee_bps, 'a studio must see the rate it is charged');
+  assert.equal(ownStudioView.body.stripe_account_id, undefined);
+
+  const artistStudioView = await request('/studio/current', { headers: { authorization: `Bearer ${artistToken}` } });
+  assert.equal(artistStudioView.body?.platform_fee_bps, undefined, 'an artist must not see a studio\'s commercial terms');
+
   // Registering a studio without naming it is a client error, not a half-created studio.
   const namelessStudio = await request('/auth/signup', {
     method: 'POST',
