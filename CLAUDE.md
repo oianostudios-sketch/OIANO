@@ -1,5 +1,21 @@
 # OIANO StudioOS — Claude Code Master Prompt (Corrected)
 
+> **Read [`docs/OIANO_DIRECTION.md`](docs/OIANO_DIRECTION.md) first.** Parts of this
+> file are out of date and one instruction in it is harmful.
+>
+> Verified against the tree: this file says 15 models (there are **56**), three roles
+> (there are **five** — also `PRODUCER` and `OIANO_ADMIN`), `model Passport` (it is
+> `ArtistPassport` / `ProducerPassport`), `wallet.balance` (it is `balance_usd`), and
+> single-studio scoping (the product is **multi-studio**). The top `[P0]` task names a
+> file that no longer exists, and **13 of 14 sampled "Open tasks" are already done** —
+> that list is history, not a queue.
+>
+> **Do not implement the `[P2]` `SINGLE_STUDIO_MODE` startup assertion.** The constant
+> is `false`, so `if (!SINGLE_STUDIO_MODE) throw` would stop the API booting.
+>
+> Still correct and binding here: the frontend conventions, the Zod/`AppError`/error-
+> middleware contract, the design tokens, and the ports.
+
 You are building **OIANO StudioOS**, a studio management platform for **Dreamz Music Lab**.
 This is a TypeScript monorepo. Read every file before modifying. Never break existing imports.
 
