@@ -17,6 +17,7 @@ import { STATUS_HEX } from '../lib/bookingStatus';
 import MySignal from '../components/MySignal';
 import MyOrbit from '../components/MyOrbit';
 import OianoNow from '../components/OianoNow';
+import NextAction from '../components/NextAction';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -499,6 +500,11 @@ export default function DashboardPage() {
             real (network-metrics.routes.ts / network-pulse.routes.ts) —
             nothing here is fabricated to look alive. */}
         <section className="db-fade db-fade-1" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {/* Answered by GET /api/context in one call, rather than reconstructed
+              from the eight queries this page already runs. It leads because a
+              dashboard that reports state without naming an action leaves the
+              creator to work out what to do from the widgets. */}
+          <NextAction />
           <MySignal accent="#6aa9d2" />
           <div className="db-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
             <MyOrbit />

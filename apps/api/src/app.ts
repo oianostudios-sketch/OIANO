@@ -17,6 +17,7 @@ import { availabilityRouter } from './routes/availability.routes';
 import { bookingsRouter } from './routes/bookings.routes';
 import { paymentsRouter } from './routes/payments.routes';
 import { payoutsRouter } from './routes/payouts.routes';
+import { contextRouter } from './routes/context.routes';
 import { adminRouter, creditRequestRouter } from './routes/admin.routes';
 import { artistsRouter } from './routes/artists.routes';
 import { webhooksRouter } from './routes/webhooks.routes';
@@ -133,6 +134,7 @@ app.use('/api/projects/:id/messages',    projectMessagesRouter);
 app.use('/api/bookings/:id/artist-review', artistReviewRouter);
 app.use('/api/payments',                 paymentsRouter);
 app.use('/api/payouts',                  payoutsRouter);
+app.use('/api/context',                  contextRouter);
 app.use('/api/admin',                    creditRequestRouter);
 app.use('/api/admin',                    adminRouter);
 app.use('/api/artists/discover',         discoverRouter);  // must be before /:id catch-all

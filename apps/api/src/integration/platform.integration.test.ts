@@ -526,6 +526,58 @@ test('auth, booking payment, and rights operate through real database transactio
   const artistMaintenanceAttempt = await request('/maintenance/summary', { headers: { authorization: `Bearer ${artistToken}` } });
   assert.equal(artistMaintenanceAttempt.response.status, 403);
 
+  // One call answering where the caller is and what to do next. Every page used
+  // to rebuild this in the browser — the artist dashboard runs eight queries and
+  // assembles meaning client-side — and the only deterministic guidance in the
+  // product, Pulse, is STUDIO_ADMIN-only. This is the creator's equivalent, and
+  // it is deterministic: every action traces to a row, nothing is generated.
+  const contextEarly = await request('/context', { headers: { authorization: `Bearer ${artistToken}` } });
+  assert.equal(contextEarly.response.status, 200);
+  assert.equal(contextEarly.body.who.id, (await prisma.artist.findUniqueOrThrow({ where: { id: artistId } , select: { user_id: true } })).user_id);
+  assert.ok(contextEarly.body.next, 'context must always name a next action, even when nothing is urgent');
+  assert.ok(contextEarly.body.next.href.startsWith('/'), 'a next action must be actionable');
+  const performedSoFar = await prisma.booking.count({ where: { artist_id: artistId, status: 'COMPLETED' } });
+  assert.equal(contextEarly.body.progress.sessions, performedSoFar, 'progress must count only performed work');
+
+  // Ranking is the substance. A session that cannot be recovered once its hour
+  // passes must outrank money, which must outrank anything only growing the
+  // creator's own record. Give the artist a session within the window and an
+  // unpaid balance at the same time, and the imminent session must win.
+  const imminent = new Date(Date.now() + 6 * 60 * 60 * 1000);
+  const imminentBooking = await prisma.booking.create({
+    data: {
+      studio_id: studio.id, artist_id: artistId, room_id: room.id, service_id: service.id,
+      starts_at: imminent, ends_at: new Date(imminent.getTime() + 2 * 60 * 60 * 1000),
+      status: 'CONFIRMED', total_usd: 100,
+      payment: { create: { amount_usd: 100, status: 'UNPAID', provider: 'wallet' } },
+    },
+  });
+
+  const contextUrgent = await request('/context', { headers: { authorization: `Bearer ${artistToken}` } });
+  assert.equal(contextUrgent.response.status, 200);
+  assert.equal(contextUrgent.body.next.kind, 'SESSION_IMMINENT', 'an imminent session must outrank an unpaid balance');
+  assert.equal(contextUrgent.body.next.href, `/bookings/${imminentBooking.id}`);
+  assert.ok(contextUrgent.body.attention.some((a: any) => a.kind === 'BALANCE_DUE'), 'the balance must still be surfaced, just not first');
+  assert.equal(contextUrgent.body.money.outstanding_usd, 100, 'outstanding money must be real, not a UI total');
+
+  // Remove the time pressure and money becomes the most useful thing to do.
+  await prisma.booking.update({ where: { id: imminentBooking.id }, data: { status: 'CANCELLED' } });
+  const contextMoney = await request('/context', { headers: { authorization: `Bearer ${artistToken}` } });
+  assert.equal(contextMoney.body.next.kind, 'BALANCE_DUE', 'with no imminent session, the balance leads');
+
+  // Context is always about the caller. It takes no parameters, so it cannot be
+  // pointed at anyone else's situation — a second artist sees their own.
+  const otherContext = await request('/context', { headers: { authorization: `Bearer ${entered.body.token}` } });
+  assert.equal(otherContext.response.status, 200);
+  assert.notEqual(otherContext.body.who.id, contextUrgent.body.who.id, 'context must be scoped to the caller');
+  assert.equal(otherContext.body.progress.sessions, 0, 'a creator with no performed work has none reported');
+
+  const anonymousContext = await request('/context');
+  assert.equal(anonymousContext.response.status, 401, 'context requires authentication');
+
+  await prisma.payment.deleteMany({ where: { booking_id: imminentBooking.id } });
+  await prisma.booking.delete({ where: { id: imminentBooking.id } });
+
   // The passport is the accumulated proof of work performed through OIANO, so a
   // session that has not happened must never appear on it. The public passport
   // counted CONFIRMED and IN_PROGRESS bookings as delivered sessions — publishing
