@@ -1186,8 +1186,23 @@ enum ArtistAvailability {
 }
 
 model ActivityEvent {
-  id         String   @id @default(uuid())
-  type       String // "profile.created" | "status.changed" | "session.booked" | "session.completed"
+  id   String @id @default(uuid())
+  type String // past tense, always — see lib/activityEvents.ts for the vocabulary
+
+  // The event's subject was originally an Artist FK and nothing else, so an
+  // event about a studio or a payout had nowhere to go and simply was not
+  // emitted — studio registration, the platform fee and payouts all record
+  // nothing. subject_type/subject_id follow the same "typed column, not an
+  // invented polymorphic ref" convention as ProjectParticipant and
+  // WeaveEvidence. artist_id stays: it carries referential integrity for
+  // artist events and the existing feed and SSE bridge read it.
+  subject_type String  @default("ARTIST") // ARTIST | STUDIO | PRODUCER | PLATFORM
+  subject_id   String?
+  // The User who caused it, when a person did. Absent for system-derived events.
+  actor_id     String?
+  // Payload shape version. Add fields; never repurpose one.
+  version      Int     @default(1)
+
   artist_id  String?
   artist     Artist?  @relation(fields: [artist_id], references: [id])
   payload    Json     @default("{}")
@@ -1195,6 +1210,7 @@ model ActivityEvent {
 
   @@index([type])
   @@index([artist_id])
+  @@index([subject_type, subject_id, created_at])
   @@map("activity_events")
 }
 

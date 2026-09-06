@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
 import { AppError } from './errors';
 import { postFinancialTransaction } from './financialLedger';
+import { emitActivityEvent } from './activityEvents';
 
 function money(value: number) { return Math.round(value * 100) / 100; }
 
@@ -111,8 +112,22 @@ export async function releaseFailedPayout(payoutId: string, reason: string) {
 }
 
 export async function markPayoutPaid(payoutId: string, stripeTransferId: string) {
-  return prisma.studioPayout.update({
+  const paid = await prisma.studioPayout.update({
     where: { id: payoutId },
     data: { status: 'PAID', stripe_transfer_id: stripeTransferId },
   });
+
+  // Money reaching a studio is the most consequential thing that happens to it,
+  // and until the event subject was widened beyond Artist there was no way to
+  // record it. Emitted after the row is updated, and never allowed to fail the
+  // payout — the money has already moved by this point.
+  emitActivityEvent('payout.paid', {
+    subject: { type: 'STUDIO', id: paid.studio_id },
+    actorId: paid.requested_by,
+    payout_id: paid.id,
+    amount_usd: Number(paid.amount_usd),
+    currency: paid.currency,
+  }).catch((e: any) => console.error('[activity] payout.paid emit failed:', e?.message));
+
+  return paid;
 }

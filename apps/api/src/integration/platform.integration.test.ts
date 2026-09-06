@@ -673,6 +673,26 @@ test('auth, booking payment, and rights operate through real database transactio
   assert.equal(ownerUser.studio_staff[0].studio_id, registeredStudio.id);
   assert.equal(ownerUser.active_studio_id, registeredStudio.id, 'the new studio must already be the active one');
 
+  // A studio joining is a fact worth recording, and until the event subject was
+  // widened beyond Artist there was nowhere to record it — the subject was an
+  // Artist foreign key, so a studio event could not exist at all.
+  const studioEvent = await prisma.activityEvent.findFirst({
+    where: { type: 'studio.registered', subject_type: 'STUDIO', subject_id: registeredStudio.id },
+  });
+  assert.ok(studioEvent, 'registering a studio must record an event about the studio');
+  assert.equal(studioEvent!.artist_id, null, 'a studio event must not be filed against an artist');
+  assert.equal(studioEvent!.actor_id, ownerUser.id, 'the event must record who caused it');
+  assert.equal(studioEvent!.version, 1, 'events carry a payload version');
+  assert.equal((studioEvent!.payload as any).slug, registeredStudio.slug);
+
+  // Existing artist emitters were not changed, and must still resolve their
+  // subject from artist_id alone.
+  const artistEvent = await prisma.activityEvent.findFirstOrThrow({
+    where: { type: 'session.completed', artist_id: artistId },
+  });
+  assert.equal(artistEvent.subject_type, 'ARTIST', 'an artist event defaults to the artist subject');
+  assert.equal(artistEvent.subject_id, artistId, 'and the subject is backfilled from artist_id');
+
   // The point of the whole loop: this operator can run their studio immediately,
   // with no provisioning step and no "Active studio selection required" prompt.
   const ownerClock = await request('/studio-clock', {

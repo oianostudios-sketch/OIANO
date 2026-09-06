@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
 import { AppError } from './errors';
 import { platformFeeBpsForNewStudio } from './platformFee';
+import { emitActivityEvent } from './activityEvents';
 
 // A studio and its first operator come into existence together. Before this,
 // nothing in the API created a Studio at all — `prisma.studio.create` appeared
@@ -47,7 +48,7 @@ export async function registerStudioWithOwner(input: RegisterStudioInput) {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const slug = attempt === 0 ? base : `${base}-${attempt + 1}`;
     try {
-      return await prisma.$transaction(async (tx) => {
+      const created = await prisma.$transaction(async (tx) => {
         const studio = await tx.studio.create({
           data: {
             slug,
@@ -74,6 +75,19 @@ export async function registerStudioWithOwner(input: RegisterStudioInput) {
 
         return { user, studio };
       });
+
+      // A studio joining the network is a fact worth recording, and until the
+      // event subject was widened beyond Artist there was nowhere to record it.
+      // Emitted after the transaction commits: the studio exists by then, and a
+      // logging failure must never roll back a registration.
+      emitActivityEvent('studio.registered', {
+        subject: { type: 'STUDIO', id: created.studio.id },
+        actorId: created.user.id,
+        studio_name: created.studio.name,
+        slug: created.studio.slug,
+      }).catch((e: any) => console.error('[activity] studio.registered emit failed:', e?.message));
+
+      return created;
     } catch (error) {
       const slugTaken =
         error instanceof Prisma.PrismaClientKnownRequestError &&
