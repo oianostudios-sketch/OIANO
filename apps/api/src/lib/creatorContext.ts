@@ -148,7 +148,7 @@ export function sessionAction(booking: SessionForAction | null, now: Date): Next
     return {
       kind: 'SESSION_AWAITING_STUDIO',
       title: `${studio} hasn't confirmed your session yet`,
-      detail: `Requested for ${whenLabel(booking.starts_at, now)}. You'll hear when they accept it.`,
+      detail: `Starts ${whenLabel(booking.starts_at, now)}. You'll hear when they accept it.`,
       href: `/bookings/${booking.id}`,
       at: booking.starts_at.toISOString(),
     };

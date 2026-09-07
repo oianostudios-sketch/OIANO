@@ -49,6 +49,7 @@ test('sessionAction', async (t) => {
     const action = sessionAction(booking({ status: 'PENDING' }), NOW);
     assert.equal(action?.kind, 'SESSION_AWAITING_STUDIO');
     assert.match(action!.title, /hasn't confirmed/);
+    assert.match(action!.detail, /^Starts in \d+ hours\./);
     assert.doesNotMatch(`${action!.title} ${action!.detail}`, /confirm you're coming/i);
   });
 
