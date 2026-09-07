@@ -18,11 +18,27 @@ export function useSSE() {
   const toast = useToast();
   const esRef = useRef<EventSource | null>(null);
   const retryRef = useRef(1000);
+  const hasConnectedRef = useRef(false);
 
   useEffect(() => {
     if (!token) return;
     let disposed = false;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
+
+    // The two query families that answer "what is happening and what needs me":
+    // ['context'] behind Creator Home's next action, and ['communications', …]
+    // behind the inbox. Every branch below enumerates the keys it knows about,
+    // which meant these two — added later — were refreshed by nothing, and an
+    // approved deliverable went on looking pending until a manual reload.
+    //
+    // Refreshing them for any recognised event rather than per-branch is the
+    // point: a new event type should not have to remember to do this, and being
+    // occasionally over-eager about two cached reads is much cheaper than
+    // showing someone stale work.
+    function refreshWorkContext() {
+      qc.invalidateQueries({ queryKey: ['context'] });
+      qc.invalidateQueries({ queryKey: ['communications'] });
+    }
 
     async function connect() {
       if (esRef.current) esRef.current.close();
@@ -47,6 +63,12 @@ export function useSSE() {
 
       es.onopen = () => {
         retryRef.current = 1000; // reset backoff on success
+        // The stream has no replay cursor, so anything that happened while it
+        // was down is simply missed. A reconnection is therefore the moment the
+        // client is least entitled to trust what it is showing — re-read rather
+        // than wait for the next event to arrive.
+        if (hasConnectedRef.current) refreshWorkContext();
+        hasConnectedRef.current = true;
       };
 
       es.onmessage = (e) => {
@@ -151,6 +173,9 @@ export function useSSE() {
             qc.invalidateQueries({ queryKey: ['network-orbit'] });
             qc.invalidateQueries({ queryKey: ['artist-activity'] });
           }
+
+          // Any server event can change what needs the user; see refreshWorkContext.
+          refreshWorkContext();
 
           // ── Dispatch to window so inline components can react ──────────────
           window.dispatchEvent(new CustomEvent('sse', { detail: event }));

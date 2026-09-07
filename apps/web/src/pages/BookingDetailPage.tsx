@@ -81,6 +81,16 @@ export default function BookingDetailPage() {
   const { user } = useAuthStore();
   const toast = useToast();
   const qc = useQueryClient();
+
+  // A domain action that changes this booking also changes what Creator Home
+  // and the inbox should be saying about it. The SSE stream refreshes these too,
+  // but the actor's own screen must not wait on a round trip through the server
+  // to stop showing them work they have just finished.
+  function refreshWorkContext() {
+    qc.invalidateQueries({ queryKey: ['context'] });
+    qc.invalidateQueries({ queryKey: ['communications'] });
+  }
+
   const [sharing, setSharing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [dawLinked, setDawLinked] = useState(false);
@@ -107,6 +117,7 @@ export default function BookingDetailPage() {
       qc.invalidateQueries({ queryKey: ['booking', id] });
       qc.invalidateQueries({ queryKey: ['bookings'] });
       qc.invalidateQueries({ queryKey: ['availability'] });
+      refreshWorkContext();
     },
     onError: (e: any) => toast.error(e?.response?.data?.error ?? 'Reschedule failed'),
   });
@@ -121,6 +132,7 @@ export default function BookingDetailPage() {
       setDeliverOpen(false);
       setDeliveryNotes('');
       qc.invalidateQueries({ queryKey: ['booking', id] });
+      refreshWorkContext();
     },
     onError: (e: any) => toast.error(e?.response?.data?.error ?? 'Delivery failed'),
   });
@@ -132,6 +144,7 @@ export default function BookingDetailPage() {
       toast.success(variables.decision === 'APPROVED' ? 'Deliverable approved' : 'Revision request sent');
       setReviewNote('');
       qc.invalidateQueries({ queryKey: ['booking', id] });
+      refreshWorkContext();
     },
     onError: (error: any) => toast.error(error?.response?.data?.error ?? 'Review could not be saved'),
   });
