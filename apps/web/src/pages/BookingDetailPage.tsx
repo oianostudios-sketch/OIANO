@@ -11,6 +11,7 @@ import SessionCompletionModal from '../components/SessionCompletionModal';
 import SessionInsightCard from '../components/SessionInsightCard';
 import { useToast } from '../components/Toast';
 import { BookingStatus, STATUS_TAILWIND, STATUS_HEX, STATUS_MESSAGE } from '../lib/bookingStatus';
+import { mayClaimPaymentReceived, settlementView } from '../lib/paymentReturn';
 
 
 // ── Stripe pay button ─────────────────────────────────────────────────────────
@@ -62,17 +63,20 @@ export default function BookingDetailPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // Handle Stripe redirect back
+  // Handle Stripe redirect back.
+  //
+  // A query parameter is something the browser carries back from a redirect, and
+  // anyone can type one. It records that the user *returned* from checkout — never
+  // that money arrived. Only the payment record can say that, so returning here
+  // starts a settlement check and the banner reports whatever the server actually
+  // holds. Payment and booking confirmation are also different facts with different
+  // owners, so neither is ever asserted on the strength of the other.
   const paymentResult = searchParams.get('payment');
+  const [settlement, setSettlement] = useState<'idle' | 'checking' | 'cancelled'>('idle');
   useEffect(() => {
-    if (paymentResult === 'success') {
-      toast.success('Payment received! Your booking is confirmed.');
-      setSearchParams({}, { replace: true });
-      qc.invalidateQueries({ queryKey: ['booking', id] });
-    } else if (paymentResult === 'cancelled') {
-      toast.error('Payment cancelled. Your booking is still pending.');
-      setSearchParams({}, { replace: true });
-    }
+    if (paymentResult !== 'success' && paymentResult !== 'cancelled') return;
+    setSettlement(paymentResult === 'success' ? 'checking' : 'cancelled');
+    setSearchParams({}, { replace: true });
   }, [paymentResult]);
   const { user } = useAuthStore();
   const toast = useToast();
@@ -134,11 +138,53 @@ export default function BookingDetailPage() {
 
   const backTo = user?.role === 'STUDIO_ADMIN' ? '/admin' : '/dashboard';
 
+  // Stripe settles asynchronously: the webhook that records the payment can land
+  // after the browser is already back here. While a settlement check is open we
+  // re-read the booking on a short interval, but only for a bounded window — an
+  // unresolved check becomes an honest "not recorded yet" with a retry, never a
+  // spinner that runs forever or an optimistic success.
+  const SETTLEMENT_POLL_MS = 2_000;
+  const SETTLEMENT_ATTEMPT_LIMIT = 6;
+  const [settlementAttempts, setSettlementAttempts] = useState(0);
+
   const { data: booking, isLoading } = useQuery({
     queryKey: ['booking', id],
     queryFn: async () => (await api.get(`/bookings/${id}`)).data,
     enabled: !!id,
+    refetchInterval: settlement === 'checking' && settlementAttempts < SETTLEMENT_ATTEMPT_LIMIT
+      ? SETTLEMENT_POLL_MS
+      : false,
   });
+
+  const paymentState: string = booking?.payment?.status ?? 'UNPAID';
+  const paymentSettled = mayClaimPaymentReceived(paymentState);
+  const settlementState = settlementView({
+    returned: settlement === 'checking' ? 'success' : settlement === 'cancelled' ? 'cancelled' : null,
+    recorded: booking?.payment?.status,
+    attempts: settlementAttempts,
+    attemptLimit: SETTLEMENT_ATTEMPT_LIMIT,
+  });
+
+  useEffect(() => {
+    if (settlement !== 'checking') return;
+    if (paymentSettled) {
+      // Server-confirmed, so it can now be said out loud — and only about the
+      // payment. Whether the booking is confirmed is the booking's to report.
+      toast.success(paymentState === 'PAID' ? 'Payment received' : 'Partial payment received');
+      setSettlement('idle');
+      setSettlementAttempts(0);
+      return;
+    }
+    if (settlementAttempts >= SETTLEMENT_ATTEMPT_LIMIT) return;
+    const timer = setTimeout(() => setSettlementAttempts(n => n + 1), SETTLEMENT_POLL_MS);
+    return () => clearTimeout(timer);
+  }, [settlement, paymentSettled, settlementAttempts]);
+
+  function recheckSettlement() {
+    setSettlementAttempts(0);
+    setSettlement('checking');
+    qc.invalidateQueries({ queryKey: ['booking', id] });
+  }
 
   const canDeliver = (user?.role === 'ENGINEER' || user?.role === 'STUDIO_ADMIN')
     && ['CONFIRMED','IN_PROGRESS','COMPLETED'].includes(booking?.status ?? '');
@@ -248,6 +294,34 @@ export default function BookingDetailPage() {
       </header>
 
       <main className="max-w-2xl mx-auto px-6 py-10 space-y-6">
+
+        {/* Settlement notice — speaks only for the payment record, never for the
+            booking. The booking's own status sits directly below and says its
+            own piece. */}
+        {settlementState.kind === 'checking' && (
+          <div role="status" className="rounded-xl border border-studio-border bg-studio-surface px-6 py-4 flex items-center gap-3">
+            <span className="h-4 w-4 rounded-full border-2 border-zinc-700 border-t-zinc-300 animate-spin" aria-hidden="true" />
+            <p className="text-sm text-zinc-300">Checking payment status…</p>
+          </div>
+        )}
+        {settlementState.kind === 'unrecorded' && (
+          <div role="status" className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 px-6 py-4">
+            <p className="text-sm text-yellow-200 font-medium">Payment not recorded yet</p>
+            <p className="text-sm text-zinc-400 mt-1">
+              You returned from checkout, but OIANO has not recorded this payment. It can take
+              a moment to settle. Nothing has been charged twice by waiting.
+            </p>
+            <button type="button" onClick={recheckSettlement}
+              className="mt-3 text-sm underline text-yellow-200 bg-transparent border-0 p-0 cursor-pointer">
+              Check again
+            </button>
+          </div>
+        )}
+        {settlementState.kind === 'cancelled' && (
+          <div role="status" className="rounded-xl border border-studio-border bg-studio-surface px-6 py-4">
+            <p className="text-sm text-zinc-300">Checkout was cancelled — no payment was taken.</p>
+          </div>
+        )}
 
         {/* Status */}
         <div className={`rounded-xl border px-6 py-5 animate-surface ${STATUS_TAILWIND[booking.status as BookingStatus] ?? 'border-studio-border'}`}>

@@ -205,7 +205,7 @@ export default function DashboardPage() {
   // Auto-redirect new artists who haven't completed onboarding
   // Trigger: ARTIST role + no bio + profile_strength is 0 or undefined
   const toast = useToast();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [editOpen, setEditOpen] = useState(false);
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [topUpAmount, setTopUpAmount] = useState<number | ''>(100);
@@ -217,17 +217,28 @@ export default function DashboardPage() {
     return () => document.body.classList.remove('artist-dashboard');
   }, []);
 
-  // Show toast if returning from Stripe top-up
+  // Returning from a Stripe top-up.
+  //
+  // The redirect carried an `amount` parameter and this used to announce it as
+  // money added. Both halves were wrong: the browser cannot witness a payment,
+  // and the figure was attacker-controllable, so any crafted link could claim any
+  // sum had landed. Returning now only refreshes the wallet; the balance rendered
+  // below comes from context, which reads the ledger, and that is the only thing
+  // permitted to state a number. The parameters are cleared so a reload does not
+  // replay the notice.
   useEffect(() => {
     const status = searchParams.get('topup');
-    const amount = searchParams.get('amount');
-    if (status === 'success' && amount) {
-      toast.success(`$${amount} added to your wallet!`);
+    if (status !== 'success' && status !== 'cancelled') return;
+    if (status === 'success') {
+      toast.info('Checking your wallet…');
       qc.invalidateQueries({ queryKey: ['me'] });
       qc.invalidateQueries({ queryKey: ['wallet'] });
+      qc.invalidateQueries({ queryKey: ['context'] });
+    } else {
+      toast.info('Top-up cancelled — no payment was taken.');
     }
-    if (status === 'cancelled') toast.error('Top-up cancelled');
-  }, []);
+    setSearchParams({}, { replace: true });
+  }, [searchParams]);
 
   // Latest studio announcement — dismissed per-session via state
   const [announcementDismissed, setAnnouncementDismissed] = useState<string | null>(null);
