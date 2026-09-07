@@ -2,6 +2,51 @@
 
 **Date:** 2026-09-07 · **Commit audited:** `61633df` · **Scope:** `apps/web` (50 pages, 47 components, 55 routes)
 **Status:** Audit only. No code was modified to produce this document.
+**Revised:** 2026-09-07, after a concurrent audit caught six false findings. See Corrections.
+
+---
+
+## Corrections (supersede everything below)
+
+Six findings in the original text are **wrong**, including three of five P0s. They are
+retracted here and struck in place. The corrected P0 list is in W2.
+
+**Root cause, single and nameable:** every CSS query in the original audit was scoped
+`--include=*.css`. Section V2 of this same document records that **24 files inject CSS
+through `<style>` blocks in TSX**. The audit identified the trap and then ran its own
+queries straight into it. A second error compounded it: `grep -c` counts *lines*
+containing a match, and grouped selectors were read as narrow rules when they were
+global ones.
+
+| # | Original claim | Actual | Status |
+|---|---|---|---|
+| 1 | Identity renders on exactly one page (`EnterPage`) — "no room, only doors" | `OianoBrand.tsx` is imported by **19 files**, including `PublicPassportPage:36` and `ReceiptPage`. The audit enumerated four candidate components and treated their absence as the concept's absence, never grepping for a shared brand component. | **RETRACTED** |
+| 2 | Zero `@media print` rules against 7 print call sites | **Four** print blocks exist — `PassportPage:434`, `PublicPassportPage:33`, `ReceiptPage:57`, `RunsheetPage:458`. `PublicPassportPage` sets `print-color-adjust: exact` and hides action buttons: a deliberate dark-print design, not an oversight. | **RETRACTED** |
+| 3 | Two `focus-visible` rules, one ARTIST-only; four of five roles under-served | `index.css:228` is **global**: `:where(a, button, input, textarea, select, summary, [tabindex]):focus-visible { outline: 2px solid … !important }`. One line, seven element types, all roles — and the `!important` beats the 24 `outline: none` declarations. | **RETRACTED** |
+| 4 | 76 keyframes against only 10 files honouring reduced motion | `index.css:233` carries a **global** guard: `*, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important }`. Being `!important` in a stylesheet, it also overrides the 65 inline `animation:` declarations the audit called structurally exempt. | **RETRACTED** |
+| 5 | `--surface` is `#141414`; red `#d94a4a` fails AA on surface | `--surface` is **`#111111`** (the audit took `#141414` from `CLAUDE.md` instead of `index.css`). Against the real token both reds pass: `#d94a4a` 4.52, `#ef4444` 5.02. The two-reds problem is **consistency, not accessibility**. | **CORRECTED** |
+| 6 | Token adoption 72 references / 3.3% | A concurrent scan counts **155** references (the audit counted `var(--` in TSX only, excluding CSS). Still low against 2,094 literals — but understated by roughly half. | **CORRECTED** |
+
+**What survives, re-verified against the real token `#111111`:**
+
+- **Contrast (P0-1).** `text-zinc-600` `#52525b` = **2.44:1**, used **225×**; `text-zinc-500`
+  `#71717a` = **3.91:1**, used **185×**; `#666666` = 3.29:1, 38×. **410 uses below AA**, unchanged.
+- **The passport's demoted text (P0-3, narrowed).** The brand lockup is `OianoBrand` and is
+  fine. But `PublicPassportPage:37` still sets the passport code at `text-[10px]
+  text-zinc-600` (2.44:1), and line 70 sets the sentence asserting the work was verified —
+  *"OIANO-ISSUED CREATIVE PASSPORT · STUDIO ACTIVITY VERIFIED FROM OIANO RECORDS"* — at
+  `text-zinc-700` = **1.81:1**. The claim about the mark was wrong; the claim about the
+  evidence text stands.
+- **332 distinct hex values, 213 singletons** — independently confirmed by the concurrent audit.
+- **Five styling systems** (§A), **53 private CSS namespaces** and **24 `<style>` injections**
+  (§V1/V2). This finding is *strengthened*: it is what caused the six errors above.
+- **Density** (§J): 400 of ~470 inline font sizes at ≤12px, 73 at 8–9px.
+- **`data-account-family` has zero CSS consumers** (§T2) — undisputed, and still the
+  highest-leverage item in the audit.
+- **No light mode** (§L3); **no i18n library against 29 `'en-US'`** (§R).
+
+The rest of the document is left as written, with the retracted sections struck in place,
+so the error is legible rather than quietly edited away.
 
 ---
 
@@ -9,8 +54,9 @@
 
 OIANO's design system is a **document, not a product**. Twenty-one CSS custom
 properties are defined in `index.css` and reproduced in `CLAUDE.md` as "design
-tokens." The rendered application uses them **72 times**, against **2,094 raw hex
-literals** in TSX — **3.3% adoption**. There are **332 distinct six-digit hex
+tokens." The rendered application uses them **155 times** *(corrected from 72 — the
+original count excluded CSS files)*, against **2,094 raw hex literals** — roughly
+**7% adoption**. There are **332 distinct six-digit hex
 values** in the frontend; **213 of them appear exactly once**.
 
 That single ratio explains almost every other finding below. When there is no
@@ -53,18 +99,18 @@ substrate. The file is not the problem; it is the diagnosis.
 
 **The three findings that matter most, in order:**
 
-1. **The product has no room, only doors.** OIANO's entire visual identity —
-   the wordmark, the ringed-planet glyph, the signature universe, the rotating
-   African market inlay — renders on exactly **one page**: `EnterPage`, the login
-   screen. Once a creator is inside, there is no identity at all. Serious creative
-   work cannot live in a place that only introduces itself at the threshold.
-2. **The passport cannot be shown to anyone.** `PublicPassportPage` is the one
-   artefact a creator sends to a label, a manager, or a festival. Its OIANO brand
-   mark is set at **10px in `text-zinc-600` — 2.56:1 contrast**, less than half the
-   WCAG AA floor. Its "SAVE EPK" button calls `window.print()`, and the codebase
-   contains **zero `@media print` rules** across **seven** `window.print()` call
-   sites. The document a creator uses to prove their career is hard to read on
-   screen and broken on paper.
+1. ~~**The product has no room, only doors.**~~ **RETRACTED — see Corrections #1.**
+   `OianoBrand` is imported by 19 files including the public passport and receipt.
+   The audit enumerated four candidate components and mistook their absence for the
+   concept's absence.
+2. **The passport's evidence text is the least legible thing on it.** *(Narrowed —
+   see Corrections #2 and #3; the print and brand-mark halves of this finding are
+   retracted.)* `PublicPassportPage` is the one artefact a creator sends to a label,
+   a manager, or a festival. Its brand lockup is fine. But the passport code sits at
+   `text-[10px] text-zinc-600` (**2.44:1**), and the sentence asserting the work was
+   verified — *"STUDIO ACTIVITY VERIFIED FROM OIANO RECORDS"* — is set in
+   `text-zinc-700` at **1.81:1**, the lowest-contrast text on the page. The claim the
+   document exists to make is the hardest part of it to read.
 3. **The product speaks in telemetry, not in craft.** Roughly 400 of ~470 inline
    font sizes are **12px or smaller** (119 at 10px, 61 at 9px, 12 at 8px), with
    **271** uppercase transforms and **139** letter-spacing declarations. That is the
@@ -85,17 +131,17 @@ cited so it can be checked or refuted.
 
 | Measurement | What was counted | Result |
 |---|---|---|
-| Token adoption | `var(--` vs `#rrggbb` in `src/**/*.tsx` | 72 vs 2,094 |
+| Token adoption | `var(--` vs `#rrggbb` (corrected to include CSS) | **155** vs 2,094 |
 | Colour drift | distinct 6-digit hex values | 332 distinct, 213 singletons |
 | Styling mode | `style={{` vs `className=` | 1,378 vs 2,706 |
 | Type scale | distinct inline `fontSize` values | 44 |
 | Spacing scale | distinct inline `padding` strings | 138 |
 | Radius scale | distinct inline `borderRadius` integers | 16 |
-| Focus | `focus-visible` rules | 2 (one ARTIST-only) |
+| ~~Focus~~ | ~~`focus-visible` rules~~ | ~~2~~ — **miscounted; one is global** |
 | Focus suppression | `outline: none` | 24 |
-| Motion | `@keyframes` vs files honouring reduced motion | 76 vs 10 |
+| Motion | `@keyframes` vs reduced-motion guard | 76 vs **1 global guard** *(corrected)* |
 | Localization | `'en-US'` literals · i18n dependency | 29 · none |
-| Print | `window.print()` call sites vs `@media print` rules | 7 vs 0 |
+| Print | `window.print()` call sites vs `@media print` blocks | 7 vs **4** *(corrected)* |
 | Shell adoption | pages importing a shared shell | 11 of 50 |
 | CSS namespaces | distinct `.prefix-` families in `index.css` | 53 |
 | Injected stylesheets | files rendering a `<style>` element | 24 |
@@ -395,7 +441,7 @@ that a raised card may not contain another raised card. Two radii plus a pill.
 | `#5a9bcb` | 147 | primary blue (= `--dome`) |
 | `#c9a84c` | 138 | gold (= `--gold`) |
 | `#1e1e1e` | 65 | border |
-| `#141414` | 55 | surface |
+| `#141414` | 55 | *undeclared* — the real `--surface` is `#111111` (Corrections #5) |
 | `#2a2a2a` | 45 | muted |
 | `#1a1a1a` | 44 | *undeclared* near-black |
 | `#0a0a0a` | 38 | page background |
@@ -485,7 +531,9 @@ correct and cheap to finish.
 
 ## O. Motion
 
-**O1 — 76 `@keyframes` against 10 files honouring `prefers-reduced-motion`.** The
+**O1 — ~~76 `@keyframes` against 10 files honouring `prefers-reduced-motion`~~ RETRACTED (Corrections #4).** `index.css:233` carries a global `*, *::before, *::after` guard with `!important`, which also overrides the 65 inline `animation:` declarations. The original text follows, struck:
+
+> ~~76 `@keyframes` against 10 files honouring `prefers-reduced-motion`.~~ The
 route-transition system (`page-enter`, `artist-route-enter`, `artist-content-reveal`,
 `artist-image-reveal`, plus staggered `nth-child` delays at
 `artist-experience.css:102-105`) animates on every navigation. Users who have asked
@@ -536,7 +584,7 @@ genuinely thoughtful piece of inclusive design. It is unwired (C2).
 This section states conformance failures, not preferences. Ratios computed against
 the three page backgrounds in use.
 
-**Q1 — 410 uses of text colours that fail AA for normal text. (Fails 1.4.3.)**
+**Q1 — 410 uses of text colours that fail AA for normal text. (Fails 1.4.3.) — STANDS.** Ratios below were computed against `#141414`; against the real `--surface` `#111111` they are marginally worse (zinc-600 2.44, zinc-500 3.91), except the two reds, which both **pass** (Corrections #5).
 
 | Colour | Uses | on `#0a0a0a` | on `#141414` | AA normal (4.5:1) |
 |---|---|---|---|---|
@@ -561,8 +609,9 @@ Passing, for reference: `#5a9bcb` (6.13), `#c9a84c` (8.06), `#1d9e75` (5.44),
 entirely in the demoted-text tier**, which is exactly what section I predicted:
 dimming is the only hierarchy tool available, so it gets over-used past the floor.
 
-**Q2 — focus is suppressed 24 times and restored twice. (Fails 2.4.7, and 2.4.11
-Focus Not Obscured in 2.2.)** `outline: none` appears 24 times. There are exactly two
+**Q2 — ~~focus is suppressed 24 times and restored twice~~ RETRACTED (Corrections #3).** `index.css:228` is a global `:where(...)` focus rule with `!important` covering seven element types for all roles, and it beats the 24 `outline: none` declarations. Original text struck:
+
+> ~~Focus is suppressed 24 times and restored twice.~~ `outline: none` appears 24 times. There are exactly two
 `focus-visible` rules in the entire product: one in `index.css`, one at
 `artist-experience.css:147` — and the second only applies inside `.artist-experience`,
 i.e. **only for ARTIST users**. A keyboard user in the STUDIO_ADMIN, ENGINEER,
@@ -681,7 +730,7 @@ a record label. OIANO's stated purpose is verified creative work; the passport i
 verification made visible; and it receives less design attention than any operational
 screen in the product.
 
-**U2 — the OIANO mark on the public passport fails contrast by a factor of ~1.8.**
+**U2 — the passport's *evidence text* fails contrast** *(narrowed; the mark itself is `OianoBrand` and is fine — Corrections #1).*
 `PublicPassportPage.tsx:37`:
 
     <span className="font-mono text-[10px] text-zinc-600 tracking-[.15em]">
@@ -693,7 +742,9 @@ one page where a stranger encounters it, is nearly invisible — and the sentenc
 asserting that the work was verified from OIANO records is the least legible text on
 the page.
 
-**U3 — "SAVE EPK" produces a broken document.** Seven `window.print()` call sites
+**U3 — ~~"SAVE EPK" produces a broken document"~~ RETRACTED (Corrections #2).** Four `@media print` blocks exist, in `PassportPage`, `PublicPassportPage`, `ReceiptPage` and `RunsheetPage`. `PublicPassportPage:33` deliberately sets `print-color-adjust: exact` and hides the action buttons. Original text struck:
+
+> ~~Seven print call sites and zero @media print rules.~~ Seven `window.print()` call sites
 (`PassportPage` ×3, `PublicPassportPage`, `ReceiptPage` ×2 — one auto-firing after
 600ms — `RunsheetPage`), and **zero `@media print` rules** anywhere in
 `src/**/*.css`. Printing a `#0a0a0a` page yields either an ink-flooded black sheet
@@ -782,16 +833,22 @@ are parsed repeatedly across a session.
 
 ### W2 — Prioritised backlog
 
-**P0 — conformance and the outward artefact** *(the product is currently broken for
-keyboard users, low-vision users, and anyone the passport is sent to)*
+**P0 — conformance and the outward artefact** *(revised after Corrections; three of
+the original five P0s were false and are struck)*
 
 | # | Finding | Where | Fix |
 |---|---|---|---|
-| P0-1 | 410 uses of sub-4.5:1 text (Q1) | tree-wide | Retire `text-zinc-600`/`zinc-500` as text; two approved text tones |
-| P0-2 | Focus suppressed 24×, restored twice, one ARTIST-only (Q2) | tree-wide | Global `:focus-visible` in `index.css`, before any role scoping |
-| P0-3 | Public passport mark at 2.56:1/10px (U2) | `PublicPassportPage.tsx:37,70` | Raise size and tone |
-| P0-4 | 7 print call sites, 0 print rules (U3) | all `.css` | One `@media print` sheet: light ground, dark ink, hide chrome |
-| P0-5 | Two reds, one failing (L1/Q1) | tree-wide | Standardise on `#ef4444` |
+| P0-1 | **410 uses of sub-4.5:1 text** (Q1) — zinc-600 at 2.44:1 ×225, zinc-500 at 3.91:1 ×185, `#666` at 3.29:1 ×38 | tree-wide | Retire `text-zinc-600`/`zinc-500` as *text* colours; two approved text tones |
+| P0-2 | **The passport's evidence text is its least legible element** (U2) — code at 2.44:1/10px, verification sentence at **1.81:1** | `PublicPassportPage.tsx:37,70` | Raise size and tone on the two lines that carry the claim |
+| ~~P0-3~~ | ~~Focus suppressed, one ARTIST-only~~ | — | **RETRACTED** — global rule exists at `index.css:228` |
+| ~~P0-4~~ | ~~7 print call sites, 0 print rules~~ | — | **RETRACTED** — four `@media print` blocks exist |
+| ~~P0-5~~ | ~~Two reds, one failing AA~~ | — | **DOWNGRADED to P2** — both pass on `#111111`; a consistency issue, not a conformance one |
+
+**Two P0s, not five.** The accessibility floor the original audit reported as missing
+is largely in place: a global focus ring, a global reduced-motion guard, and print
+stylesheets on four of five printing surfaces. What remains is real but narrower —
+demoted-text contrast, and the fact that the passport's own claim is the hardest
+sentence on it to read.
 
 **P1 — the environment itself**
 
@@ -802,7 +859,7 @@ keyboard users, low-vision users, and anyone the passport is sent to)*
 | P1-3 | 44 font sizes, 400 uses ≤12px (J1) | tree-wide | 7-step scale, 15px body |
 | P1-4 | 24 gaps / 16 radii / 138 paddings (G1) | tree-wide | 6-step space, 3-step radius |
 | P1-5 | `data-account-family` has no CSS (T2) | `artist-experience.css` | Re-key role rules onto the attribute; extend to 5 roles |
-| P1-6 | 76 keyframes, 10 guarded (O1) | `index.css` | One global reduced-motion guard |
+| ~~P1-6~~ | ~~76 keyframes, 10 guarded~~ | — | **RETRACTED** — the global guard already exists at `index.css:233` |
 | P1-7 | 8 near-blacks, 2 blues (L1) | tree-wide | 3 surfaces, 1 border, 4 accents |
 | P1-8 | Identity absent past login (C1) | public surfaces | Mark on passport, studio page, receipt, print |
 | P1-9 | 53 private CSS namespaces (V1) | `index.css`, `PassportPage.tsx` | Fold into primitives, namespace by namespace |
@@ -864,8 +921,8 @@ right *second* operational surface, not the first.
 | Sub-4.5:1 text uses on the five surfaces | **51** | **0** |
 | — of which `ArtistProjectsPage` | 33 | 0 |
 | — of which `PublicPassportPage` | 15 | 0 |
-| `focus-visible` rules | 2 (one role-scoped) | 1 global + role extensions |
-| `@media print` rules | 0 | ≥1, verified on the EPK |
+| ~~`focus-visible` rules~~ | ~~2 (one role-scoped)~~ | **retracted — already global** |
+| ~~`@media print` rules~~ | ~~0~~ | **retracted — four already exist** |
 | Distinct font sizes across the five surfaces | **21** | ≤7 |
 | Pages using a shared shell | 11 / 50 | 16 / 50 |
 | Private CSS namespaces retired (`.pp-`, `.rs-`) | 0 of 53 | 2 of 53 |
