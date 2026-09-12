@@ -1,4 +1,5 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, type SessionLog } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import { prisma } from './prisma';
 
 type Db = Prisma.TransactionClient | typeof prisma;
@@ -60,13 +61,16 @@ export async function appendSessionLogNote(
   line: string,
   db: Db = prisma,
 ) {
-  const existing = await db.sessionLog.findUnique({
-    where: { booking_id: booking.id },
-    select: { notes: true },
-  });
-  return upsertSessionLog(
-    booking,
-    { notes: existing?.notes ? `${existing.notes}\n${line}` : line },
-    db,
-  );
+  // Read/concatenate/write loses a line when two callers read the same notes.
+  // ON CONFLICT locks the row and appends to its current value. Keep this in
+  // the session domain, and use the caller's transaction when one is supplied.
+  const [log] = await db.$queryRaw<SessionLog[]>`
+    INSERT INTO session_logs (id, booking_id, artist_id, started_at, notes, tracks_worked, testimonial_public)
+    VALUES (${randomUUID()}, ${booking.id}, ${booking.artist_id}, ${booking.starts_at.toISOString()}::timestamp, ${line}, ARRAY[]::text[], false)
+    ON CONFLICT (booking_id) DO UPDATE SET notes =
+      CASE WHEN session_logs.notes IS NULL OR session_logs.notes = '' THEN EXCLUDED.notes
+           ELSE session_logs.notes || E'\n' || EXCLUDED.notes END
+    RETURNING *
+  `;
+  return log;
 }

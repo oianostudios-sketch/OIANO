@@ -13,6 +13,11 @@ import { resolveStaffStudio } from '../middleware/studioScope.middleware';
 
 const MAX_UPLOAD_BYTES = 200 * 1024 * 1024; // matches the multer route's existing cap
 
+const UploadMetadataSchema = z.object({
+  folder: z.string().trim().max(255).optional(),
+  source: z.string().trim().max(255).optional(),
+});
+
 const ALLOWED_PRIVATE_MIME = /^(audio\/|video\/|image\/(?!svg\+xml$)|application\/(pdf|zip|octet-stream)$)/i;
 
 async function assertArtistFileAccess(artistId: string, userId: string, userRole: string, mode: 'manage' | 'read') {
@@ -105,8 +110,9 @@ filesRouter.post('/:id/files', authenticate, async (req: Request, res: Response,
       const reqFile = (req as any).file;
       if (!reqFile) throw new AppError('No file provided', 400);
 
-      const folder = (req.body?.folder as string | undefined)?.trim() || null;
-      const source = (req.body?.source as string | undefined)?.trim() || null;
+      const metadata = UploadMetadataSchema.parse(req.body);
+      const folder = metadata.folder || null;
+      const source = metadata.source || null;
 
       let publicUrl: string;
 

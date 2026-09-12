@@ -46,4 +46,4 @@ function run(command, args) {
 }
 
 run(process.execPath, [require.resolve('prisma/build/index.js'), 'migrate', 'deploy']);
-run('node', ['-r', 'ts-node/register/transpile-only', '-r', 'tsconfig-paths/register', '--test', 'apps/api/src/integration/platform.integration.test.ts']);
+run('node', ['-r', 'ts-node/register/transpile-only', '-r', 'tsconfig-paths/register', '--test', 'apps/api/src/integration/platform.integration.test.ts', 'apps/api/src/integration/architecture.integration.test.ts']);
