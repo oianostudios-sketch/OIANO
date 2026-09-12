@@ -246,7 +246,7 @@ export async function completeSession(req: Request, res: Response, next: NextFun
       void recordBookingCompleted(booking);
 
       if (booking.project_id) {
-        (prisma as any).project.update({
+        prisma.project.update({
           where: { id: booking.project_id },
           data: { last_session_at: new Date() },
         }).catch(() => {});

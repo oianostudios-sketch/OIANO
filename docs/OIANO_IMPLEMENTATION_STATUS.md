@@ -51,7 +51,7 @@ migration starts until Session 5 reports every gate passed.
 | Session | Status | Deliverable |
 |---|---|---|
 | 1 — Architecture delta | **Done** 2026-09-12 | [Architecture delta](OIANO_ARCHITECTURE_DELTA.md): 58 models classified, 25 contradictions, 10 migration risks |
-| 2 — Migration and type safety | Not started | Prisma manifest alignment, 20 `prisma as any`, dead WebSocket path |
+| 2 — Migration and type safety | **Done** 2026-09-12 | Prisma ranges aligned to the installed 5.22.0; all 20 `prisma as any` removed, hiding no type errors; dead WebSocket client removed (no server existed and it was never configured) |
 | 3 — Invitation and Weave tests | Not started | Expired invitation; Weave idempotency, counts and dates (A08) |
 | 4 — Booking, payment and engineer-scope tests | Not started | Lifecycle, Stripe webhook, engineer scope; A02 and A03 as todo tests |
 | 5 — Stabilization gate | Not started | Eight gates answered yes or no, with evidence |

@@ -2,9 +2,10 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useAuthStore } from '../../store/auth.store';
 
 const API      = import.meta.env.VITE_API_URL    ?? '';
-// WebSocket transport is optional. The API currently exposes the clock over
-// REST, so do not probe a non-existent /ws endpoint unless one is configured.
-const WS_URL   = import.meta.env.VITE_WS_URL as string | undefined;
+// The clock is served over REST and polled. An optional WebSocket client used to
+// sit here for an endpoint that was never built: nothing on the API accepts a
+// WebSocket and VITE_WS_URL was never configured, so it was removed rather than
+// kept as a second transport to maintain.
 const POLL_MS  = 30_000;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -90,7 +91,6 @@ export function useClockData(): {
   data: ClockData | null;
   loading: boolean;
   error: string | null;
-  lastEvent: ClockEventType | null;
   markActivity: (sessionId: string) => Promise<void>;
   setPhase: (sessionId: string, phase: SessionPhase) => Promise<void>;
   logOvertime: (sessionId: string, minutes: number, status?: 'pending_approval' | 'approved' | 'logged') => Promise<void>;
@@ -99,8 +99,6 @@ export function useClockData(): {
   const [data, setData]     = useState<ClockData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]   = useState<string | null>(null);
-  const [lastEvent, setLastEvent] = useState<ClockEventType | null>(null);
-  const wsRef               = useRef<WebSocket | null>(null);
   const pollRef             = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchRest = useCallback(async () => {
@@ -128,65 +126,8 @@ export function useClockData(): {
   }, [fetchRest]);
 
   useEffect(() => {
-    let didCleanup = false;
-
-    if (!WS_URL) {
-      startPolling();
-      return () => {
-        didCleanup = true;
-        if (pollRef.current) clearInterval(pollRef.current);
-        pollRef.current = null;
-      };
-    }
-
-    try {
-      const ws = new WebSocket(WS_URL);
-      wsRef.current = ws;
-
-      const connectTimeout = setTimeout(() => {
-        if (ws.readyState !== WebSocket.OPEN) {
-          console.warn('[Clock] WS connect timeout — falling back to REST polling');
-          ws.close();
-          if (!didCleanup) startPolling();
-        }
-      }, 3_000);
-
-      ws.onopen = () => {
-        clearTimeout(connectTimeout);
-        setLoading(false);
-        console.log('[Clock] WebSocket connected');
-      };
-
-      ws.onmessage = (e) => {
-        try {
-          const msg = JSON.parse(e.data);
-          if (msg.data) {
-            setLastEvent(msg.type);
-            setData(msg.data);
-            setError(null);
-            setLoading(false);
-          }
-        } catch {
-          console.error('[Clock] WS message parse error');
-        }
-      };
-
-      ws.onerror = () => {
-        clearTimeout(connectTimeout);
-        console.warn('[Clock] WS error — falling back to REST polling');
-        if (!didCleanup) startPolling();
-      };
-
-      ws.onclose = () => {
-        wsRef.current = null;
-      };
-    } catch {
-      startPolling();
-    }
-
+    startPolling();
     return () => {
-      didCleanup = true;
-      wsRef.current?.close();
       if (pollRef.current) clearInterval(pollRef.current);
       pollRef.current = null;
     };
@@ -222,5 +163,5 @@ export function useClockData(): {
     await fetchRest();
   }, [fetchRest, token]);
 
-  return { data, loading, error, lastEvent, markActivity, setPhase, logOvertime };
+  return { data, loading, error, markActivity, setPhase, logOvertime };
 }

@@ -40,7 +40,7 @@ creditRequestRouter.post('/credit-request', async (req, res, next) => {
 // Artist-facing read endpoint. Posting announcements remains admin-only.
 creditRequestRouter.get('/announcements', async (req, res, next) => {
   try {
-    const db = prisma as any;
+    const db = prisma;
     const artist = await prisma.artist.findUnique({ where: { user_id: (req as any).userId } });
     if (!artist) throw new AppError('Artist not found', 404);
     const studioId = typeof req.query.studio_id === 'string'
@@ -388,7 +388,7 @@ adminRouter.post('/walkin', async (req, res, next) => {
 // ── GET /api/admin/credit-requests — pending credit requests ─────────────────
 adminRouter.get('/credit-requests', async (req, res, next) => {
   try {
-    const db = prisma as any;
+    const db = prisma;
     // credit_request transactions with amount 0 — join wallet → artist
     const requests = await db.walletTransaction.findMany({
       where: {
@@ -421,7 +421,7 @@ adminRouter.get('/credit-requests', async (req, res, next) => {
 // ── POST /api/admin/announcements — post a studio-wide message ────────────────
 adminRouter.post('/announcements', requireRole('STUDIO_ADMIN'), async (req: any, res, next) => {
   try {
-    const db = prisma as any;
+    const db = prisma;
     const { title, body } = z.object({
       title: z.string().min(1).max(120),
       body:  z.string().min(1).max(500),
@@ -443,7 +443,7 @@ adminRouter.post('/announcements', requireRole('STUDIO_ADMIN'), async (req: any,
 // ── GET /api/admin/announcements — last 10 announcements ─────────────────────
 adminRouter.get('/announcements', async (req, res, next) => {
   try {
-    const db = prisma as any;
+    const db = prisma;
     const studio = (req as any).studio;
 
     const announcements = await db.studioAnnouncement.findMany({

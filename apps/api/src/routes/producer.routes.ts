@@ -18,7 +18,7 @@ export const producerRouter = Router();
 producerRouter.use(authenticate);
 producerRouter.use(auditSuccessfulMutation);
 
-const db = prisma as any; // cast until prisma generate runs with new schema
+const db = prisma;
 
 // ── GET /api/producer/me — producer profile + projects ───────────────────────
 producerRouter.get('/me', requireRole('PRODUCER'), async (req: any, res, next) => {

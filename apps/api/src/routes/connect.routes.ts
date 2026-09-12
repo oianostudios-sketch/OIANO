@@ -9,7 +9,7 @@ export const connectRouter = Router();
 
 // Helper: get artistId from userId
 async function getArtistId(userId: string): Promise<string> {
-  const artist = await (prisma as any).artist.findUnique({
+  const artist = await prisma.artist.findUnique({
     where: { user_id: userId },
     select: { id: true },
   });
@@ -22,7 +22,7 @@ connectRouter.get('/', requireAuth, async (req, res, next) => {
   try {
     const myArtistId = await getArtistId((req as any).userId!);
 
-    const connections = await (prisma as any).passportConnection.findMany({
+    const connections = await prisma.passportConnection.findMany({
       where: {
         OR: [
           { initiator_id: myArtistId },
@@ -62,7 +62,7 @@ connectRouter.post('/', requireAuth, async (req, res, next) => {
     }
 
     // Upsert — find existing in either direction
-    let connection = await (prisma as any).passportConnection.findFirst({
+    let connection = await prisma.passportConnection.findFirst({
       where: {
         OR: [
           { initiator_id: myArtistId, recipient_id: recipientId },
@@ -72,7 +72,7 @@ connectRouter.post('/', requireAuth, async (req, res, next) => {
     });
 
     if (!connection) {
-      connection = await (prisma as any).passportConnection.create({
+      connection = await prisma.passportConnection.create({
         data: {
           initiator_id: myArtistId,
           recipient_id: recipientId,
@@ -83,7 +83,7 @@ connectRouter.post('/', requireAuth, async (req, res, next) => {
 
     // If first message provided, create it
     if (message) {
-      await (prisma as any).connectMessage.create({
+      await prisma.connectMessage.create({
         data: {
           connection_id: connection.id,
           sender_id: myArtistId,
@@ -92,11 +92,11 @@ connectRouter.post('/', requireAuth, async (req, res, next) => {
       });
 
       // Notify recipient
-      const sender = await (prisma as any).artist.findUnique({
+      const sender = await prisma.artist.findUnique({
         where: { id: myArtistId },
         include: { user: { select: { id: true } } },
       });
-      const recipientUser = await (prisma as any).artist.findUnique({
+      const recipientUser = await prisma.artist.findUnique({
         where: { id: recipientId },
         include: { user: { select: { id: true } } },
       });
@@ -123,7 +123,7 @@ connectRouter.get('/:id', requireAuth, async (req, res, next) => {
   try {
     const myArtistId = await getArtistId((req as any).userId!);
 
-    const connection = await (prisma as any).passportConnection.findFirst({
+    const connection = await prisma.passportConnection.findFirst({
       where: {
         id: req.params.id,
         OR: [
@@ -158,7 +158,7 @@ connectRouter.post('/:id/messages', requireAuth, async (req, res, next) => {
     const { body } = MessageSchema.parse(req.body);
     const myArtistId = await getArtistId((req as any).userId!);
 
-    const connection = await (prisma as any).passportConnection.findFirst({
+    const connection = await prisma.passportConnection.findFirst({
       where: {
         id: req.params.id,
         OR: [
@@ -174,7 +174,7 @@ connectRouter.post('/:id/messages', requireAuth, async (req, res, next) => {
 
     if (!connection) throw new AppError('Connection not found', 404);
 
-    const message = await (prisma as any).connectMessage.create({
+    const message = await prisma.connectMessage.create({
       data: {
         connection_id: connection.id,
         sender_id: myArtistId,
@@ -187,7 +187,7 @@ connectRouter.post('/:id/messages', requireAuth, async (req, res, next) => {
 
     // Auto-accept on first reply if still PENDING
     if (connection.status === 'PENDING' && myArtistId !== connection.initiator_id) {
-      await (prisma as any).passportConnection.update({
+      await prisma.passportConnection.update({
         where: { id: connection.id },
         data: { status: 'ACCEPTED' },
       });
@@ -222,13 +222,13 @@ connectRouter.patch('/:id/status', requireAuth, async (req, res, next) => {
     const { status } = StatusSchema.parse(req.body);
     const myArtistId = await getArtistId((req as any).userId!);
 
-    const connection = await (prisma as any).passportConnection.findFirst({
+    const connection = await prisma.passportConnection.findFirst({
       where: { id: req.params.id, recipient_id: myArtistId },
     });
 
     if (!connection) throw new AppError('Connection not found', 404);
 
-    const updated = await (prisma as any).passportConnection.update({
+    const updated = await prisma.passportConnection.update({
       where: { id: req.params.id },
       data: { status },
     });

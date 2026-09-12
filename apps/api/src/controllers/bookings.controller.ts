@@ -527,9 +527,9 @@ export async function updateBookingStatus(req: Request, res: Response, next: Nex
     }
 
     // On COMPLETED — update project's last_session_at if booking is tied to one
-    if (status === 'COMPLETED' && (existing as any).project_id) {
-      (prisma as any).project.update({
-        where: { id: (existing as any).project_id },
+    if (status === 'COMPLETED' && existing.project_id) {
+      prisma.project.update({
+        where: { id: existing.project_id },
         data:  { last_session_at: new Date() },
       }).catch(() => {});
     }
