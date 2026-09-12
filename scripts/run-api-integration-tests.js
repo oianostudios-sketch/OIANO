@@ -46,4 +46,13 @@ function run(command, args) {
 }
 
 run(process.execPath, [require.resolve('prisma/build/index.js'), 'migrate', 'deploy']);
-run('node', ['-r', 'ts-node/register/transpile-only', '-r', 'tsconfig-paths/register', '--test', 'apps/api/src/integration/platform.integration.test.ts', 'apps/api/src/integration/architecture.integration.test.ts']);
+// Integration files share one database, so they run one at a time. In parallel,
+// the Weave backfill test would sync other files' completed bookings while those
+// files are still asserting on them.
+run('node', [
+  '-r', 'ts-node/register/transpile-only', '-r', 'tsconfig-paths/register',
+  '--test', '--test-concurrency=1',
+  'apps/api/src/integration/platform.integration.test.ts',
+  'apps/api/src/integration/architecture.integration.test.ts',
+  'apps/api/src/integration/weave-invitations.integration.test.ts',
+]);

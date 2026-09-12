@@ -2,42 +2,25 @@
 // Run once against any environment adopting the Oiano Weave foundation:
 //   npx ts-node -r tsconfig-paths/register prisma/backfill-weave.ts
 //
-// Two passes, both idempotent (safe to re-run):
-//   1. A WeaveNode for every existing Artist and Studio, regardless of
-//      booking history — a Node's existence must not depend on activity
-//      (the brief's "floating node" principle: an artist with zero studio
-//      relationships is still a full, independent Node).
-//   2. A RECORDED_AT WeaveConnection + evidence for every historical
-//      COMPLETED booking, via the exact same syncConnectionFromBooking()
-//      used going forward — one code path for "backfill" and "live sync",
-//      not two implementations that can drift apart.
+// Idempotent, so safe to re-run. The logic lives in
+// apps/api/src/lib/weave/backfill.ts, where its idempotency is tested; this file
+// is only the command-line entry point.
+//
+//   1. A WeaveNode for every existing Artist and Studio, regardless of booking
+//      history (the "floating node" principle).
+//   2. A RECORDED_AT WeaveConnection and evidence for every historical COMPLETED
+//      booking, via the same syncConnectionFromBooking() used going forward.
 import { PrismaClient } from '@prisma/client';
-import { ensureNodeExists, syncConnectionFromBooking } from '../apps/api/src/lib/weave/sync';
+import { backfillWeave } from '../apps/api/src/lib/weave/backfill';
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log('Oiano Weave backfill starting...');
 
-  const [artists, studios] = await Promise.all([
-    prisma.artist.findMany({ select: { id: true } }),
-    prisma.studio.findMany({ select: { id: true } }),
-  ]);
-  for (const artist of artists) await ensureNodeExists('ARTIST', artist.id);
-  for (const studio of studios) await ensureNodeExists('STUDIO', studio.id);
-  console.log(`Nodes ensured: ${artists.length} artists, ${studios.length} studios.`);
-
-  const completedBookings = await prisma.booking.findMany({
-    where: { status: 'COMPLETED' },
-    select: { id: true },
-    orderBy: { starts_at: 'asc' },
-  });
-  let synced = 0;
-  for (const booking of completedBookings) {
-    await syncConnectionFromBooking(booking.id);
-    synced += 1;
-  }
-  console.log(`Connections synced from ${synced} completed bookings.`);
+  const result = await backfillWeave(prisma);
+  console.log(`Nodes ensured: ${result.artists} artists, ${result.studios} studios.`);
+  console.log(`Connections synced from ${result.completedBookings} completed bookings.`);
 
   const [nodeCount, connectionCount, evidenceCount] = await Promise.all([
     prisma.weaveNode.count(),
