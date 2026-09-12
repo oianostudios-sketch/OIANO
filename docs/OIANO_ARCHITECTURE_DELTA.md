@@ -122,6 +122,8 @@ current code before being cited.
 
 ## 2. Contradiction matrix
 
+**Decided since this was measured.** The [owner decisions of 2026-09-12](OIANO_FROZEN_ARCHITECTURE.md) settle the currency row (decision 1), the single-studio engineer and producer-only project rows (decisions 2 and 3), the missing Agreement step (decision 4) and the architecture audit §15 row (decision 5). The rows below still describe the code as measured.
+
 Ordered by law. No contradiction found for **9** (`ProjectCredit` is confirmed by the credited person; proof is separate), **15** (the AI brief is artist-editable, `routes/passport.routes.ts:471–474`, and not rendered by `web/pages/PublicPassportPage.tsx`) or **16** (no surface tables; `lib/creatorContext.ts` only reads).
 
 | Current reality | Law | Decision | Why |
