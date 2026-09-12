@@ -52,9 +52,26 @@ migration starts until Session 5 reports every gate passed.
 |---|---|---|
 | 1 — Architecture delta | **Done** 2026-09-12 | [Architecture delta](OIANO_ARCHITECTURE_DELTA.md): 58 models classified, 25 contradictions, 10 migration risks |
 | 2 — Migration and type safety | **Done** 2026-09-12 | Prisma ranges aligned to the installed 5.22.0; all 20 `prisma as any` removed, hiding no type errors; dead WebSocket client removed (no server existed and it was never configured) |
-| 3 — Invitation and Weave tests | Not started | Expired invitation; Weave idempotency, counts and dates (A08) |
-| 4 — Booking, payment and engineer-scope tests | Not started | Lifecycle, Stripe webhook, engineer scope; A02 and A03 as todo tests |
+| 3 — Invitation and Weave tests | **Done** 2026-09-13 | Expired invitations are rejected and change nothing; the Weave backfill records exactly one evidence row per completed booking and a second run changes nothing, on real Postgres; A08 confirmed as a todo test. Backfill logic moved into `lib/weave/backfill.ts` so it can be tested |
+| 4 — Booking, payment and engineer-scope tests | **Done** 2026-09-13 | Wallet guard, lifecycle and cross-studio scope, Stripe signature, replay and amount checks; A02 (twice) and A03 confirmed as todo tests. A credential leak found on the way is fixed (below) |
 | 5 — Stabilization gate | Not started | Eight gates answered yes or no, with evidence |
+
+Every new assertion in Sessions 3 and 4 was mutation-checked: the protected code was
+broken in seven runs, each run failed the intended test, and every file was restored
+byte-identical. Integration files now run one at a time, because they share a database.
+
+**Fixed in Session 4 — booking detail leaked credentials.** `GET /api/bookings/:id`
+returned the artist's whole User row, password hash and encrypted MFA secret included,
+and let any producer read any booking by id. That was reachable by anyone: producer
+signup is open, and booking ids are broadcast to every connected client (A01). The
+response now carries only the artist user's `id` and `email`, and a producer reaches a
+booking only through a project they own, on all three booking read endpoints.
+
+**Observed, not changed.** An engineer sees every booking at their own studio, including
+unassigned ones; the test characterises this so narrowing it is a decision, not drift.
+Re-syncing an already-synced booking is verified to change nothing on real Postgres. The
+architecture audit's §7 caution still applies to future edits: a statement added after the
+duplicate-evidence catch in `lib/weave/sync.ts` would run inside an aborted transaction.
 
 **Schema redesign:** designed for review in [schema redesign](OIANO_SCHEMA_REDESIGN.md),
 against the owner decisions of 2026-09-12. No migration is written; implementation

@@ -149,7 +149,9 @@ export async function getBookingById(req: Request, res: Response, next: NextFunc
     const booking = await prisma.booking.findUnique({
       where: { id: req.params.id },
       include: {
-        artist: { include: { user: true } }, studio: true, room: true, engineer: true, service: true, payment: true, session_log: true,
+        // Only what a booking view needs. `user: true` returned the whole User row,
+        // password hash and encrypted MFA secret included.
+        artist: { include: { user: { select: { id: true, email: true } } } }, studio: true, room: true, engineer: true, service: true, payment: true, session_log: true,
         project: { include: {
           producer: { select: { id: true, user_id: true, name: true, alias: true } },
           participants: {
@@ -172,6 +174,12 @@ export async function getBookingById(req: Request, res: Response, next: NextFunc
     if (['STUDIO_ADMIN', 'ENGINEER'].includes(userRole)) {
       const studio = await resolveStaffStudio(userId);
       if (booking.studio_id !== studio.id) throw new AppError('Booking not found', 404);
+    }
+    // A producer reaches a booking only through a project they own, the rule
+    // GET /api/bookings already applies to lists. Without it, any producer
+    // account could read any booking by id.
+    if (userRole === 'PRODUCER' && booking.project?.producer?.user_id !== userId) {
+      throw new AppError('Booking not found', 404);
     }
 
     res.json(booking);
@@ -204,6 +212,7 @@ export async function getBookingNextAction(req: Request, res: Response, next: Ne
         project: {
           select: {
             id: true,
+            producer: { select: { user_id: true } },
             credits: { select: { status: true } },
             rights_agreements: { select: { status: true } },
           },
@@ -219,6 +228,12 @@ export async function getBookingNextAction(req: Request, res: Response, next: Ne
     if (['STUDIO_ADMIN', 'ENGINEER'].includes(userRole)) {
       const studio = await resolveStaffStudio(userId);
       if (booking.studio_id !== studio.id) throw new AppError('Booking not found', 404);
+    }
+    // A producer reaches a booking only through a project they own, the rule
+    // GET /api/bookings already applies to lists. Without it, any producer
+    // account could read any booking by id.
+    if (userRole === 'PRODUCER' && booking.project?.producer?.user_id !== userId) {
+      throw new AppError('Booking not found', 404);
     }
 
     const context = buildNextActionContext({
@@ -268,6 +283,7 @@ export async function getBookingSessionSummary(req: Request, res: Response, next
         project: {
           select: {
             id: true,
+            producer: { select: { user_id: true } },
             credits: { select: { status: true } },
             rights_agreements: { select: { status: true } },
           },
@@ -282,6 +298,12 @@ export async function getBookingSessionSummary(req: Request, res: Response, next
     if (['STUDIO_ADMIN', 'ENGINEER'].includes(userRole)) {
       const studio = await resolveStaffStudio(userId);
       if (booking.studio_id !== studio.id) throw new AppError('Booking not found', 404);
+    }
+    // A producer reaches a booking only through a project they own, the rule
+    // GET /api/bookings already applies to lists. Without it, any producer
+    // account could read any booking by id.
+    if (userRole === 'PRODUCER' && booking.project?.producer?.user_id !== userId) {
+      throw new AppError('Booking not found', 404);
     }
 
     const context = buildSessionSummaryContext({
