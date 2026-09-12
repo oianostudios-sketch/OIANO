@@ -56,6 +56,15 @@ migration starts until Session 5 reports every gate passed.
 | 4 — Booking, payment and engineer-scope tests | Not started | Lifecycle, Stripe webhook, engineer scope; A02 and A03 as todo tests |
 | 5 — Stabilization gate | Not started | Eight gates answered yes or no, with evidence |
 
+**Schema redesign:** designed for review in [schema redesign](OIANO_SCHEMA_REDESIGN.md),
+against the owner decisions of 2026-09-12. No migration is written; implementation
+waits for Session 5.
+
+**Open defect, found while designing money:** studio payouts sum a studio's payable
+across currencies and transfer it in `Studio.currency` (`lib/studioPayout.ts:14–27,60`;
+`routes/payouts.routes.ts:110–113`), while booking payments post as USD. Latent while
+payouts are off; it must be fixed before a studio with a non-USD currency takes a payout.
+
 ## Verification performed for Phase 1
 
 Both typechecks · API security 53/53 · API intelligence 31/31 · web 57/57 ·
