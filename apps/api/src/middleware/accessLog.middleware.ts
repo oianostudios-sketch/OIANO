@@ -8,6 +8,13 @@ import { Request, Response, NextFunction } from 'express';
 // aggregation service, just console lines tailable from Render's log stream
 // for the duration of the event.
 export function accessLog(req: Request, res: Response, next: NextFunction) {
+  // Under NODE_ENV=test every request is a fixture. One line per success was
+  // about 60% of a green integration run's output, burying the assertions a
+  // reader (or an agent paying per token) actually needs. Failures still log
+  // with full detail through error.middleware.ts, including the ones tests
+  // provoke on purpose.
+  if (process.env.NODE_ENV === 'test') return next();
+
   const startedAt = Date.now();
 
   res.on('finish', () => {
