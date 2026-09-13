@@ -5,7 +5,8 @@ import { AppError } from '../lib/errors';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { resolveStaffStudio } from '../middleware/studioScope.middleware';
 import {
-  outstandingPayableUsd,
+  PAYABLE_CURRENCY,
+  studioPayable,
   reserveStudioPayout,
   releaseFailedPayout,
   markPayoutPaid,
@@ -31,16 +32,19 @@ function getStripe() {
 payoutsRouter.get('/balance', requireRole('STUDIO_ADMIN'), async (req: any, res, next) => {
   try {
     const studio = await resolveStaffStudio(req.userId);
-    const [outstanding, pending] = await Promise.all([
-      outstandingPayableUsd(studio.id),
+    const [payable, pending] = await Promise.all([
+      studioPayable(studio.id),
       prisma.studioPayout.count({ where: { studio_id: studio.id, status: 'PENDING' } }),
     ]);
     res.json({
       studio_id: studio.id,
-      currency: studio.currency,
-      outstanding_usd: outstanding,
+      // The currency this balance is owed in, which need not be the currency the
+      // studio prices in (lib/studioPayout.ts).
+      currency: PAYABLE_CURRENCY,
+      outstanding_usd: payable.amountUsd,
       pending_payouts: pending,
-      payouts_enabled: Boolean(studio.stripe_account_id),
+      payouts_enabled: Boolean(studio.stripe_account_id) && payable.otherCurrencies.length === 0,
+      needs_reconciliation: payable.otherCurrencies,
     });
   } catch (error) { next(error); }
 });

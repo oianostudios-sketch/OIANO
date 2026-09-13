@@ -42,6 +42,10 @@ function tierFromAggregates(params: {
  * a roster of 20 doesn't fire 20x the round trips (and exhaust the Prisma
  * connection pool, which is exactly what calling computeArtistTier in a
  * Promise.all per-artist did before this was batched).
+ *
+ * Standing counts only what someone else confirmed about the artist's work
+ * (A07). It used to count the ratings the artist gave their engineers, and
+ * connection requests nobody had accepted.
  */
 export async function computeArtistTiers(artistIds: string[]): Promise<Record<string, ArtistTier | null>> {
   if (artistIds.length === 0) return {};
@@ -55,13 +59,18 @@ export async function computeArtistTiers(artistIds: string[]): Promise<Record<st
       where: { artist_id: { in: artistIds }, status: 'COMPLETED' },
       select: { artist_id: true, engineer_id: true },
     }),
+    // The engineer's rating of the session. artist_rating is the artist's rating
+    // of the engineer, which says nothing about the artist.
     prisma.sessionLog.findMany({
-      where: { artist_id: { in: artistIds }, artist_rating: { not: null } },
-      select: { artist_id: true, artist_rating: true },
+      where: { artist_id: { in: artistIds }, quality_rating: { not: null } },
+      select: { artist_id: true, quality_rating: true },
     }),
+    // Only connections the artist accepted. An unanswered request is interest,
+    // not a relationship.
     prisma.passportConnection.findMany({
       where: {
         recipient_id: { in: artistIds },
+        status: 'ACCEPTED',
         created_at: { gte: new Date(Date.now() - TRADED_WINDOW_DAYS * 24 * 60 * 60 * 1000) },
       },
       select: { recipient_id: true, initiator_id: true },
@@ -76,9 +85,9 @@ export async function computeArtistTiers(artistIds: string[]): Promise<Record<st
   }
   const ratingsById = new Map<string, number[]>();
   for (const s of sessionLogs) {
-    if (s.artist_rating == null) continue;
+    if (s.quality_rating == null) continue;
     if (!ratingsById.has(s.artist_id)) ratingsById.set(s.artist_id, []);
-    ratingsById.get(s.artist_id)!.push(s.artist_rating);
+    ratingsById.get(s.artist_id)!.push(s.quality_rating);
   }
   const initiatorsById = new Map<string, string[]>();
   for (const c of connections) {

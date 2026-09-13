@@ -56,4 +56,5 @@ run('node', [
   'apps/api/src/integration/architecture.integration.test.ts',
   'apps/api/src/integration/weave-invitations.integration.test.ts',
   'apps/api/src/integration/bookings-payments.integration.test.ts',
+  'apps/api/src/integration/stabilization.integration.test.ts',
 ]);
