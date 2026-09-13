@@ -175,6 +175,38 @@ duplicate-evidence catch in `lib/weave/sync.ts` would run inside an aborted tran
   at the same moment, one fails and is logged, and its booking's evidence waits for the
   next backfill.
 
+**Stabilization pass, 2026-09-14 — the base made ready to build.** What gets built next
+is in [build direction](OIANO_BUILD_DIRECTION.md).
+
+- **Announcements.** The fix above, committed on its own branch on 2026-09-13, is now on
+  `main`.
+- **Payouts.** A studio is owed, and paid, in the currency the money was earned in, which
+  is USD today; the payout and its ledger posting no longer take `Studio.currency`. A
+  payable with entries in any other currency is refused until someone reconciles it: its
+  dollar total cannot be trusted, and paying it could pay the same money twice.
+  `GET /api/payouts/balance` reports the payable's currency and anything needing
+  reconciliation.
+- **A04, rights decisions.** A decision is written only while it is still pending, and the
+  agreement row is locked first. Two answers from one holder record one, and holders
+  answering together settle the agreement from every decision.
+- **A07, standing.** An artist's tier counts the ratings engineers gave their sessions, not
+  the ratings the artist gave engineers, and only connections the artist accepted.
+- **A06, passport score.** The stored score is the total of the breakdown the artist reads
+  (`lib/passportScore.ts`), so a delivered project still marked active no longer counts
+  twice.
+- **A09, studio clock.** Only a confirmed session within its time, or one still in
+  progress, is live, so overtime can now be shown. The day runs from the studio's own
+  midnight in its time zone and includes sessions that cross midnight
+  (`lib/studioClock.ts`).
+- **A10.** The project page calls the sum of its sessions' prices "Booked value", not
+  "Revenue".
+- **Evidence.** The integration suite passes all 39 tests on a fresh database, including
+  new ones for announcements, payouts, A04 and A07. Eight new unit tests hold A06 and A09,
+  among them a day the clocks go back and a day they go forward. Eleven defects were put
+  back one at a time, the two A04 races three times each, and every one failed its intended
+  test; every file was restored byte-identical. **Not exercised:** the studio clock and the
+  booked-value label in a browser, and a payout against Stripe.
+
 **Schema redesign:** designed for review in [schema redesign](OIANO_SCHEMA_REDESIGN.md),
 against the owner decisions of 2026-09-12. No migration is written; implementation
 waits for Session 5.
@@ -183,6 +215,7 @@ waits for Session 5.
 across currencies and transfer it in `Studio.currency` (`lib/studioPayout.ts:14–27,60`;
 `routes/payouts.routes.ts:110–113`), while booking payments post as USD. Latent while
 payouts are off; it must be fixed before a studio with a non-USD currency takes a payout.
+*Fixed in the stabilization pass of 2026-09-14, above.*
 
 ## Verification performed for Phase 1
 
