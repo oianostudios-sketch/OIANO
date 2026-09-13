@@ -37,12 +37,19 @@ export async function ensureNodeExists(type: WeaveNodeType, id: string, tx: TxCl
 // and Studio, with the booking itself as evidence. No-ops for anything that
 // isn't (yet) a COMPLETED booking — a PENDING or CANCELLED booking is not
 // evidence of a real creative relationship. Idempotent: calling this twice
-// for the same completed booking creates no duplicate evidence and does not
-// double-count activity_count.
+// for the same completed booking creates no duplicate evidence.
+//
+// A connection's count and dates are derived from all of its evidence on every
+// sync, never from the booking being synced (A08). They used to be incremented
+// and stamped with that booking's updated_at, so syncing an older booking moved
+// last activity backwards, first activity was whichever booking synced first,
+// and a wrong count was never corrected. Work is dated by when the session
+// started, as the Studio Circle dates it: updated_at moves whenever a booking is
+// edited, and a completed booking cannot be rescheduled.
 export async function syncConnectionFromBooking(bookingId: string): Promise<void> {
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
-    select: { id: true, artist_id: true, studio_id: true, status: true, updated_at: true },
+    select: { id: true, artist_id: true, studio_id: true, status: true, starts_at: true },
   });
   if (!booking || booking.status !== 'COMPLETED') return;
 
@@ -67,26 +74,45 @@ export async function syncConnectionFromBooking(bookingId: string): Promise<void
           type: 'RECORDED_AT',
         },
       },
-      update: { last_activity_at: booking.updated_at },
+      update: {},
       create: {
         source_node_id: booking.artist_id,
         target_node_id: booking.studio_id,
         type: 'RECORDED_AT',
-        first_activity_at: booking.updated_at,
-        last_activity_at: booking.updated_at,
+        first_activity_at: booking.starts_at,
+        last_activity_at: booking.starts_at,
       },
     });
 
-    // Optimistic: try the create and let the unique constraint on
-    // (connection_id, booking_id) reject a duplicate, instead of a
-    // findUnique-first round trip that only ever matters on a re-run.
-    try {
-      await tx.weaveEvidence.create({ data: { connection_id: connection.id, booking_id: booking.id } });
-      await tx.weaveConnection.update({ where: { id: connection.id }, data: { activity_count: { increment: 1 } } });
-    } catch (error) {
-      const isDuplicateEvidence = error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
-      if (!isDuplicateEvidence) throw error;
-    }
+    // One sync per connection at a time. Two bookings for the same artist and
+    // studio synced together would otherwise each count only the evidence they
+    // could see, and the later write would leave the other booking uncounted.
+    const [stored] = await tx.$queryRaw<Array<{ activity_count: number; first_activity_at: Date; last_activity_at: Date }>>`
+      SELECT activity_count, first_activity_at, last_activity_at FROM weave_connections WHERE id = ${connection.id} FOR UPDATE
+    `;
+
+    // A booking already recorded is skipped, not raised: a failed statement
+    // would abort the transaction, recount included.
+    await tx.weaveEvidence.createMany({
+      data: [{ connection_id: connection.id, booking_id: booking.id }],
+      skipDuplicates: true,
+    });
+
+    const worked = await tx.booking.aggregate({
+      where: { weave_evidence: { some: { connection_id: connection.id } } },
+      _count: { _all: true },
+      _min: { starts_at: true },
+      _max: { starts_at: true },
+    });
+    const derived = {
+      activity_count: worked._count._all,
+      first_activity_at: worked._min.starts_at ?? booking.starts_at,
+      last_activity_at: worked._max.starts_at ?? booking.starts_at,
+    };
+    const unchanged = stored.activity_count === derived.activity_count
+      && stored.first_activity_at.getTime() === derived.first_activity_at.getTime()
+      && stored.last_activity_at.getTime() === derived.last_activity_at.getTime();
+    if (!unchanged) await tx.weaveConnection.update({ where: { id: connection.id }, data: derived });
   }, { timeout: 15_000 });
 }
 

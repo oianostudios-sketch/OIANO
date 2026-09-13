@@ -1305,11 +1305,10 @@ model WeaveConnection {
   target_node       WeaveNode           @relation("TargetNode", fields: [target_node_id], references: [id])
   type              WeaveConnectionType
   // Explainable growth signal, not an opaque score — "worked together N
-  // times," incremented only when new evidence is actually added.
-  // Starts at 0, not 1: syncConnectionFromBooking always increments after
-  // creating a connection's first evidence row too, so a @default(1) here
-  // would silently double-count the first piece of evidence on every new
-  // connection (found via the backfill script's first real run).
+  // times." activity_count, first_activity_at and last_activity_at are derived
+  // from this connection's evidence on every sync (how many bookings, and the
+  // earliest and latest session start among them), never incremented, so the
+  // order bookings sync in cannot skew them (A08).
   activity_count    Int                 @default(0)
   first_activity_at DateTime
   last_activity_at  DateTime

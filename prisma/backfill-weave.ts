@@ -2,7 +2,8 @@
 // Run once against any environment adopting the Oiano Weave foundation:
 //   npx ts-node -r tsconfig-paths/register prisma/backfill-weave.ts
 //
-// Idempotent, so safe to re-run. The logic lives in
+// Idempotent, so safe to re-run, and a run also corrects every synced
+// connection's count and dates from its evidence (A08). The logic lives in
 // apps/api/src/lib/weave/backfill.ts, where its idempotency is tested; this file
 // is only the command-line entry point.
 //

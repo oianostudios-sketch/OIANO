@@ -72,6 +72,7 @@ unassigned ones; the test characterises this so narrowing it is a decision, not 
 Re-syncing an already-synced booking is verified to change nothing on real Postgres. The
 architecture audit's §7 caution still applies to future edits: a statement added after the
 duplicate-evidence catch in `lib/weave/sync.ts` would run inside an aborted transaction.
+*No longer applies: the A08 fix below removed that catch.*
 
 **Fixed after Session 4 — A02 and A03.**
 
@@ -129,6 +130,41 @@ duplicate-evidence catch in `lib/weave/sync.ts` would run inside an aborted tran
   dashboards learn of it on their next refresh.
 - A stream is checked only when it opens, so a revoked session keeps receiving its own
   updates until the stream closes.
+
+**Fixed after Session 4 — A08.**
+
+- A Weave connection's count and dates are derived from its evidence on every sync, never
+  incremented or taken from the booking being synced. Syncing an older booking no longer
+  moves last activity backwards, first activity is no longer whichever booking synced
+  first, and a wrong count is corrected by the next sync for that artist and studio.
+- Work is dated by when the session started, the date the Studio Circle already uses, not
+  by `updated_at`, which moves whenever a booking is edited. A completed booking cannot be
+  rescheduled, so that date is fixed.
+- A booking already recorded is skipped instead of raising an error, so the recount after it
+  always runs. The duplicate-evidence catch behind the §7 caution above is gone.
+- Two syncs for the same artist and studio take turns: the connection row is locked before
+  counting. Without the lock, syncs running together each counted only the evidence they
+  could see, and a booking went uncounted.
+- **Evidence.** The todo test passes, and two tests were added: a corrupted count and dates
+  are repaired by the next sync, and 48 bookings synced six at a time over eight rounds are
+  all counted. The backfill test now also checks first and last activity against the
+  sessions. Seven defects were put back one at a time, each failed at least one test, and
+  `sync.ts` was restored byte-identical every time. The missing lock was caught in one run
+  of three by the first version of the concurrency test, and in five of five once it was
+  given eight rounds.
+- **Not done.** Stored rows, production's included, keep their old counts and dates until a
+  booking for that artist and studio is synced again. `prisma/backfill-weave.ts` corrects
+  every connection that has a completed booking; nothing was run against production.
+
+**Observed while fixing A08, not changed.**
+
+- Evidence is never retracted. A booking completed and then moved to another status before
+  A02 keeps its evidence and still counts toward the Weave, while the Studio Circle counts
+  only completed bookings, so the two can disagree about that history.
+- A node or connection is created by a select followed by an insert: Prisma issues no
+  single upsert statement here. When the first two syncs for a new artist and studio land
+  at the same moment, one fails and is logged, and its booking's evidence waits for the
+  next backfill.
 
 **Schema redesign:** designed for review in [schema redesign](OIANO_SCHEMA_REDESIGN.md),
 against the owner decisions of 2026-09-12. No migration is written; implementation

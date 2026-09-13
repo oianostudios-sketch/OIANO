@@ -4,8 +4,8 @@ import type { AddressInfo } from 'node:net';
 import jwt from 'jsonwebtoken';
 
 // Stabilization Session 3: invitation expiry and the Weave invariants a schema
-// migration relies on. Known defects are todo tests that name their finding in
-// docs/ARCHITECTURE_AUDIT_2026_09_06.md; fixing them is separate work.
+// migration relies on. A08 from docs/ARCHITECTURE_AUDIT_2026_09_06.md began here
+// as a todo test; it is fixed now, and the tests below hold it fixed.
 test('invitations expire, and the Weave backfill is exact and idempotent', async (t) => {
   const database = new URL(process.env.DATABASE_URL!);
   assert.match(`${database.pathname}/${database.searchParams.get('schema') ?? ''}`, /(^|[/_-])test([/_-]|$)/i);
@@ -126,33 +126,76 @@ test('invitations expire, and the Weave backfill is exact and idempotent', async
       'evidence is exactly the completed bookings — not the cancelled or pending ones');
     assert.ok(!connection.evidence.includes(cancelled.id) && !connection.evidence.includes(pending.id));
     assert.equal(connection.activity_count, completed.length, 'activity_count equals the completed bookings behind it');
+    assert.equal(connection.first, completed[0].starts_at.toISOString(), 'first activity is the earliest completed session');
+    assert.equal(connection.last, completed[completed.length - 1].starts_at.toISOString(), 'last activity is the latest completed session, not a later cancelled or pending one');
 
     await backfillWeave(prisma);
     assert.deepEqual(await snapshot(), first, 'a second backfill changes nothing');
   });
 
-  // Built after the backfill above has run, so the backfill cannot sync these in
-  // the right order first and hide the defect the next test is about.
-  const late = await artist('a08');
-  const olderAt = new Date(Date.now() - 20 * 86_400_000);
-  const newerAt = new Date(Date.now() - 10 * 86_400_000);
-  const older = await book(late.artist!.id, 'COMPLETED', 20);
-  const newer = await book(late.artist!.id, 'COMPLETED', 10);
-  await prisma.booking.update({ where: { id: older.id }, data: { updated_at: olderAt } });
-  await prisma.booking.update({ where: { id: newer.id }, data: { updated_at: newerAt } });
-  // The fixture must hold on its own, or the todo below could hide a broken setup.
-  assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: older.id } })).updated_at.toISOString(), olderAt.toISOString());
-  assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: newer.id } })).updated_at.toISOString(), newerAt.toISOString());
+  // A08, fixed: a connection's count and dates are derived from its evidence.
+  // Each fixture below is built after the backfill above has run, so the backfill
+  // cannot sync it in the right order first and hide what the test is about.
+  const connectionOf = (artistId: string) => prisma.weaveConnection.findFirstOrThrow({
+    where: { source_node_id: artistId, target_node_id: studio.id },
+    include: { evidence: true },
+  });
 
-  await t.test('syncing an older booking does not move last activity backwards',
-    { todo: 'A08: last_activity_at follows whichever booking synced last' },
-    async () => {
-      await syncConnectionFromBooking(newer.id);
-      await syncConnectionFromBooking(older.id);
-      const connection = await prisma.weaveConnection.findFirstOrThrow({
-        where: { source_node_id: late.artist!.id, target_node_id: studio.id },
-      });
-      assert.equal(connection.last_activity_at.toISOString(), newerAt.toISOString(), 'last activity is the newest work, whatever the sync order');
-      assert.equal(connection.first_activity_at.toISOString(), olderAt.toISOString(), 'first activity is the oldest work');
-    });
+  await t.test('syncing an older booking does not move last activity backwards', async () => {
+    const late = await artist('a08');
+    const older = await book(late.artist!.id, 'COMPLETED', 20);
+    const newer = await book(late.artist!.id, 'COMPLETED', 10);
+    // updated_at says when a booking was last edited, not when the work happened.
+    await prisma.booking.update({ where: { id: older.id }, data: { notes: 'Edited long after the session' } });
+    const edited = await prisma.booking.findUniqueOrThrow({ where: { id: older.id } });
+    assert.ok(edited.updated_at > newer.updated_at, 'the fixture holds: the older booking was edited most recently');
+
+    await syncConnectionFromBooking(newer.id);
+    await syncConnectionFromBooking(older.id);
+    const connection = await connectionOf(late.artist!.id);
+    assert.equal(connection.last_activity_at.toISOString(), newer.starts_at.toISOString(), 'last activity is the newest work, whatever the sync order');
+    assert.equal(connection.first_activity_at.toISOString(), older.starts_at.toISOString(), 'first activity is the oldest work');
+    assert.equal(connection.activity_count, 2);
+  });
+
+  await t.test('a wrong count or date is corrected by the next sync', async () => {
+    const regular = await artist('a08-repair');
+    const sessions = [await book(regular.artist!.id, 'COMPLETED', 60), await book(regular.artist!.id, 'COMPLETED', 50)];
+    for (const session of sessions) await syncConnectionFromBooking(session.id);
+    const { id } = await connectionOf(regular.artist!.id);
+    await prisma.weaveConnection.update({ where: { id }, data: { activity_count: 99, first_activity_at: new Date(0), last_activity_at: new Date() } });
+
+    await syncConnectionFromBooking(sessions[0].id);
+    const repaired = await connectionOf(regular.artist!.id);
+    assert.equal(repaired.activity_count, 2, 'the count is the evidence behind it, not what was stored');
+    assert.equal(repaired.evidence.length, 2, 'repairing adds no evidence');
+    assert.equal(repaired.first_activity_at.toISOString(), sessions[0].starts_at.toISOString());
+    assert.equal(repaired.last_activity_at.toISOString(), sessions[1].starts_at.toISOString());
+  });
+
+  await t.test('bookings synced at the same moment are all counted', async () => {
+    const busy = await artist('a08-concurrent');
+    let daysAgo = 400;
+    const session = () => book(busy.artist!.id, 'COMPLETED', daysAgo--);
+    const first = await session();
+    // The connection exists first, so this is about counting, not about creating it.
+    await syncConnectionFromBooking(first.id);
+
+    // A count is lost only when two syncs overlap, and timing decides that, so
+    // the syncs get several chances to collide.
+    let latest = first;
+    for (let round = 1; round <= 8; round += 1) {
+      const batch: typeof first[] = [];
+      for (let i = 0; i < 6; i += 1) batch.push(await session());
+      await Promise.all(batch.map((booking) => syncConnectionFromBooking(booking.id)));
+      latest = batch[batch.length - 1];
+      const connection = await connectionOf(busy.artist!.id);
+      assert.equal(connection.activity_count, connection.evidence.length, `round ${round}: no sync running alongside another drops its booking from the count`);
+    }
+
+    const connection = await connectionOf(busy.artist!.id);
+    assert.equal(connection.evidence.length, 1 + 8 * 6);
+    assert.equal(connection.first_activity_at.toISOString(), first.starts_at.toISOString());
+    assert.equal(connection.last_activity_at.toISOString(), latest.starts_at.toISOString());
+  });
 });
