@@ -570,7 +570,7 @@ export async function updateBookingStatus(req: Request, res: Response, next: Nex
     const artistName  = existing.artist?.name ?? 'Artist';
     const service     = existing.service?.name ?? 'Session';
     const room        = existing.room?.name ?? 'Studio';
-    const totalUsd    = Number((existing as any).total_usd ?? 0);
+    const totalUsd    = Number(existing.total_usd);
 
     // Persist notification to DB so the inbox shows it even after SSE reconnect
     if (existing.artist?.user_id) {

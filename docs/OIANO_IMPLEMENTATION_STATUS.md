@@ -54,7 +54,7 @@ migration starts until Session 5 reports every gate passed.
 | 2 — Migration and type safety | **Done** 2026-09-12 | Prisma ranges aligned to the installed 5.22.0; all 20 `prisma as any` removed, hiding no type errors; dead WebSocket client removed (no server existed and it was never configured) |
 | 3 — Invitation and Weave tests | **Done** 2026-09-13 | Expired invitations are rejected and change nothing; the Weave backfill records exactly one evidence row per completed booking and a second run changes nothing, on real Postgres; A08 confirmed as a todo test. Backfill logic moved into `lib/weave/backfill.ts` so it can be tested |
 | 4 — Booking, payment and engineer-scope tests | **Done** 2026-09-13 | Wallet guard, lifecycle and cross-studio scope, Stripe signature, replay and amount checks; A02 (twice) and A03 confirmed as todo tests. A credential leak found on the way is fixed (below) |
-| 5 — Stabilization gate | Not started | Eight gates answered yes or no, with evidence |
+| 5 — Stabilization gate | **Done** 2026-09-13, **not passed** | [Stabilization gate](OIANO_STABILIZATION_GATE.md): seven gates yes; gate 2 no, because the tracked migrations build a database that differs from `schema.prisma` in nine tables. Six redundant schema casts removed on the way |
 
 Every new assertion in Sessions 3 and 4 was mutation-checked: the protected code was
 broken in seven runs, each run failed the intended test, and every file was restored

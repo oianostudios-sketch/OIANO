@@ -155,7 +155,7 @@ artistsRouter.get('/:id', async (req: any, res, next) => {
 
     // Non-admin artists viewing someone else's profile get a redacted response
     if (!isOwner && !isAdmin) {
-      const { wallet, bookings, files, ...publicFields } = artist as any;
+      const { wallet, bookings, files, ...publicFields } = artist;
       // Also hide AI brief if artist marked it private
       if (publicFields.passport && !publicFields.passport.ai_summary_public) {
         publicFields.passport = { ...publicFields.passport, ai_summary: null };
@@ -179,8 +179,8 @@ artistsRouter.get('/:id/summary', async (req, res, next) => {
     if (!artist) throw new AppError('Artist not found', 404);
 
     const passport = artist.passport;
-    const profileUpdated = (passport as any)?.updated_at ?? new Date(0);
-    const summaryAge     = (passport as any)?.ai_summary_updated_at ?? new Date(0);
+    const profileUpdated = passport?.updated_at ?? new Date(0);
+    const summaryAge     = passport?.ai_summary_updated_at ?? new Date(0);
 
     // Serve cache if summary exists and was generated after last profile update
     if (passport?.ai_summary && summaryAge > profileUpdated) {
@@ -188,7 +188,7 @@ artistsRouter.get('/:id/summary', async (req, res, next) => {
     }
 
     // Generate fresh summary
-    const summary = await generateArtistSummary(artist as any);
+    const summary = await generateArtistSummary(artist);
 
     // Persist to passport (non-blocking -- don't let a DB write fail the response)
     if (passport) {

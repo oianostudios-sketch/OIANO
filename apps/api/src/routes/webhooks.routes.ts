@@ -152,7 +152,7 @@ async function handleBookingPayment(session: Stripe.Checkout.Session) {
 
   // 5. Email receipt — outside transaction, non-fatal
   if (booking.artist?.user?.email) {
-    sendReceiptEmail(booking.artist.user.email, booking as any).catch((e) =>
+    sendReceiptEmail(booking.artist.user.email, booking).catch((e) =>
       console.error('[email] receipt failed:', e?.message),
     );
   }
