@@ -5,7 +5,7 @@ import { CalendarDays, CheckCircle2, Clock3, FileAudio, FolderKanban, MessageSqu
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
 import ArtistAvatar from '../components/ArtistAvatar';
-import TrustSignal from '../components/TrustSignal';
+
 import { useToast } from '../components/Toast';
 import MessageThread from '../components/MessageThread';
 import ProjectActionPanel from '../components/ProjectActionPanel';
@@ -69,8 +69,8 @@ export default function ArtistProjectsPage() {
         <div className="mx-auto flex max-w-6xl items-center gap-4">
           <Link to="/dashboard" className="text-xs text-zinc-500 hover:text-white">← Home</Link>
           <div>
-            <p className="text-[9px] font-mono uppercase tracking-[.18em] text-dome">Your artist workspace</p>
-            <h1 className="text-xl font-medium">Studio projects</h1>
+            <p className="text-[9px] font-mono uppercase tracking-[.18em] text-dome">Your projects and collaborators</p>
+            <h1 className="text-xl font-medium">Projects</h1>
           </div>
           <Link to="/book" className="ml-auto rounded-lg border border-dome/25 bg-dome/10 px-3 py-2 text-xs font-semibold text-dome">Plan next session</Link>
         </div>
@@ -79,8 +79,8 @@ export default function ArtistProjectsPage() {
       <main className="mx-auto max-w-6xl px-5 py-8">
         <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h2 className="text-3xl font-medium">Every record, moving forward</h2>
-            <p className="mt-2 max-w-xl text-sm text-zinc-500">Keep each project’s sessions, collaborators, files, and feedback together from first idea to final delivery.</p>
+            <h2 className="text-3xl font-medium">Keep the work moving</h2>
+            <p className="mt-2 max-w-xl text-sm text-zinc-500">Keep each project’s sessions, collaborators, files, and feedback together through production and delivery.</p>
           </div>
           <div className="flex rounded-xl border border-white/[.07] bg-black/20 p-1">
             {(['ACTIVE', 'DELIVERED'] as const).map((item) => <button key={item} onClick={() => setFilter(item)} className={`rounded-lg px-4 py-2 text-[10px] font-mono tracking-wider ${filter === item ? 'bg-white/[.08] text-white' : 'text-zinc-600'}`}>{item === 'ACTIVE' ? `ACTIVE ${projects.filter(p => p.is_active && p.phase !== 'DELIVERED').length}` : `DELIVERED ${projects.filter(p => p.phase === 'DELIVERED').length}`}</button>)}
@@ -93,8 +93,8 @@ export default function ArtistProjectsPage() {
           <div className="rounded-2xl border border-white/[.07] bg-white/[.018] px-6 py-16 text-center">
             <FolderKanban className="mx-auto text-zinc-700" size={32} strokeWidth={1.3} />
             <h3 className="mt-5 text-xl">{filter === 'ACTIVE' ? 'Your next record starts here.' : 'No delivered projects yet.'}</h3>
-            <p className="mx-auto mt-2 max-w-md text-sm text-zinc-600">{filter === 'ACTIVE' ? 'Projects appear here when a producer connects your work to a studio project.' : 'Completed work will become your growing studio catalogue.'}</p>
-            {filter === 'ACTIVE' && <Link to="/producers" className="mt-6 inline-block rounded-lg bg-dome px-4 py-2.5 text-xs font-bold text-black">Find a producer →</Link>}
+            <p className="mx-auto mt-2 max-w-md text-sm text-zinc-600">{filter === 'ACTIVE' ? 'Projects linked to you appear here. You can also join a project through a contribution invitation.' : 'Delivered projects stay here alongside their sessions and credits.'}</p>
+            {filter === 'ACTIVE' && <Link to="/contributions" className="mt-6 inline-block rounded-lg bg-dome px-4 py-2.5 text-xs font-bold text-black">Review contribution invitations →</Link>}
           </div>
         ) : (
           <div className="artist-project-layout grid grid-cols-[310px_minmax(0,1fr)] gap-5">
@@ -144,7 +144,7 @@ export default function ArtistProjectsPage() {
                 <div className="lg:col-span-2"><h3 className="flex items-center gap-2 text-sm"><FileAudio size={15} className="text-dome"/> Project credit sheet</h3><p className="mt-1 text-[9px] text-zinc-700">Credits record contribution, not rights or ownership.</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{selected.credits?.length ? selected.credits.map((credit: any) => <div key={credit.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/[.05] px-3 py-2.5"><div><p className="text-xs text-zinc-300">{credit.credited_name}</p><p className="mt-1 text-[9px] text-zinc-600">{credit.role.replaceAll('_',' ')} · {credit.scope || 'Whole project'}</p></div><span className={`rounded-full border px-2 py-1 text-[8px] font-mono ${credit.status === 'CONFIRMED' ? 'border-emerald-500/15 text-emerald-500' : credit.status === 'DISPUTED' ? 'border-red-500/15 text-red-400' : 'border-white/[.07] text-zinc-600'}`}>{credit.status}</span></div>) : <p className="text-xs text-zinc-700">The producer has not added structured credits yet.</p>}</div></div>
               </div>
 
-              {selected.phase === 'DELIVERED' && <div className="mt-7 grid gap-3 rounded-xl border border-emerald-900/30 bg-emerald-950/15 p-4 sm:grid-cols-[1fr_auto]"><div className="flex items-center gap-3"><CheckCircle2 className="text-emerald-500" size={18}/><div><p className="text-xs font-semibold text-emerald-200">Delivered</p><p className="text-[10px] text-emerald-800">Completion is recorded in this OIANO studio project.</p></div></div><TrustSignal kind="studio" compact /></div>}
+              {selected.phase === 'DELIVERED' && <div className="mt-7 grid gap-3 rounded-xl border border-emerald-900/30 bg-emerald-950/15 p-4 sm:grid-cols-[1fr_auto]"><div className="flex items-center gap-3"><CheckCircle2 className="text-emerald-500" size={18}/><div><p className="text-xs font-semibold text-emerald-200">Delivered</p><p className="text-[10px] text-emerald-800">Project marked delivered. Review credits, rights and payments separately.</p></div></div></div>}
               {selected.promotional_consents?.length > 0 && <section className="mt-7 rounded-xl border border-gold/15 bg-gold/[.025] p-4"><h3 className="text-sm">Promotional permissions</h3><p className="mt-1 text-[9px] text-zinc-700">Promotion only · no ownership transfer.</p><div className="mt-4 space-y-3">{selected.promotional_consents.map((consent: any) => <article key={consent.id} className="rounded-lg border border-white/[.06] bg-black/20 p-3"><div className="flex items-start justify-between gap-3"><div><p className="text-xs text-zinc-300">{consent.subject}</p><p className="mt-1 text-[10px] leading-5 text-zinc-600">{consent.purpose}</p><p className="mt-1 text-[9px] text-zinc-700">{consent.channels.join(', ')} · {consent.assets.join(', ')}</p></div><span className="text-[9px] font-mono text-gold">{consent.status}</span></div>{consent.status === 'REQUESTED' && <div className="mt-3 flex gap-2"><button onClick={() => answerPromotion.mutate({ projectId: selected.id, consentId: consent.id, action: 'APPROVE' })} className="rounded-md bg-emerald-500 px-3 py-2 text-[10px] font-semibold text-black">Approve</button><button onClick={() => answerPromotion.mutate({ projectId: selected.id, consentId: consent.id, action: 'DECLINE' })} className="rounded-md border border-red-500/20 px-3 py-2 text-[10px] text-red-400">Decline</button></div>}{consent.status === 'APPROVED' && <button onClick={() => answerPromotion.mutate({ projectId: selected.id, consentId: consent.id, action: 'WITHDRAW' })} className="mt-3 text-[10px] text-zinc-600 underline">Withdraw permission</button>}</article>)}</div></section>}
               {selected.rights_agreements?.length > 0 && <section className="mt-7 rounded-xl border border-white/[.07] bg-black/20 p-4"><h3 className="text-sm">Rights & ownership</h3><p className="mt-1 text-[9px] text-zinc-700">Review master and publishing proposals independently. Consider legal advice before approving.</p><div className="mt-4 space-y-3">{selected.rights_agreements.map((agreement: any) => <article key={agreement.id} className="rounded-lg border border-white/[.06] p-3"><div className="flex justify-between gap-3"><div><p className="text-xs text-zinc-300">{agreement.title}</p><p className="mt-1 text-[9px] text-zinc-700">{agreement.agreement_type}</p></div><span className="text-[9px] font-mono text-gold">{agreement.status}</span></div><div className="mt-3 flex flex-wrap gap-2">{agreement.shares.map((share: any) => <span key={share.id} className="rounded-full border border-white/[.07] px-2.5 py-1 text-[9px] text-zinc-500">{share.holder_name} · {Number(share.percentage)}%</span>)}</div>{agreement.status === 'PROPOSED' && <div className="mt-3"><input value={rightsNote} onChange={event => setRightsNote(event.target.value)} placeholder="Reason required only if disputing" className="w-full rounded-md border border-white/[.07] bg-black/30 px-3 py-2 text-[10px] text-white outline-none"/><div className="mt-2 flex gap-2"><button onClick={() => answerRights.mutate({ projectId: selected.id, agreementId: agreement.id, action: 'APPROVE' })} className="rounded-md bg-emerald-500 px-3 py-2 text-[10px] font-semibold text-black">Approve split</button><button disabled={!rightsNote.trim()} onClick={() => answerRights.mutate({ projectId: selected.id, agreementId: agreement.id, action: 'DISPUTE' })} className="rounded-md border border-red-500/20 px-3 py-2 text-[10px] text-red-400 disabled:opacity-40">Dispute</button></div></div>}</article>)}</div></section>}
             </section>}

@@ -11,7 +11,7 @@ import SessionStats from '../components/SessionStats';
 import OianoBrand from '../components/OianoBrand';
 import ArtistStatusToggle from '../components/ArtistStatusToggle';
 import { fmtTime as _fmtTime, fmtDateShort as _fmtDateShort } from '../lib/fmt';
-import { CalendarDays, Compass, Mic2, Pencil, Wallet } from 'lucide-react';
+import { FolderKanban, Compass, Handshake, Pencil, Wallet } from 'lucide-react';
 import ArtistAvatar from '../components/ArtistAvatar';
 import { STATUS_HEX } from '../lib/bookingStatus';
 import MySignal from '../components/MySignal';
@@ -323,10 +323,10 @@ export default function DashboardPage() {
     .filter((project: any) => project.is_active && project.phase !== 'DELIVERED');
   const nextProject = activeProjects[0] ?? null;
   const primaryAction = nextSession
-    ? { to: `/bookings/${nextSession.id}`, eyebrow: 'Your next move', label: 'Prepare for your session', detail: `${fmtDateShort(nextSession.starts_at)} at ${fmtTime(nextSession.starts_at)}`, cta: 'Prepare for session' }
+    ? { to: `/bookings/${nextSession.id}`, eyebrow: 'Upcoming session', label: 'Prepare for your session', detail: `${fmtDateShort(nextSession.starts_at)} at ${fmtTime(nextSession.starts_at)}`, cta: 'Prepare for session' }
     : activeProjectCount > 0
       ? { to: '/projects', eyebrow: 'Keep the momentum', label: 'Review your active work', detail: `${activeProjectCount} project${activeProjectCount === 1 ? '' : 's'} currently moving`, cta: 'Review project' }
-      : { to: '/book', eyebrow: 'Your next move', label: 'Start your next studio session', detail: 'Choose the room, people, and time for your next record', cta: 'Explore studio dates' };
+      : { to: '/contributions', eyebrow: 'Make something together', label: 'Find your place in the work', detail: 'Review project invitations and the contributions you can make', cta: 'Open contributions' };
 
   // Animated stats
   const cSessions  = useCounter(allBookings.length);
@@ -395,7 +395,7 @@ export default function DashboardPage() {
       <header className="db-header" style={{ borderBottom: '1px solid #141414', padding: '14px 24px', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <OianoBrand variant="compact" size={20} />
-          <span style={{ color: '#2a2a2a', fontSize: 11, fontFamily: 'monospace' }}>StudioOS</span>
+          <span style={{ color: '#2a2a2a', fontSize: 11, fontFamily: 'monospace' }}>Creative Work Network</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <StudioBar />
@@ -471,7 +471,9 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* ── Two-column grid ── */}
+        <NextAction />
+
+        {/* Existing project and session context, below pending decisions. */}
         <section className="db-fade db-fade-1" aria-labelledby="today-heading">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
             <p id="today-heading" style={{ fontSize: 10, color: '#777', fontFamily: 'monospace', letterSpacing: '0.14em', textTransform: 'uppercase' }}>Today at OIANO</p>
@@ -503,8 +505,8 @@ export default function DashboardPage() {
 
             <Link className="db-signal-card" to="/artist/passport" style={{ minHeight: 180, display: 'flex', flexDirection: 'column', padding: 17, borderRadius: 16, textDecoration: 'none', background: 'linear-gradient(145deg, rgba(18,21,24,.94), rgba(10,12,14,.92))', border: '1px solid rgba(255,255,255,.075)' }}>
               <span style={{ fontSize: 9, color: '#596168', fontFamily: 'monospace', letterSpacing: '0.12em' }}>PASSPORT</span>
-              <strong style={{ marginTop: 'auto', color: profileScore >= 80 ? '#7dc99a' : '#d3b35c', fontFamily: "'Playfair Display', serif", fontWeight: 500, fontSize: 25 }}>{profileScore}%</strong>
-              <span style={{ marginTop: 4, color: '#7d7a72', fontSize: 10 }}>{profileScore < 100 ? 'Strength · keep building →' : 'Portfolio complete'}</span>
+              <strong style={{ marginTop: 'auto', color: '#E2C97E', fontFamily: "'Playfair Display', serif", fontWeight: 500, fontSize: 25 }}>Your record</strong>
+              <span style={{ marginTop: 4, color: '#7d7a72', fontSize: 10 }}>Projects, sessions and credits →</span>
             </Link>
 
             {balance > 0 && (
@@ -528,7 +530,7 @@ export default function DashboardPage() {
               from the eight queries this page already runs. It leads because a
               dashboard that reports state without naming an action leaves the
               creator to work out what to do from the widgets. */}
-          <NextAction />
+
           <MySignal accent="#6aa9d2" />
           <div className="db-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
             <MyOrbit />
@@ -536,11 +538,11 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <nav className="db-action-dock db-fade db-fade-1" aria-label="Artist shortcuts" style={{ display: 'grid', gridTemplateColumns: `repeat(${balance === 0 ? 5 : 4}, 1fr)`, gap: 8, padding: 8, borderRadius: 16, background: 'rgba(14,17,19,.72)', border: '1px solid rgba(255,255,255,.07)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.025)' }}>
+        <nav className="db-action-dock db-fade db-fade-1" aria-label="Work shortcuts" style={{ display: 'grid', gridTemplateColumns: `repeat(${balance === 0 ? 5 : 4}, 1fr)`, gap: 8, padding: 8, borderRadius: 16, background: 'rgba(14,17,19,.72)', border: '1px solid rgba(255,255,255,.07)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.025)' }}>
           {[
-            { label: 'Book studio', to: '/book', Icon: Mic2 },
-            { label: 'My schedule', to: '/calendar', Icon: CalendarDays },
-            { label: 'Producers', to: '/producers', Icon: Compass },
+            { label: 'Projects', to: '/projects', Icon: FolderKanban },
+            { label: 'Contributions', to: '/contributions', Icon: Handshake },
+            { label: 'Find people', to: '/discover', Icon: Compass },
           ].map(({ label, to, Icon }) => (
             <Link key={label} className="db-action-tile" to={to} style={{ minHeight: 66, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 7, color: '#898d90', textDecoration: 'none', border: '1px solid transparent', borderRadius: 11, fontSize: 10 }}>
               <Icon size={18} strokeWidth={1.65} aria-hidden="true" />

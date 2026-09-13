@@ -1,37 +1,12 @@
 // apps/web/src/components/ProducerNav.tsx
-// Shared top navigation for the producer portal
-import { useNavigate, useLocation } from 'react-router-dom';
+// Project context header; App owns shared creator navigation.
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/auth.store';
 import OianoBrand from './OianoBrand';
 
 export function ProducerNav({ passportCode }: { passportCode?: string | null }) {
   const navigate = useNavigate();
-  const location = useLocation();
   const logout = useAuthStore(s => s.logout);
-
-  const onProjects = location.pathname === '/producer';
-  const onPassport = location.pathname === '/producer/passport';
-  const onDiscover = location.pathname === '/discover';
-  const onProducers = location.pathname === '/producers';
-
-  const navLink = (label: string, path: string, active: boolean) => (
-    <button
-      onClick={() => navigate(path)}
-      style={{
-        background: 'none', border: 'none',
-        padding: '0.4rem 0.9rem',
-        borderRadius: 6,
-        color: active ? '#5A9BCB' : '#666',
-        fontFamily: 'var(--font-mono, JetBrains Mono), monospace',
-        fontSize: '0.75rem', letterSpacing: '0.08em',
-        textTransform: 'uppercase' as const,
-        cursor: 'pointer',
-        transition: 'color 0.15s, background 0.15s',
-      }}
-    >
-      {label}
-    </button>
-  );
 
   return (
     <nav className="producer-nav" style={{
@@ -49,20 +24,7 @@ export function ProducerNav({ passportCode }: { passportCode?: string | null }) 
           .producer-nav { padding: 0 1rem !important; }
           .producer-nav .producer-nav-subtitle { display: none; }
           .producer-nav .producer-nav-code { display: none; }
-          .producer-nav .producer-nav-links {
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-            scrollbar-width: none;
-            min-width: 0;
-            flex: 1 1 auto;
-            justify-content: flex-start !important;
-            /* Fade the trailing edge so a scrollable nav with clipped items
-               (e.g. "Passport" cut off) reads as "more this way", not broken. */
-            mask-image: linear-gradient(to right, black calc(100% - 18px), transparent);
-            -webkit-mask-image: linear-gradient(to right, black calc(100% - 18px), transparent);
-          }
-          .producer-nav .producer-nav-links::-webkit-scrollbar { display: none; }
-          .producer-nav .producer-nav-links button { flex-shrink: 0; }
+
         }
       `}</style>
       {/* Left — wordmark */}
@@ -76,17 +38,11 @@ export function ProducerNav({ passportCode }: { passportCode?: string | null }) 
           fontSize: '0.65rem', letterSpacing: '0.2em',
           color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase',
         }}>
-          Producer Portal
+          Project workspace
         </span>
       </div>
 
-      {/* Centre — nav links */}
-      <div className="producer-nav-links" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', justifyContent: 'center' }}>
-        {navLink('Projects', '/producer', onProjects)}
-        {navLink('Discover', '/discover', onDiscover)}
-        {navLink('Producers', '/producers', onProducers)}
-        {navLink('Passport', '/producer/passport', onPassport)}
-      </div>
+      {/* Creative workspace navigation is shared by App across creator routes. */}
 
       {/* Right — passport code + logout */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexShrink: 0 }}>

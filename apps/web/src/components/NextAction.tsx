@@ -43,8 +43,6 @@ const ACTION_LABEL: Record<string, string> = {
   RIGHTS_DECISION_PENDING: 'Review split',
   CREDIT_AWAITING_RESPONSE: 'Review credit',
   CONSENT_REQUESTED: 'Review consent',
-  NO_WORK_YET: 'Book a session',
-  ALL_CLEAR: 'Book a session',
 };
 
 export default function NextAction() {
@@ -54,7 +52,7 @@ export default function NextAction() {
     staleTime: 30_000,
   });
 
-  if (isLoading) return null;
+  if (isLoading) return <section aria-label="What to do next" role="status" style={{ padding: 20, border: '1px solid #2a2a2a', borderRadius: 14, color: '#aaa' }}>Checking what needs your attention…</section>;
 
   // Rendering nothing on failure said "nothing needs you" — the one sentence
   // this component must never say when it does not know. An unreachable server
@@ -76,7 +74,7 @@ export default function NextAction() {
           We couldn't load what needs you
         </h2>
         <p style={{ margin: '6px 0 0', fontSize: 12, color: '#9a9a9a', lineHeight: 1.5 }}>
-          Your work is safe. This is a problem reaching OIANO, not a sign that nothing is waiting.
+          We couldn't check your pending decisions. Try again to see what needs attention.
         </p>
         <button
           type="button"
@@ -96,6 +94,19 @@ export default function NextAction() {
   }
 
   const { next, attention } = data;
+  // Empty attention is an opportunity to choose, not a requirement to buy a session.
+  if (next.kind === 'NO_WORK_YET' || next.kind === 'ALL_CLEAR') {
+    return <section aria-label="What to do next" style={{ border: '1px solid #2a2a2a', background: '#121212', borderRadius: 14, padding: '20px' }}>
+      <p style={{ color: '#C9A84C', fontSize: 10, letterSpacing: '.12em', textTransform: 'uppercase' }}>Your next step</p>
+      <h2 style={{ color: '#eee', fontSize: 22, margin: '8px 0' }}>{next.kind === 'ALL_CLEAR' ? 'Choose what to pick up next' : 'Begin with the people and the project'}</h2>
+      <p style={{ color: '#aaa', fontSize: 13, lineHeight: 1.6 }}>Open your projects, review contribution invitations, or find someone to create with.</p>
+      <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginTop: 16 }}>
+        <Link to="/projects" style={{ color: '#E2C97E' }}>Open projects →</Link>
+        <Link to="/contributions" style={{ color: '#8BBEDD' }}>Review contributions →</Link>
+        <Link to="/discover" style={{ color: '#aaa' }}>Find people →</Link>
+      </div>
+    </section>;
+  }
   const urgent = URGENT.has(next.kind);
   // attention.length counts *kinds*; attention_total counts things. Showing the
   // former as "N more waiting on you" describes a number that does not exist.
