@@ -8,6 +8,7 @@ import { sendSessionComplete } from '../../services/email.service';
 import { resolveStaffStudio } from '../../middleware/studioScope.middleware';
 import { recordBookingCompleted } from '../../lib/bookingCompletion';
 import { upsertSessionLog } from '../../lib/sessionLog';
+import { requireTransition, transitionBookingStatus } from '../../lib/bookingTransitions';
 
 // POST /api/bookings/:id/complete — the session completion screen.
 // Single entry point that replaces the old "flip status, then separately
@@ -121,7 +122,10 @@ export async function completeSession(req: Request, res: Response, next: NextFun
     });
     if (previousRequest) return res.json(previousRequest.response);
 
-    const wasAlreadyCompleted = booking.status === 'COMPLETED';
+    // Whether this submission is the one that completed the booking. Decided by the
+    // conditional write inside the transaction rather than the status read above,
+    // so two submissions with different keys cannot both run the completion effects.
+    let completedNow = false;
 
     let result;
     try {
@@ -133,10 +137,11 @@ export async function completeSession(req: Request, res: Response, next: NextFun
         data: { booking_id: booking.id, idempotency_key: idempotencyKey, response: {} },
       });
 
-      const updatedBooking = await tx.booking.update({
-        where: { id: booking.id },
-        data: { status: 'COMPLETED' },
-      });
+      const completion = requireTransition(
+        await transitionBookingStatus(tx, { bookingId: booking.id, to: 'COMPLETED', studioId: studio.id }),
+      );
+      completedNow = completion.outcome === 'APPLIED';
+      const updatedBooking = await tx.booking.findUniqueOrThrow({ where: { id: booking.id } });
 
       await upsertSessionLog(booking, { ...data.session_notes, ended_at: new Date() }, tx);
 
@@ -242,7 +247,7 @@ export async function completeSession(req: Request, res: Response, next: NextFun
     // Side effects only fire for genuinely new state — a re-submit against an
     // already-COMPLETED booking must not re-notify the artist that their
     // session is complete a second time.
-    if (!wasAlreadyCompleted) {
+    if (completedNow) {
       void recordBookingCompleted(booking);
 
       if (booking.project_id) {

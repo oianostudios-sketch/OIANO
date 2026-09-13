@@ -5,6 +5,8 @@ import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
 import { z } from 'zod';
 import { resolveStaffStudio } from '../middleware/studioScope.middleware';
+import { Prisma } from '@prisma/client';
+import { checkoutEligibility, planCheckout } from '../lib/checkoutEligibility';
 
 export const paymentsRouter = Router();
 paymentsRouter.use(authenticate);
@@ -49,12 +51,24 @@ paymentsRouter.post('/stripe/checkout-session', async (req: any, res, next) => {
         throw new AppError('Booking not found', 404);
       }
     }
-    if (booking.payment?.status === 'PAID') throw new AppError('Booking is already paid', 400);
+    const eligibility = checkoutEligibility(booking.status, booking.payment?.status ?? null);
+    if (!eligibility.ok) throw new AppError(eligibility.message, eligibility.status);
 
     const stripe = getStripe();
     const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
     const amountCents = Math.round(Number(booking.total_usd) * 100);
     if (!Number.isSafeInteger(amountCents) || amountCents <= 0) throw new AppError('Booking amount is invalid', 409);
+
+    // One payable session per booking. A checkout started earlier may still be open,
+    // and two open sessions for the same booking can both be paid (A03).
+    const previousRef = booking.payment?.status === 'PROCESSING' ? booking.payment.provider_ref : null;
+    const previous = previousRef ? await stripe.checkout.sessions.retrieve(previousRef) : null;
+    const plan = planCheckout(previous && { status: previous.status, amountTotal: previous.amount_total }, amountCents);
+    if (plan === 'IN_FLIGHT') throw new AppError('A payment for this booking is already being processed', 409);
+    if (plan === 'REUSE' && previous?.url) {
+      return res.json({ checkout_url: previous.url, booking_id, session_id: previous.id });
+    }
+    if ((plan === 'REUSE' || plan === 'REPLACE') && previous) await stripe.checkout.sessions.expire(previous.id);
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -82,21 +96,30 @@ paymentsRouter.post('/stripe/checkout-session', async (req: any, res, next) => {
       cancel_url:  `${frontendUrl}/bookings/${booking.id}?payment=cancelled`,
     });
 
-    // Upsert Payment record — store checkout session id immediately
-    await prisma.payment.upsert({
-      where:  { booking_id },
-      create: {
-        booking_id,
-        provider:     'stripe',
-        provider_ref: session.id,
-        amount_usd:   booking.total_usd,
-        status:       'PROCESSING',
-      },
-      update: {
-        provider_ref: session.id,
-        status:       'PROCESSING',
-      },
-    });
+    // Record this session against the payment only if the payment is exactly as it was
+    // read. If another checkout for the same booking got there first, expire the session
+    // just opened rather than leave a second payable one behind.
+    const superseded = async () => {
+      await stripe.checkout.sessions.expire(session.id).catch((e: any) =>
+        console.error('[payments] could not expire a superseded checkout:', e?.message));
+      return new AppError('Another checkout for this booking started at the same time. Refresh and try again.', 409);
+    };
+    if (booking.payment) {
+      const claimed = await prisma.payment.updateMany({
+        where: { id: booking.payment.id, status: booking.payment.status, provider_ref: booking.payment.provider_ref },
+        data:  { provider_ref: session.id, status: 'PROCESSING' },
+      });
+      if (claimed.count !== 1) throw await superseded();
+    } else {
+      try {
+        await prisma.payment.create({
+          data: { booking_id, provider: 'stripe', provider_ref: session.id, amount_usd: booking.total_usd, status: 'PROCESSING' },
+        });
+      } catch (err) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') throw await superseded();
+        throw err;
+      }
+    }
 
     res.json({ checkout_url: session.url, booking_id, session_id: session.id });
   } catch (err) { next(err); }

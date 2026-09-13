@@ -5,8 +5,9 @@ import jwt from 'jsonwebtoken';
 import Stripe from 'stripe';
 
 // Stabilization Session 4: the booking lifecycle, who may read a booking, and
-// Stripe webhook handling, against a real database. Known defects are todo tests
-// that name their finding in docs/ARCHITECTURE_AUDIT_2026_09_06.md.
+// Stripe webhook handling, against a real database. A02 and A03 from
+// docs/ARCHITECTURE_AUDIT_2026_09_06.md began here as todo tests; both are fixed now,
+// and these tests are what hold them fixed.
 //
 // Plain strings on purpose: the repository secret scanner rejects values shaped
 // like real Stripe credentials, and signature verification accepts any secret.
@@ -181,22 +182,34 @@ test('bookings, access scope and Stripe webhooks hold their invariants', async (
     include: { artist: true },
   });
 
-  await t.test('completing a booking twice records the completion once',
-    { todo: 'A02: the status route re-runs completion effects on every COMPLETED write' },
-    async () => {
-      const booking = await book(alpha, 'CONFIRMED', { artistId: loneArtist.artist!.id });
-      await setStatus(booking.id, 'COMPLETED');
-      await setStatus(booking.id, 'COMPLETED');
-      assert.equal(await prisma.activityEvent.count({ where: { type: 'session.completed', artist_id: loneArtist.artist!.id } }), 1);
-    });
+  // A02, fixed: lib/bookingTransitions.ts decides every booking status change.
+  await t.test('completing a booking twice records the completion once', async () => {
+    const booking = await book(alpha, 'CONFIRMED', { artistId: loneArtist.artist!.id });
+    assert.equal((await setStatus(booking.id, 'COMPLETED')).status, 200);
+    const repeat = await setStatus(booking.id, 'COMPLETED');
+    assert.equal(repeat.status, 200, 'asking for the status a booking already has is not an error');
+    assert.equal(repeat.body.status, 'COMPLETED');
+    assert.equal(await prisma.activityEvent.count({ where: { type: 'session.completed', artist_id: loneArtist.artist!.id } }), 1);
+  });
 
-  await t.test('a completed booking cannot be reopened',
-    { todo: 'A02: the status route accepts any transition' },
-    async () => {
-      const booking = await book(alpha, 'COMPLETED');
-      assert.equal((await setStatus(booking.id, 'PENDING')).status, 409);
-      assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: booking.id } })).status, 'COMPLETED');
+  await t.test('a closed booking cannot be reopened or revived', async () => {
+    const attempts = [['COMPLETED', 'PENDING'], ['COMPLETED', 'CANCELLED'], ['CANCELLED', 'CONFIRMED']] as const;
+    for (const [closed, attempted] of attempts) {
+      const booking = await book(alpha, closed);
+      assert.equal((await setStatus(booking.id, attempted)).status, 409, `${closed} must not become ${attempted}`);
+      assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: booking.id } })).status, closed);
+    }
+  });
+
+  await t.test('files cannot be delivered for a cancelled booking', async () => {
+    const booking = await book(alpha, 'CANCELLED');
+    const attempt = await request(`/bookings/${booking.id}/deliver`, {
+      method: 'POST', headers: auth(adminAlpha), body: JSON.stringify({ file_urls: ['https://files.example.test/mix.wav'] }),
     });
+    assert.equal(attempt.status, 409);
+    assert.equal(await prisma.deliverable.count({ where: { booking_id: booking.id } }), 0, 'no deliverable is created');
+    assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: booking.id } })).status, 'CANCELLED');
+  });
 
   const stripe = new Stripe('integration-stripe-key');
   const deliver = async (event: object, options: { secret?: string; signed?: boolean } = {}) => {
@@ -266,11 +279,64 @@ test('bookings, access scope and Stripe webhooks hold their invariants', async (
     assert.equal(await prisma.stripeWebhookEvent.count({ where: { id: eventId } }), 0, 'the claim is released so Stripe can retry');
   });
 
-  await t.test('payment for a cancelled booking does not revive it',
-    { todo: 'A03: payment success confirms the booking without checking its state' },
-    async () => {
-      const target = await awaitingPayment('CANCELLED', 'cancelled');
-      await deliver(checkoutCompleted(`evt-cancelled-${runId}`, target));
-      assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: target.booking.id } })).status, 'CANCELLED');
+  // A03, fixed: a payment records money; it no longer decides a booking's status.
+  const refundRequests = (bookingId: string) => prisma.notification.count({
+    where: { user_id: adminAlpha.id, type: 'PAYMENT_NEEDS_REFUND', payload: { path: ['booking_id'], equals: bookingId } },
+  });
+
+  await t.test('payment for a cancelled booking is recorded, does not revive it, and asks for a refund', async () => {
+    const target = await awaitingPayment('CANCELLED', 'cancelled');
+    assert.equal((await deliver(checkoutCompleted(`evt-cancelled-${runId}`, target))).status, 200);
+    assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: target.booking.id } })).status, 'CANCELLED');
+    assert.equal((await prisma.payment.findUniqueOrThrow({ where: { id: target.payment.id } })).status, 'PAID', 'the money arrived, so it is recorded');
+    assert.equal(await refundRequests(target.booking.id), 1, 'studio staff are asked to refund it');
+  });
+
+  await t.test('a failed attempt delivered after the payment succeeded does not undo it', async () => {
+    const target = await awaitingPayment('PENDING', 'late-failure');
+    const eventId = `evt-late-failure-${runId}`;
+    assert.equal((await deliver(checkoutCompleted(eventId, target))).status, 200);
+    const failureNotices = () => prisma.notification.count({ where: { user_id: artistUser.id, type: 'PAYMENT_FAILED' } });
+    const noticesBefore = await failureNotices();
+
+    const failure = await deliver({
+      id: `${eventId}-intent`, object: 'event', type: 'payment_intent.payment_failed', created: Math.floor(Date.now() / 1000),
+      data: { object: { id: `intent-${eventId}`, object: 'payment_intent' } },
     });
+    assert.equal(failure.status, 200);
+    assert.equal((await prisma.payment.findUniqueOrThrow({ where: { id: target.payment.id } })).status, 'PAID');
+    assert.equal(await failureNotices(), noticesBefore, 'the artist is not told a settled payment failed');
+  });
+
+  await t.test('a checkout that fails before paying is marked failed', async () => {
+    const target = await awaitingPayment('PENDING', 'async-failure');
+    const failure = await deliver({
+      id: `evt-async-failure-${runId}`, object: 'event', type: 'checkout.session.async_payment_failed', created: Math.floor(Date.now() / 1000),
+      data: { object: { id: target.payment.provider_ref, object: 'checkout.session', payment_intent: null } },
+    });
+    assert.equal(failure.status, 200);
+    assert.equal((await prisma.payment.findUniqueOrThrow({ where: { id: target.payment.id } })).status, 'FAILED');
+  });
+
+  await t.test('a second checkout paying an already settled booking is flagged for refund, not recorded twice', async () => {
+    const target = await awaitingPayment('PENDING', 'double');
+    assert.equal((await deliver(checkoutCompleted(`evt-double-first-${runId}`, target))).status, 200);
+    const secondCheckout = { booking: target.booking, payment: { provider_ref: `checkout-double-second-${runId}` } };
+    assert.equal((await deliver(checkoutCompleted(`evt-double-second-${runId}`, secondCheckout))).status, 200);
+    assert.equal(await prisma.financialTransaction.count({ where: { source_type: 'BOOKING_PAYMENT', source_id: target.payment.id } }), 1);
+    assert.equal(await refundRequests(target.booking.id), 1, 'studio staff are asked to refund the second charge');
+  });
+
+  await t.test('checkout refuses a booking that cannot be paid, before reaching Stripe', async () => {
+    const cancelled = await awaitingPayment('CANCELLED', 'checkout-cancelled');
+    const refunded = await awaitingPayment('PENDING', 'checkout-refunded');
+    await prisma.payment.update({ where: { id: refunded.payment.id }, data: { status: 'REFUNDED' } });
+    for (const [label, target] of [['cancelled booking', cancelled], ['refunded payment', refunded]] as const) {
+      const attempt = await request('/payments/stripe/checkout-session', {
+        method: 'POST', headers: auth(artistUser), body: JSON.stringify({ booking_id: target.booking.id }),
+      });
+      assert.equal(attempt.status, 409, label);
+    }
+    assert.equal((await prisma.payment.findUniqueOrThrow({ where: { id: refunded.payment.id } })).status, 'REFUNDED', 'a refund is never reset to processing');
+  });
 });

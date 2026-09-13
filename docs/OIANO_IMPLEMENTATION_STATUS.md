@@ -73,6 +73,28 @@ Re-syncing an already-synced booking is verified to change nothing on real Postg
 architecture audit's §7 caution still applies to future edits: a statement added after the
 duplicate-evidence catch in `lib/weave/sync.ts` would run inside an aborted transaction.
 
+**Fixed after Session 4 — A02 and A03.**
+
+- **A02.** `lib/bookingTransitions.ts` is the one statement of which status a booking may
+  move to. COMPLETED, CANCELLED and NO_SHOW are closed, and every move a dashboard offers
+  stays legal. The status route, the completion screen, file delivery and the Stripe
+  webhook all go through it, writing only from the status they read, so a repeated or
+  racing completion is UNCHANGED and runs nothing twice, and a closed booking gets a 409.
+  Delivery is refused for cancelled and no-show bookings.
+- **A03.** A payment records money; it no longer decides booking state. It confirms only a
+  PENDING booking; money for a cancelled or no-show booking is recorded and the studio is
+  asked to refund it; a refunded payment never flips back to paid. A late failure event
+  cannot overwrite a paid payment, and asynchronous checkout failures are matched by session
+  (matching by payment intent alone meant the handler could find nothing but paid
+  payments). Checkout refuses cancelled, no-show and refunded bookings, hands back an open
+  session instead of opening a second payable one, and a second session that pays an
+  already settled booking is flagged for refund.
+- **Evidence.** The three todo tests pass, five integration tests were added, and the API
+  security suite grew from 53 to 80 with the new unit tests. Eight defects were put back at
+  once and every one failed its test. **Not exercised:** checkout's calls to Stripe to reuse
+  or expire an open session — typechecked, with the decision unit-tested, but never run
+  against Stripe.
+
 **Schema redesign:** designed for review in [schema redesign](OIANO_SCHEMA_REDESIGN.md),
 against the owner decisions of 2026-09-12. No migration is written; implementation
 waits for Session 5.

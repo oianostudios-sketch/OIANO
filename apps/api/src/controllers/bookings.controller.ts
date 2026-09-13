@@ -14,6 +14,7 @@ import { createNotification } from '../routes/notifications.routes';
 import { Prisma } from '@prisma/client';
 import { resolveStaffStudio } from '../middleware/studioScope.middleware';
 import { recordBookingCompleted } from '../lib/bookingCompletion';
+import { requireTransition, transitionBookingStatus } from '../lib/bookingTransitions';
 import { upsertSessionLog } from '../lib/sessionLog';
 import { applyWalletDelta } from '../lib/walletLedger';
 import { recordBookingPayment } from '../lib/financialLedger';
@@ -524,10 +525,14 @@ export async function updateBookingStatus(req: Request, res: Response, next: Nex
     });
     if (!existing) throw new AppError('Booking not found', 404);
 
-    const booking = await prisma.booking.update({
-      where: { id: req.params.id },
-      data: { status },
-    });
+    const transition = requireTransition(
+      await transitionBookingStatus(prisma, { bookingId: existing.id, to: status, studioId: studio.id }),
+    );
+    const booking = await prisma.booking.findUniqueOrThrow({ where: { id: existing.id } });
+
+    // Asking for the status a booking already has changes nothing, so nothing
+    // repeats: no second completion, notification, email or broadcast (A02).
+    if (transition.outcome !== 'APPLIED') return res.json(booking);
 
     // Auto-create SessionLog on completion
     if (status === 'COMPLETED') {
@@ -643,6 +648,11 @@ export async function deliverSessionFiles(req: Request, res: Response, next: Nex
       include: { artist: { include: { user: true } }, service: true },
     });
     if (!booking) throw new AppError('Booking not found', 404);
+    // Delivery belongs to a session that happened or is happening. A cancelled or
+    // no-show booking refuses it, as the completion screen already did.
+    if (booking.status === 'CANCELLED' || booking.status === 'NO_SHOW') {
+      throw new AppError(`Cannot deliver files for a ${booking.status} booking`, 409);
+    }
 
     // Delivery URLs belong to immutable deliverable versions, not the list of
     // track titles worked during a session. Keep those two data domains apart.
@@ -683,11 +693,13 @@ export async function deliverSessionFiles(req: Request, res: Response, next: Nex
       });
     });
 
-    // Move booking to COMPLETED if still CONFIRMED/IN_PROGRESS
-    if (['CONFIRMED','IN_PROGRESS'].includes(booking.status)) {
-      await prisma.booking.update({ where: { id: booking.id }, data: { status: 'COMPLETED' } });
-      await recordBookingCompleted(booking);
-    }
+    // Delivery completes a session that was confirmed or under way. Deciding that at the
+    // moment of writing means it never re-completes, or revives, a booking another
+    // request moved in the meantime (A02).
+    const completion = await transitionBookingStatus(prisma, {
+      bookingId: booking.id, to: 'COMPLETED', studioId: studio.id, onlyFrom: ['CONFIRMED', 'IN_PROGRESS'],
+    });
+    if (completion.outcome === 'APPLIED') await recordBookingCompleted(booking);
 
     // In-app notification to artist
     if (booking.artist?.user_id) {

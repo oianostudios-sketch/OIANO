@@ -8,6 +8,7 @@ import { Prisma } from '@prisma/client';
 import { applyWalletDelta } from '../lib/walletLedger';
 import { recordBookingPayment, recordWalletTopUp, postFinancialTransaction, bookingAllocation } from '../lib/financialLedger';
 import { emitActivityEvent } from '../lib/activityEvents';
+import { transitionBookingStatus } from '../lib/bookingTransitions';
 
 export const webhooksRouter = Router();
 
@@ -94,10 +95,15 @@ async function handleBookingPayment(session: Stripe.Checkout.Session) {
     ? session.payment_intent
     : (session.payment_intent as any)?.id ?? null;
 
-  const applied = await prisma.$transaction(async (tx) => {
-    // 1. Update payment — store payment_intent_id for reliable future matching
+  const payment = booking.payment;
+  const amountUsd = Number(payment.amount_usd);
+
+  const settled = await prisma.$transaction(async (tx) => {
+    // 1. Settle the payment, storing payment_intent_id for reliable future matching.
+    // Only an unsettled payment can become PAID, so a refunded one is never flipped
+    // back to paid by a late or foreign event (A03).
     const claimed = await tx.payment.updateMany({
-      where: { booking_id: bookingId, status: { not: 'PAID' } },
+      where: { booking_id: bookingId, status: { in: ['UNPAID', 'PROCESSING', 'FAILED'] } },
       data: {
         provider_ref:      session.id,
         payment_intent_id: paymentIntentId,
@@ -105,28 +111,44 @@ async function handleBookingPayment(session: Stripe.Checkout.Session) {
         paid_at:           new Date(),
       },
     });
-    if (claimed.count === 0) return false;
-    await recordBookingPayment(tx, { paymentId: booking.payment!.id, provider: 'stripe', amountUsd: Number(booking.payment!.amount_usd), platformFeeBps: booking.studio.platform_fee_bps, artistId: booking.artist_id, studioId: booking.studio_id, bookingId: booking.id });
+    if (claimed.count === 0) return null;
+    await recordBookingPayment(tx, { paymentId: payment.id, provider: 'stripe', amountUsd, platformFeeBps: booking.studio.platform_fee_bps, artistId: booking.artist_id, studioId: booking.studio_id, bookingId: booking.id });
 
-    // 2. Confirm booking
-    await tx.booking.update({ where: { id: bookingId }, data: { status: 'CONFIRMED' } });
+    // 2. A payment confirms a booking only while the booking is still waiting to be
+    // confirmed (A03). Money that arrives for a cancelled or no-show booking is
+    // recorded, because it arrived, but it does not bring the booking back.
+    const confirmation = await transitionBookingStatus(tx, { bookingId, to: 'CONFIRMED', onlyFrom: ['PENDING'] });
+    const { status } = await tx.booking.findUniqueOrThrow({ where: { id: bookingId }, select: { status: true } });
+    const confirmedNow = confirmation.outcome === 'APPLIED';
+    const needsRefund = status === 'CANCELLED' || status === 'NO_SHOW';
 
     // Stripe payments do not mutate the studio-credit wallet ledger.
-    // In-app notification
     if (booking.artist?.user_id) {
-      await tx.notification.create({
-        data: {
-          user_id: booking.artist.user_id,
-          title:   'Booking confirmed',
-          body:    'Your session has been confirmed and payment received.',
-          type:    'BOOKING_CONFIRMED',
-        },
-      });
+      const notice = confirmedNow
+        ? { title: 'Booking confirmed', body: 'Your session has been confirmed and payment received.', type: 'BOOKING_CONFIRMED' }
+        : needsRefund
+          ? { title: 'Payment received for an inactive booking', body: 'We received your payment, but this booking is no longer active. The studio has been asked to refund you.', type: 'PAYMENT_NEEDS_REFUND' }
+          : { title: 'Payment received', body: 'Your payment for this session has been received.', type: 'PAYMENT_CONFIRMED' };
+      await tx.notification.create({ data: { user_id: booking.artist.user_id, ...notice } });
     }
-    return true;
+    if (needsRefund) {
+      await notifyStudioToRefund(tx, booking, payment.id,
+        `A payment of $${amountUsd.toFixed(2)} arrived for a booking that is ${status === 'NO_SHOW' ? 'marked no-show' : 'cancelled'}. Refund it in Stripe; OIANO records the refund when Stripe reports it.`);
+    }
+    return { status };
   });
 
-  if (!applied) return;
+  if (!settled) {
+    // Nothing left to settle. If this session is not the one that paid, the customer
+    // has been charged a second time for one booking. Staying silent would leave that
+    // money unrecorded, so it has to reach someone who can refund it.
+    if (payment.provider_ref !== session.id) {
+      await notifyStudioToRefund(prisma, booking, payment.id,
+        `A second payment of $${amountUsd.toFixed(2)} arrived through another checkout for a booking that was already settled. Refund that second charge in Stripe.`);
+      console.error(`[stripe] checkout ${session.id} paid booking ${booking.id}, already settled by ${payment.provider_ref ?? 'another payment'}`);
+    }
+    return;
+  }
 
   // 5. Email receipt — outside transaction, non-fatal
   if (booking.artist?.user?.email) {
@@ -142,7 +164,7 @@ async function handleBookingPayment(session: Stripe.Checkout.Session) {
     broadcastToUser(booking.artist.user_id, {
       type: 'booking_updated',
       bookingId: booking.id,
-      status: 'CONFIRMED',
+      status: settled.status,
     });
   }
   emitActivityEvent('payment.received', {
@@ -217,19 +239,54 @@ async function handleWalletTopUp(session: Stripe.Checkout.Session) {
   }
 }
 
+// A payment OIANO received but cannot apply has to reach a person, because only the
+// studio can refund it. Every staff member of the booking's studio is told.
+async function notifyStudioToRefund(
+  db: Prisma.TransactionClient | typeof prisma,
+  booking: { id: string; studio_id: string },
+  paymentId: string,
+  body: string,
+) {
+  const staff = await db.studioStaff.findMany({ where: { studio_id: booking.studio_id }, select: { user_id: true } });
+  if (!staff.length) return;
+  await db.notification.createMany({
+    data: staff.map(({ user_id }) => ({
+      user_id,
+      type: 'PAYMENT_NEEDS_REFUND',
+      title: 'Refund needed',
+      body,
+      payload: { booking_id: booking.id, payment_id: paymentId },
+    })),
+  });
+}
+
 async function handlePaymentFailed(obj: any) {
-  // Match by payment_intent_id — reliable, not fuzzy amount
+  // A checkout session is matched by its own id, a payment intent by the intent id.
+  // The intent id is stored only once a payment succeeds, so matching failures by it
+  // alone found nothing except payments that had already been paid, and then marked
+  // those FAILED (A03).
+  const sessionId: string | null = obj.object === 'checkout.session' ? obj.id : null;
   const paymentIntentId: string | null =
-    obj.payment_intent ?? (obj.object === 'payment_intent' ? obj.id : null);
-  if (!paymentIntentId) return;
+    obj.object === 'payment_intent' ? obj.id : typeof obj.payment_intent === 'string' ? obj.payment_intent : null;
+  const match = [
+    ...(sessionId ? [{ provider_ref: sessionId }] : []),
+    ...(paymentIntentId ? [{ payment_intent_id: paymentIntentId }] : []),
+  ];
+  if (!match.length) return;
 
   const payment = await prisma.payment.findFirst({
-    where:   { payment_intent_id: paymentIntentId },
+    where:   { OR: match },
     include: { booking: { include: { artist: true } } },
   });
   if (!payment) return;
 
-  await prisma.payment.update({ where: { id: payment.id }, data: { status: 'FAILED' } });
+  // A failure never overrides money that settled or was refunded: Stripe can deliver
+  // a failed attempt after the attempt that succeeded.
+  const failed = await prisma.payment.updateMany({
+    where: { id: payment.id, status: { in: ['UNPAID', 'PROCESSING'] } },
+    data:  { status: 'FAILED' },
+  });
+  if (failed.count !== 1) return;
 
   if (payment.booking.artist?.user_id) {
     await prisma.notification.create({
