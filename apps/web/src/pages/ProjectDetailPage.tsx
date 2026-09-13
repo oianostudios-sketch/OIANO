@@ -184,7 +184,9 @@ export default function ProjectDetailPage() {
   }
 
   const phaseConf = PHASES.find(p => p.key === project.phase) ?? PHASES[0];
-  const totalRevenue = project.bookings.reduce((sum, b) => sum + Number(b.total_usd ?? 0), 0);
+  // What this project's sessions were booked for, paid or not. It is not money
+  // received; payments are recorded per booking (A10).
+  const bookedValue = project.bookings.reduce((sum, b) => sum + Number(b.total_usd ?? 0), 0);
   const sortedBookings = [...project.bookings].sort((a, b) => new Date(b.starts_at).getTime() - new Date(a.starts_at).getTime());
 
   return (
@@ -263,7 +265,7 @@ export default function ProjectDetailPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '2rem' }}>
           {[
             { label: 'Sessions', value: String(project.bookings.length) },
-            { label: 'Revenue',  value: fmtCurrency(totalRevenue) },
+            { label: 'Booked value', value: fmtCurrency(bookedValue) },
             { label: 'Last session', value: project.last_session_at ? fmtDate(project.last_session_at) : '—' },
           ].map(s => (
             <div key={s.label} style={{ background: 'var(--surface, #141414)', border: '1px solid var(--border, #1e1e1e)', borderRadius: 10, padding: '0.9rem 1rem' }}>
