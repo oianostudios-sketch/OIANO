@@ -6,6 +6,7 @@ import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
 import { PERFORMED_SESSION_WHERE, summariseVerifiedWork } from '../lib/verifiedWork';
+import { portfolioBreakdown, portfolioScore } from '../lib/passportScore';
 import { isR2Configured, uploadToR2, deleteFromR2 } from '../lib/r2';
 import { getImageUpload, normalizeImageUpload, writeNormalizedImageLocally } from '../lib/imageUpload';
 import QRCode from 'qrcode';
@@ -48,48 +49,7 @@ const releaseSchema = z.object({
 }).strict();
 const releaseUpdateSchema = releaseSchema.partial().refine((data) => Object.keys(data).length > 0, 'At least one release field is required');
 
-function portfolioScore(artist: any) {
-  const passport = artist.passport ?? {};
-  const dna = passport.creative_dna ?? {};
-  const links = Object.keys(passport.social_links ?? {}).length;
-  const releases = artist.releases?.length ?? 0;
-  const active = artist.projects?.filter((p: any) => p.is_active).length ?? 0;
-  const completed = artist.projects?.filter((p: any) => p.phase === 'DELIVERED').length ?? 0;
-  const verifiedBookings = artist.bookings?.length ?? 0;
-  const studioHours = (artist.bookings ?? []).reduce((sum: number, booking: any) =>
-    sum + Math.max(0, new Date(booking.ends_at).getTime() - new Date(booking.starts_at).getTime()) / 3_600_000, 0);
-  return Math.min(100, [
-    [artist.name, 3], [artist.alias, 3], [artist.avatar_url, 5], [artist.bio, 5],
-    [passport.location, 2], [artist.status, 2], [dna.genres?.length, 4],
-    [dna.vocal_type, 3], [dna.energy_profile, 2], [dna.key_themes?.length, 2],
-    [dna.influences?.length, 2], [dna.languages?.length, 2],
-    [passport.collaboration_interests?.length, 3], [links, Math.min(10, links * 2)],
-    [releases, releases ? 8 + Math.min(12, Math.max(0, releases - 1) * 4) : 0],
-    [active, active ? 8 : 0], [completed, completed ? 5 : 0],
-    [verifiedBookings, 5], [studioHours, 3], [artist.created_at, 1],
-    [passport.passport_code, 3], [true, 7],
-  ].reduce((sum, [value, weight]) => sum + (value ? Number(weight) : 0), 0));
-}
-
-function portfolioBreakdown(artist: any) {
-  const passport = artist.passport ?? {};
-  const dna = passport.creative_dna ?? {};
-  const links = Object.keys(passport.social_links ?? {}).length;
-  const releases = artist.releases?.length ?? 0;
-  const active = artist.projects?.some((p: any) => p.is_active && p.phase !== 'DELIVERED');
-  const completed = artist.projects?.some((p: any) => p.phase === 'DELIVERED');
-  const bookings = artist.bookings ?? [];
-  const hours = bookings.reduce((sum: number, booking: any) => sum + Math.max(0, new Date(booking.ends_at).getTime() - new Date(booking.starts_at).getTime()) / 3_600_000, 0);
-  return [
-    { label: 'Core identity', max: 20, earned: [artist.name ? 3 : 0, artist.alias ? 3 : 0, artist.avatar_url ? 5 : 0, artist.bio ? 5 : 0, passport.location ? 2 : 0, artist.status ? 2 : 0].reduce((a, b) => a + b, 0) },
-    { label: 'Creative identity', max: 18, earned: [dna.genres?.length ? 4 : 0, dna.vocal_type ? 3 : 0, dna.energy_profile ? 2 : 0, dna.key_themes?.length ? 2 : 0, dna.influences?.length ? 2 : 0, dna.languages?.length ? 2 : 0, passport.collaboration_interests?.length ? 3 : 0].reduce((a, b) => a + b, 0) },
-    { label: 'Social & streaming', max: 10, earned: Math.min(10, links * 2) },
-    { label: 'Released work', max: 20, earned: releases ? 8 + Math.min(12, Math.max(0, releases - 1) * 4) : 0 },
-    { label: 'Projects', max: 13, earned: (active ? 8 : 0) + (completed ? 5 : 0) },
-    { label: 'Verified OIANO activity', max: 12, earned: (bookings.length ? 5 : 0) + (hours ? 3 : 0) + 1 + (passport.passport_code ? 3 : 0) },
-    { label: 'Professional tools', max: 7, earned: 7 },
-  ];
-}
+// Scoring lives in lib/passportScore.ts, where the score is the total of its breakdown.
 
 async function recalculatePortfolioScore(artistId: string) {
   const artist = await prisma.artist.findUnique({

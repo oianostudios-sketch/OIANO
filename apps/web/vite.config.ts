@@ -1,6 +1,9 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+// scripts/local-db.js points the proxy at its own API when 4000 is taken.
+const apiTarget = process.env.OIANO_API_PROXY_TARGET ?? 'http://127.0.0.1:4000';
+
 export default defineConfig({
   plugins: [react()],
   server: {
@@ -9,12 +12,12 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:4000',
+        target: apiTarget,
         changeOrigin: true,
         ws: true,
       },
       '/ws': {
-        target: 'ws://127.0.0.1:4000',
+        target: apiTarget.replace(/^http/, 'ws'),
         ws: true,
       },
     },

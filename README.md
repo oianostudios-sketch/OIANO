@@ -1,54 +1,41 @@
-# OIANO StudioOS
+# OIANO
 
-Studio management platform for **Dreamz Music Lab** — Artist Passports, bookings, payments, AI briefs.
+OIANO is a Creative Work Network. People start creative work, find the people and
+places it needs, agree terms, settle what is owed and build a professional record
+from evidence. Identity is issued by OIANO; studios are organizations on the network.
 
-## Quick start
+- Working on the code, as a person or an agent: read [AGENTS.md](AGENTS.md) first.
+- Which documents are current: [docs/README.md](docs/README.md).
 
-### 1. Prerequisites
-- Node.js 20+
-- Docker (for Postgres)
-- pnpm or npm
+## Run it locally
 
-### 2. Database
+You need Node 24 (22 or later works), npm, and PostgreSQL 14 or later command-line
+tools. Nothing here uses the database named in `.env`.
+
 ```bash
-docker-compose up -d
+npm ci
 ```
 
-### 3. Environment
 ```bash
-cp .env.example apps/api/.env
-# Edit DATABASE_URL, JWT_SECRET, ANTHROPIC_API_KEY
+npx prisma generate
 ```
 
-### 4. Install & migrate
 ```bash
-npm install
-cd apps/api && npx prisma generate && npx prisma migrate dev --name init
-npx ts-node ../../prisma/seed.ts
-cd ../..
+npm run dev:local
 ```
 
-### 5. Run
-```bash
-npm run dev
-```
+`dev:local` starts a private PostgreSQL in `.oiano/`, migrates and seeds a local
+database, and runs the API and the web app, on http://localhost:4000 and
+http://localhost:5173 unless other dev servers hold those ports, in which case it
+picks the next free ones and prints them. Demo accounts are defined in
+`prisma/seed.ts`.
 
-API → http://localhost:4000  
-Web → http://localhost:5173  
-Prisma Studio → `npm run db:studio`
+## Check your work
 
-## Demo logins
-| Role | Email | Password |
-|------|-------|----------|
-| Studio Admin | admin@dreamzmusiclab.com | admin123 |
-| Artist | demo@artist.com | artist123 |
-
-## API
-`GET /health` — health check  
-See `CLAUDE_CODE_PROMPT.md` for full API surface.
-
-## Phase roadmap
-- **Phase 1** ✅ Auth, Passport, Bookings, AI Brief
-- **Phase 2** 🔲 Stripe checkout, file uploads, notifications
-- **Phase 3** 🔲 Greep Pay, email (Resend), mobile nav
-- **Phase 4** 🔲 Docker deploy, E2E tests, production hardening
+| Check | Command |
+|---|---|
+| Typecheck | `npm run typecheck --workspace=apps/api` and `npm run typecheck --workspace=apps/web` |
+| API unit and web suites | `npm test` |
+| Integration suite on a fresh database | `npm run test:integration:local` |
+| Build | `npm run build` |
+| Secrets | `npm run security:secrets` |

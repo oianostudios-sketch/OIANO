@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { attachStudioScope, resolveStaffStudio } from '../middleware/studioScope.middleware';
 import { appendSessionLogNote, upsertSessionLog } from '../lib/sessionLog';
+import { liveSession, minutesIntoStudioDay, studioDayBounds } from '../lib/studioClock';
 
 // The only request body in the API that was read straight off req.body, against
 // the project's own rule that Zod validates every body. An unbounded note went
@@ -37,30 +38,30 @@ studioClockRouter.get('/', authenticate, requireRole('STUDIO_ADMIN', 'ENGINEER')
     }
 
     const now = new Date();
-    const dayStart = new Date(now);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(now);
-    dayEnd.setHours(23, 59, 59, 999);
+    // The studio's own day, not the server's (lib/studioClock.ts).
+    const { start: dayStart, end: dayEnd } = studioDayBounds(now, studio.timezone);
 
     const todayBookings = await prisma.booking.findMany({
       where: {
         studio_id: studio.id,
         status: { notIn: ['CANCELLED', 'NO_SHOW'] },
-        starts_at: { gte: dayStart, lte: dayEnd },
+        // Every session that touches the day, one that began before midnight included.
+        starts_at: { lt: dayEnd },
+        ends_at: { gt: dayStart },
       },
       include: { artist: true, room: true, engineer: true, service: true },
       orderBy: { starts_at: 'asc' },
     });
 
-    const active = todayBookings.find(
-      (b) => b.starts_at <= now && b.ends_at >= now,
-    );
+    // Scheduled is not live: a confirmed session within its time, or one still in
+    // progress, even past its end.
+    const active = liveSession(todayBookings, now);
     const upcoming = todayBookings.filter((b) => b.starts_at > now);
 
-    // Map every booking to a 24-hour clock arc
+    // Map every booking to a 24-hour clock arc, in studio time
     const outerRing = todayBookings.map((b) => {
-      const startMins = b.starts_at.getHours() * 60 + b.starts_at.getMinutes();
-      const endMins = b.ends_at.getHours() * 60 + b.ends_at.getMinutes();
+      const startMins = b.starts_at <= dayStart ? 0 : minutesIntoStudioDay(b.starts_at, studio.timezone);
+      const endMins = b.ends_at >= dayEnd ? 1440 : minutesIntoStudioDay(b.ends_at, studio.timezone);
       const isActive = active != null && b.id === active.id;
       const endsIn = (b.ends_at.getTime() - now.getTime()) / 60_000;
       const status: SessionStatus = isActive

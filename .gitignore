@@ -38,5 +38,8 @@ packages/shared/dist/
 # Local agent tool config (not product code)
 .codex/
 
+# Private PostgreSQL for development and verification (scripts/local-db.js)
+.oiano/
+
 # CI diagnostic capture (see .github/workflows/ci.yml)
 test-output.txt

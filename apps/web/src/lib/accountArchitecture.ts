@@ -13,7 +13,7 @@ export interface AccountProfile {
 export const ACCOUNT_PROFILES: Record<AccountFamily, AccountProfile> = {
   ARTIST: {
     family: 'ARTIST', label: 'Artist', eyebrow: 'Create and grow',
-    purpose: 'Discover studios, build projects and grow a verified professional record.',
+    purpose: 'Follow your projects, join contributions and keep a record of your work.',
     homePath: '/dashboard', access: 'OPEN',
   },
   STUDIO: {

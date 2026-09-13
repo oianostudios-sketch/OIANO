@@ -7,9 +7,10 @@
  *
  * Identity Formation Audit (this session) rewrote Identity and Formation —
  * multi-select sound instead of one chip, a stage-name field, and a real
- * Oiano payoff screen instead of unrelated placeholder branding. Status and
- * Calendar are real working features (availability, a real booking) outside
- * that audit's scope and are unchanged.
+ * Oiano payoff screen instead of unrelated placeholder branding. Status sets
+ * real availability. The Calendar step no longer books anything: OIANO issues
+ * the identity, so a first session is booked later, at a studio the artist
+ * chooses.
  */
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -325,129 +326,29 @@ function StatusStep({ onAdvance }: { onAdvance: () => void }) {
   );
 }
 
-// ── Screen 4 — Calendar (simplified real slots) ───────────────────────────────
+// ── Screen 4 — First session ────────────────────────────────────────────────
+// OIANO issues the identity; no studio does. This step used to book every new
+// artist into one hardcoded studio (Dreamz Music Lab, by its production id)
+// against made-up availability. Booking is now a choice made later, at any
+// studio, through the real booking flow.
 function CalendarStep({ onAdvance }: { onAdvance: (slot: SharedState['bookingSlot']) => void }) {
-  const [expandedSlot, setExpandedSlot] = useState<{ day: Date; hour: number } | null>(null);
-  const [booking, setBooking] = useState(false);
-  const [error, setError] = useState('');
-
-  const HOURS = [10, 12, 14, 16, 18, 20];
-  const today = new Date();
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(today);
-    d.setDate(d.getDate() + i);
-    return d;
-  });
-
-  // Simple deterministic "already booked" pattern so the grid isn't all-open —
-  // real availability is checked server-side on confirm regardless.
-  function isTaken(day: Date, hour: number) {
-    return (day.getDate() + hour) % 5 === 0;
-  }
-
-  async function confirmSlot(day: Date, hour: number) {
-    setBooking(true);
-    setError('');
-    try {
-      const starts = new Date(day);
-      starts.setHours(hour, 0, 0, 0);
-      const ends = new Date(starts);
-      ends.setHours(ends.getHours() + 1);
-
-      const { data } = await api.post('/bookings', {
-        // studio_id became a required field on this endpoint at some point
-        // after this demo flow was written — room-vocal-booth/svc-recording
-        // both belong to dreamz-music-lab, confirmed directly against the DB.
-        // Without this every new artist got stuck here and never reached
-        // Formation at all.
-        studio_id: 'c7af1079-df54-4b47-9ce5-e8f6eee74a22',
-        room_id: 'room-vocal-booth',
-        service_id: 'svc-recording',
-        starts_at: starts.toISOString(),
-        ends_at: ends.toISOString(),
-      });
-
-      onAdvance({
-        starts_at: data.starts_at,
-        ends_at: data.ends_at,
-        roomName: data.room?.name ?? 'Vocal Booth',
-      });
-    } catch (err: any) {
-      const message = err?.response?.data?.error ?? 'Could not book that slot';
-      // Every new artist starts with a $0 wallet, so this is the single most
-      // likely failure here — without an escape hatch it was a hard dead
-      // end: no session, no way to ever finish onboarding. Skip below keeps
-      // onboarding completable regardless of when/how they fund their wallet;
-      // it does not change what booking a real session actually costs.
-      setError(message === 'Insufficient wallet balance' ? "You'll need studio credit to book — add funds anytime, or skip this for now." : message);
-      setBooking(false);
-    }
-  }
-
   return (
-    <div className="onb-screen" style={{ padding: '48px 32px' }}>
+    <div className="onb-screen" style={{ padding: '48px 32px', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
       <p style={{
         fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.14em',
-        color: '#555', textTransform: 'uppercase', marginBottom: 8, textAlign: 'center',
-      }}>Pick a session</p>
-      <p style={{ textAlign: 'center', marginBottom: 20 }}>
-        <button type="button" onClick={() => onAdvance(null)} style={{ background: 'none', border: 'none', color: '#555', fontSize: 11, cursor: 'pointer', font: 'inherit' }}>Skip for now →</button>
+        color: '#555', textTransform: 'uppercase', marginBottom: 8,
+      }}>Your first session</p>
+      <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 26, fontWeight: 500, color: '#f0ede8', margin: '0 0 10px' }}>
+        Book it wherever you choose
+      </h2>
+      <p style={{ color: '#888', fontSize: 13, lineHeight: 1.6, maxWidth: 420, margin: '0 auto 24px' }}>
+        Your identity comes from OIANO, not from any one studio. When you are ready, pick a studio, a room and a time.
       </p>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6, maxWidth: 700, margin: '0 auto' }}>
-        {days.map((day) => (
-          <div key={day.toISOString()}>
-            <div style={{ textAlign: 'center', marginBottom: 8 }}>
-              <div style={{ fontSize: 10, color: '#555', fontFamily: "'JetBrains Mono', monospace" }}>
-                {day.toLocaleDateString('en-US', { weekday: 'short' })}
-              </div>
-              <div style={{ fontSize: 14, color: '#ccc' }}>{day.getDate()}</div>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {HOURS.map((hour) => {
-                const taken = isTaken(day, hour);
-                const isExpanded = expandedSlot?.day.toDateString() === day.toDateString() && expandedSlot?.hour === hour;
-                return (
-                  <div key={hour}>
-                    <div
-                      onClick={() => !taken && setExpandedSlot(isExpanded ? null : { day, hour })}
-                      style={{
-                        padding: '8px 4px', borderRadius: 6, fontSize: 11, textAlign: 'center',
-                        cursor: taken ? 'default' : 'pointer',
-                        background: taken ? 'repeating-linear-gradient(45deg, #161616, #161616 4px, #1c1c1c 4px, #1c1c1c 8px)' : (isExpanded ? `${DOME}22` : '#141414'),
-                        border: `1px solid ${isExpanded ? DOME : '#222'}`,
-                        color: taken ? '#3a3a3a' : (isExpanded ? DOME : '#999'),
-                      }}
-                    >
-                      {hour > 12 ? hour - 12 : hour}{hour >= 12 ? 'pm' : 'am'}
-                    </div>
-                    {isExpanded && (
-                      <div className="onb-slot-expand" style={{
-                        marginTop: 4, padding: '8px', borderRadius: 6,
-                        background: '#0d0d0d', border: `1px solid ${DOME}`, textAlign: 'center',
-                      }}>
-                        <button
-                          disabled={booking}
-                          onClick={() => confirmSlot(day, hour)}
-                          style={{
-                            width: '100%', padding: '8px', borderRadius: 6, border: 'none',
-                            background: DOME, color: '#000', fontWeight: 700, fontSize: 11,
-                            cursor: booking ? 'wait' : 'pointer',
-                          }}
-                        >{booking ? '…' : 'Confirm'}</button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {error && (
-        <p style={{ textAlign: 'center', color: '#f87171', fontSize: 12, marginTop: 20 }}>{error}</p>
-      )}
+      <button
+        type="button"
+        onClick={() => onAdvance(null)}
+        style={{ padding: '12px 22px', borderRadius: 8, border: 'none', background: DOME, color: '#000', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}
+      >Continue</button>
     </div>
   );
 }
@@ -502,7 +403,8 @@ export default function OnboardingSequencePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const requestedNext = searchParams.get('next');
-  const safeNext = requestedNext?.startsWith('/') && !requestedNext.startsWith('//') ? requestedNext : '/calendar';
+  // Home, not a studio calendar: a new artist has no studio yet.
+  const safeNext = requestedNext?.startsWith('/') && !requestedNext.startsWith('//') ? requestedNext : '/dashboard';
   const user = useAuthStore((s) => s.user);
   const [step, setStep] = useState<Step>('identity');
   const [state, setState] = useState<SharedState>({
@@ -511,8 +413,7 @@ export default function OnboardingSequencePage() {
   });
 
   // A returning artist who already formed their identity should never land
-  // back on Identity/Status/Calendar by accident — Calendar creates a real
-  // booking, so re-running this sequence isn't a harmless replay.
+  // back on Identity/Status/Calendar by accident.
   useEffect(() => {
     if (user?.artist?.onboarding_completed_at) navigate(safeNext, { replace: true });
   }, []);

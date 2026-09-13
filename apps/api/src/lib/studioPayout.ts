@@ -6,24 +6,52 @@ import { emitActivityEvent } from './activityEvents';
 
 function money(value: number) { return Math.round(value * 100) / 100; }
 
+// Booking payments, refunds and top-ups post to the ledger in USD, and every
+// amount is held as amount_usd. Payouts used to take their currency from the
+// studio instead, so a studio pricing in euros would have been sent its dollar
+// balance labelled as euros. Until amounts carry their own currency (the owner's
+// decision of 2026-09-12), a studio is owed, and paid, in the currency the money
+// was earned in: USD.
+export const PAYABLE_CURRENCY = 'USD';
+
+export interface StudioPayable {
+  /** What OIANO owes the studio, in USD. */
+  amountUsd: number;
+  /** Other currencies this studio's payable has entries in; they must be reconciled before a payout. */
+  otherCurrencies: string[];
+}
+
 // What OIANO still owes a studio, read from the ledger rather than a cached
 // balance. STUDIO_PAYABLE is CREDITed when a booking is paid and DEBITed when it
 // is refunded or paid out, so the outstanding amount is credits minus debits.
-// The ledger is the only thing that knows this; nothing caches it, so nothing can
-// drift out of step with it.
+// Each entry counts in the currency its transaction was posted in, and amounts in
+// different currencies are never added together.
+export async function studioPayable(
+  studioId: string,
+  db: Prisma.TransactionClient | typeof prisma = prisma,
+): Promise<StudioPayable> {
+  const entries = await db.financialLedgerEntry.findMany({
+    where: { account_code: 'STUDIO_PAYABLE', owner_type: 'STUDIO', owner_id: studioId },
+    select: { direction: true, amount_usd: true, transaction: { select: { currency: true } } },
+  });
+  let amountUsd = 0;
+  const otherCurrencies = new Set<string>();
+  for (const entry of entries) {
+    const currency = entry.transaction.currency.toUpperCase();
+    if (currency !== PAYABLE_CURRENCY) {
+      otherCurrencies.add(currency);
+      continue;
+    }
+    amountUsd += entry.direction === 'CREDIT' ? Number(entry.amount_usd) : -Number(entry.amount_usd);
+  }
+  return { amountUsd: money(amountUsd), otherCurrencies: [...otherCurrencies].sort() };
+}
+
 export async function outstandingPayableUsd(
   studioId: string,
   db: Prisma.TransactionClient | typeof prisma = prisma,
 ): Promise<number> {
-  const entries = await db.financialLedgerEntry.findMany({
-    where: { account_code: 'STUDIO_PAYABLE', owner_type: 'STUDIO', owner_id: studioId },
-    select: { direction: true, amount_usd: true },
-  });
-  const total = entries.reduce(
-    (sum, entry) => sum + (entry.direction === 'CREDIT' ? Number(entry.amount_usd) : -Number(entry.amount_usd)),
-    0,
-  );
-  return money(total);
+  return (await studioPayable(studioId, db)).amountUsd;
 }
 
 export interface PayoutRequest {
@@ -46,18 +74,26 @@ export async function reserveStudioPayout(input: PayoutRequest) {
   return prisma.$transaction(async (tx) => {
     const studio = await tx.studio.findUnique({
       where: { id: input.studioId },
-      select: { id: true, currency: true, stripe_account_id: true },
+      select: { id: true, stripe_account_id: true },
     });
     if (!studio) throw new AppError('Studio not found', 404);
 
-    const outstanding = await outstandingPayableUsd(input.studioId, tx);
+    const payable = await studioPayable(input.studioId, tx);
+    // Entries in another currency were recorded before payouts stopped taking the
+    // studio's currency: a dollar amount under another label. The dollar total
+    // cannot be trusted while they stand, and paying it could pay the same money
+    // twice, so someone reconciles the payable first.
+    if (payable.otherCurrencies.length > 0) {
+      throw new AppError(`This studio's payable has entries in ${payable.otherCurrencies.join(', ')}; reconcile them before paying out`, 409);
+    }
+    const outstanding = payable.amountUsd;
     if (outstanding <= 0) throw new AppError('Nothing is currently payable to this studio', 409);
 
     const payout = await tx.studioPayout.create({
       data: {
         studio_id: studio.id,
         amount_usd: new Prisma.Decimal(outstanding.toFixed(2)),
-        currency: studio.currency,
+        currency: PAYABLE_CURRENCY,
         status: 'PENDING',
         requested_by: input.requestedBy,
       },
@@ -70,7 +106,7 @@ export async function reserveStudioPayout(input: PayoutRequest) {
       source_type: 'STUDIO_PAYOUT',
       source_id: payout.id,
       description: `Payout to studio ${studio.id}`,
-      currency: studio.currency,
+      currency: PAYABLE_CURRENCY,
       metadata: { studio_id: studio.id, requested_by: input.requestedBy },
       lines: [
         { account_code: 'STUDIO_PAYABLE', direction: 'DEBIT', amount_usd: outstanding, owner_type: 'STUDIO', owner_id: studio.id },

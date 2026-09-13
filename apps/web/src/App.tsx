@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from './store/auth.store';
 import { useSSE } from './hooks/useSSE';
 import MobileBottomNav from './components/MobileBottomNav';
+import CreatorNavigation from './components/CreatorNavigation';
 import StudioStatusBar from './components/StudioStatusBar';
 import ArtistStatusToggle from './components/ArtistStatusToggle';
 import { StudioStateProvider } from './context/StudioState';
@@ -96,9 +97,10 @@ function Chrome() {
   const { user } = useAuthStore();
   if (!user || CHROME_FREE_ROUTES.includes(pathname) || pathname.startsWith('/legal/') || pathname.startsWith('/p/') || pathname.startsWith('/s/')) return null;
   const artistDashboard = pathname === '/dashboard' && user?.role === 'ARTIST';
+  const creator = user.role === 'ARTIST' || user.role === 'PRODUCER';
   return (
     <>
-      <EcosystemNetworkPanel />
+      {creator ? <CreatorNavigation /> : <EcosystemNetworkPanel />}
       {!artistDashboard && <StudioStatusBar />}
       {!artistDashboard && <ArtistStatusToggle />}
       <MobileBottomNav />

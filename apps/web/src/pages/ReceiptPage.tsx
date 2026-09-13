@@ -101,7 +101,7 @@ export default function ReceiptPage() {
           <div>
             <OianoBrand variant="compact" size={22} />
             <p style={{ color: '#666', fontSize: 11, margin: '4px 0 0', letterSpacing: 1 }}>
-              DREAMZ MUSIC LAB · STUDIO RECEIPT
+              {(booking.studio?.name ?? 'Studio').toUpperCase()} · STUDIO RECEIPT
             </p>
           </div>
           <div style={{ textAlign: 'right' }}>

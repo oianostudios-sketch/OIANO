@@ -160,7 +160,7 @@ export default function SplashScreen({ onDone }: Props) {
         opacity: 0.3,
         fontFamily: '"JetBrains Mono", monospace',
       }}>
-        DREAMZ MUSIC LAB
+        CREATIVE WORK NETWORK
       </div>
     </div>
   );

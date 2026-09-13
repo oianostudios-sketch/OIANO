@@ -2,6 +2,13 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "oiano-local",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:local"],
+      "port": 5173,
+      "autoPort": true
+    },
+    {
       "name": "oiano-dev",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],

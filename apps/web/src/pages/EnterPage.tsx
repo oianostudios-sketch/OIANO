@@ -78,7 +78,7 @@ export default function EnterPage() {
         if (mode === 'signup' && data.user.role === 'ARTIST') navigate(`/onboarding${safeNext ? `?next=${encodeURIComponent(safeNext)}` : ''}`);
         else if (mode === 'signup' && data.user.role === 'PRODUCER') navigate('/professional/onboarding');
         else if (data.user.role === 'ARTIST' && safeNext) navigate(safeNext);
-        else if (data.user.role === 'ARTIST') navigate('/calendar');
+        else if (data.user.role === 'ARTIST') navigate('/dashboard');
         else navigate(homePathForRole(data.user.role));
       }, 850);
   }
@@ -122,18 +122,18 @@ export default function EnterPage() {
            renders them anymore. */
         .enter-ringed-o-slot{position:absolute;z-index:2;right:calc(var(--final-o-right) - 8%);top:calc(var(--final-o-top) - 1%);width:calc(var(--final-o-width) + 9%);pointer-events:none;filter:drop-shadow(0 10px 14px rgba(0,0,0,.5))}
       `}</style>
-      <section className="login-brand-panel" style={{ position: 'relative', overflow: 'hidden', background: '#020101' }} aria-label="OIANO artist workspace">
+      <section className="login-brand-panel" style={{ position: 'relative', overflow: 'hidden', background: '#020101' }} aria-label="OIANO Creative Work Network">
         <AdaptiveUniverse intensified={focused} />
         <div className="enter-brand-copy">
           <EnterBrandLockup active={loading} />
           <div className="enter-wordmark-ground" />
           <div className="enter-wordmark-rule" />
-          <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:'clamp(.52rem,1.1vw,.68rem)',letterSpacing:'.24em',color:'rgba(201,168,76,.46)',textTransform:'uppercase',margin:'16px 0 0'}}>Africa's new way to do music</p>
+          <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:'clamp(.52rem,1.1vw,.68rem)',letterSpacing:'.24em',color:'rgba(201,168,76,.46)',textTransform:'uppercase',margin:'16px 0 0'}}>A Creative Work Network</p>
         </div>
         <div className="enter-trust">
-          <div className="enter-trust-item"><CalendarDays size={15} color="#C9A84C"/><strong>Create together</strong><span>Find the right studio, room and creative team.</span></div>
-          <div className="enter-trust-item"><ShieldCheck size={15} color="#C9A84C"/><strong>Your work stays yours</strong><span>Private projects and controlled sharing.</span></div>
-          <div className="enter-trust-item"><Sparkles size={15} color="#C9A84C"/><strong>Build your identity</strong><span>A professional Passport that grows with you.</span></div>
+          <div className="enter-trust-item"><CalendarDays size={15} color="#C9A84C"/><strong>Create together</strong><span>Bring people and places together around a project.</span></div>
+          <div className="enter-trust-item"><ShieldCheck size={15} color="#C9A84C"/><strong>Make the terms clear</strong><span>Review rights proposals and sharing permissions.</span></div>
+          <div className="enter-trust-item"><Sparkles size={15} color="#C9A84C"/><strong>Carry the work forward</strong><span>Keep projects, session history and credits in view.</span></div>
         </div>
         {converging && <div className="enter-converge-flash" />}
       </section>
@@ -142,9 +142,9 @@ export default function EnterPage() {
         <div className="login-form-inner">
           <div className="enter-mobile-brand" style={{marginBottom:42}}><OianoBrand variant="compact" size={27}/></div>
           <header style={{marginBottom:28}}>
-            <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,letterSpacing:'.22em',color:'#5a5a60',textTransform:'uppercase',marginBottom:12}}>{returningToBooking ? 'Continue your booking' : 'Secure access portal'}</p>
-            <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:28,fontWeight:600,color:'#f0ede8',letterSpacing:'-.01em',lineHeight:1.18,margin:0}}>{mfa ? <>Protecting OIANO<br/>starts here</> : returningToBooking ? <>Your session is<br/>waiting</> : <>Welcome back<br/>to your work</>}</h1>
-            <p style={{color:'#707070',fontSize:12,lineHeight:1.6,margin:'12px 0 0'}}>{mfa ? (mfa.setup?'Add this account to your authenticator app, then enter the current six-digit code.':'Enter the current code from your authenticator app.') : returningToBooking ? 'Sign in and return directly to your studio selection.' : mode === 'signup' ? 'Choose how you enter the ecosystem. Your creative roles can grow with every project.' : 'One identity for studios, sessions, projects and every contribution you help create.'}</p>
+            <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,letterSpacing:'.22em',color:'#5a5a60',textTransform:'uppercase',marginBottom:12}}>{returningToBooking ? 'Continue your booking' : 'Creative Work Network'}</p>
+            <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:28,fontWeight:600,color:'#f0ede8',letterSpacing:'-.01em',lineHeight:1.18,margin:0}}>{mfa ? <>Protecting OIANO<br/>starts here</> : returningToBooking ? <>Your session is<br/>waiting</> : mode === 'signup' ? <>Make something<br/>together</> : <>Welcome back<br/>to your work</>}</h1>
+            <p style={{color:'#707070',fontSize:12,lineHeight:1.6,margin:'12px 0 0'}}>{mfa ? (mfa.setup?'Add this account to your authenticator app, then enter the current six-digit code.':'Enter the current code from your authenticator app.') : returningToBooking ? 'Sign in and return directly to your studio selection.' : mode === 'signup' ? 'Choose the account tools you need today. Projects and contribution invitations connect the work.' : 'Return to your projects, people and the decisions that move your work forward.'}</p>
           </header>
           {mfa ? <>
             {mfa.setup&&<div style={{padding:14,border:'1px solid #272727',borderRadius:11,background:'#0d0d0d',marginBottom:16}}><p style={{fontSize:9,color:'#666',textTransform:'uppercase',letterSpacing:'.12em',margin:'0 0 8px'}}>Authenticator setup key</p><code style={{fontSize:13,color:'#C9A84C',wordBreak:'break-all',letterSpacing:'.08em'}}>{mfa.secret}</code><p style={{fontSize:9,color:'#444',lineHeight:1.5,margin:'9px 0 0'}}>In Google Authenticator, Microsoft Authenticator or 1Password, choose “enter setup key”.</p></div>}
@@ -166,7 +166,7 @@ export default function EnterPage() {
               </button>
             </div>
             {signupRole === 'PRODUCER' && <fieldset style={{border:0,padding:0,margin:'0 0 16px'}}>
-              <legend style={{fontSize:10,color:'#858585',letterSpacing:'.1em',textTransform:'uppercase',marginBottom:9}}>What do you contribute? Choose all that apply.</legend>
+              <legend style={{fontSize:10,color:'#858585',letterSpacing:'.1em',textTransform:'uppercase',marginBottom:9}}>What do you practise? Choose your disciplines.</legend>
               <div style={{display:'flex',flexWrap:'wrap',gap:7}}>
                 {CREATIVE_DISCIPLINES.map((discipline) => {
                   const active = disciplines.includes(discipline.id);
@@ -188,7 +188,7 @@ export default function EnterPage() {
             </div>
             <button type="submit" className="enter-submit" disabled={loading||!email||!password||(mode === 'signup' && password.length < 8)||(mode === 'signup'&&signupRole==='PRODUCER'&&!disciplines.length)}>{loading?<span className="animate-pulse">Preparing your workspace…</span>:<>{mode === 'signup' ? (returningToBooking ? 'Create account and continue' : `Create ${signupRole === 'ARTIST' ? 'artist' : 'creative professional'} account`) : (returningToBooking ? 'Sign in and continue' : 'Sign in')}<ArrowRight size={16}/></>}</button>
           </form>
-          <div className="enter-status"><Check size={13} color="#79966f" style={{marginTop:1,flexShrink:0}}/><span>{mode === 'signup' ? (signupRole === 'ARTIST' ? 'Includes your Artist Passport, studio access and secure project workspace.' : 'Includes your professional Passport, projects, credits and collaboration workspace.') : 'OIANO opens the home experience assigned to your account and responsibilities.'}</span></div>
+          <div className="enter-status"><Check size={13} color="#79966f" style={{marginTop:1,flexShrink:0}}/><span>{mode === 'signup' ? (signupRole === 'ARTIST' ? 'Includes your Artist Passport, studio access and secure project workspace.' : 'Includes your professional Passport, projects, credits and collaboration workspace.') : 'Pick up a project, review a contribution, or continue a conversation.'}</span></div>
           <p style={{margin:'24px 0 0',color:'#3f3f46',fontSize:9,lineHeight:1.6,textAlign:'center'}}>By continuing, you agree to the <Link to="/legal/terms" style={{color:'#71717a'}}>Terms</Link> and acknowledge the <Link to="/legal/privacy" style={{color:'#71717a'}}>Privacy Policy</Link>. <Link to="/legal/cancellations" style={{color:'#71717a'}}>Refunds</Link> · <Link to="/legal/rights" style={{color:'#71717a'}}>Rights notice</Link>.</p>
           </>}
         </div>

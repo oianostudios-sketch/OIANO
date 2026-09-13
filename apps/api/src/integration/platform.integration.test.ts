@@ -941,6 +941,16 @@ test('auth, booking payment, and rights operate through real database transactio
   const artistStudioView = await request('/studio/current', { headers: { authorization: `Bearer ${artistToken}` } });
   assert.equal(artistStudioView.body?.platform_fee_bps, undefined, 'an artist must not see a studio\'s commercial terms');
 
+  // Identity comes from OIANO, not from a studio. An artist with no bookings
+  // used to be placed at the default studio, which this test's studio is.
+  const newcomer = await prisma.user.create({
+    data: { email: `newcomer-${runId}@example.test`, role: 'ARTIST', artist: { create: { name: 'Newcomer Artist' } } },
+  });
+  const newcomerToken = jwt.sign({ sub: newcomer.id, role: newcomer.role, ver: 0 }, process.env.JWT_SECRET!);
+  const newcomerStudio = await request('/studio/current', { headers: { authorization: `Bearer ${newcomerToken}` } });
+  assert.equal(newcomerStudio.response.status, 200);
+  assert.equal(newcomerStudio.body, null, 'an artist with no bookings belongs to no studio');
+
   // Registering a studio without naming it is a client error, not a half-created studio.
   const namelessStudio = await request('/auth/signup', {
     method: 'POST',
