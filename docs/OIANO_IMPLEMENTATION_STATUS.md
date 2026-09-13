@@ -119,13 +119,22 @@ duplicate-evidence catch in `lib/weave/sync.ts` would run inside an aborted tran
   reschedule, the completion screen and walk-in bookings, which call the same publisher as
   the tested status change.
 
+**Fixed after A01 — reading announcements.**
+
+- An artist reads a studio's announcements only if they have booked there, the same artists
+  who hear them live. Naming another studio returns an empty list; naming none still gives
+  the studio of their latest booking.
+- Staff are no longer answered "Artist not found": the artist-facing route passes everyone
+  else on to the admin route mounted after it, so a studio admin reads their own studio's
+  list. Engineers, who hear announcements live, are still refused the list, now with a 403
+  (read in the code, not tested).
+- **Evidence.** Two integration tests failed before the fix, one per defect. Eight defects
+  were put back one at a time, both originals and the admin router mounted first among
+  them; each failed its intended assertion and nothing else, and every file was restored
+  byte-identical. **Not exercised:** the announcement on the artist dashboard in a browser.
+
 **Observed while fixing A01, not changed** (read in the code, not tested):
 
-- The artist-facing `GET /api/admin/announcements` accepts any `studio_id`, so an artist can
-  still read another studio's announcements by asking for them. No page in the web app
-  passes one.
-- On that same path, staff are answered with "Artist not found": the artist-facing route is
-  mounted first and fails before the admin route is reached.
 - A payment confirmed by Stripe still sends its live update only to the artist, so staff
   dashboards learn of it on their next refresh.
 - A stream is checked only when it opens, so a revoked session keeps receiving its own

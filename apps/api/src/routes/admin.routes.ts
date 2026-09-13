@@ -38,21 +38,27 @@ creditRequestRouter.post('/credit-request', async (req, res, next) => {
 });
 
 // Artist-facing read endpoint. Posting announcements remains admin-only.
+// An artist reads only a studio they have booked with, the same artists who hear
+// announcements live (services/liveUpdates.ts): the studio_id they name, or else
+// the studio of their latest booking. Staff go on to adminRouter's own route,
+// which this one, mounted first, used to answer with "Artist not found".
 creditRequestRouter.get('/announcements', async (req, res, next) => {
   try {
+    if ((req as any).userRole !== 'ARTIST') return next();
     const db = prisma;
     const artist = await prisma.artist.findUnique({ where: { user_id: (req as any).userId } });
     if (!artist) throw new AppError('Artist not found', 404);
-    const studioId = typeof req.query.studio_id === 'string'
-      ? req.query.studio_id
-      : (await prisma.booking.findFirst({
-          where: { artist_id: artist.id },
-          orderBy: { starts_at: 'desc' },
-          select: { studio_id: true },
-        }))?.studio_id;
-    if (!studioId) return res.json([]);
+    const booking = await prisma.booking.findFirst({
+      where: {
+        artist_id: artist.id,
+        ...(typeof req.query.studio_id === 'string' && { studio_id: req.query.studio_id }),
+      },
+      orderBy: { starts_at: 'desc' },
+      select: { studio_id: true },
+    });
+    if (!booking) return res.json([]);
     const announcements = await db.studioAnnouncement.findMany({
-      where: { studio_id: studioId },
+      where: { studio_id: booking.studio_id },
       orderBy: { created_at: 'desc' },
       take: 10,
     });

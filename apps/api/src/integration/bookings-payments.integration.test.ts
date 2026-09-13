@@ -454,4 +454,40 @@ test('bookings, access scope and Stripe webhooks hold their invariants', async (
       for (const stream of streams.values()) stream.close();
     }
   });
+
+  // Found while fixing A01, now fixed: an artist reads a studio's announcements only
+  // if they have booked there, the same artists who hear them live, and staff are no
+  // longer answered by the artist-facing route mounted ahead of theirs. Each studio
+  // has a notice, so a leak shows up as the other studio's name.
+  const betaAnnouncer = await staff('announcer-beta', 'STUDIO_ADMIN', beta.studio.id);
+  await prisma.studioAnnouncement.createMany({ data: [
+    { studio_id: alpha.studio.id, title: 'Alpha notice', body: 'Doors open at ten.', created_by: adminAlpha.id },
+    { studio_id: beta.studio.id, title: 'Beta notice', body: 'Doors open at noon.', created_by: betaAnnouncer.id },
+  ] });
+  const alphaRegular = await prisma.user.create({
+    data: { email: email('alpha-regular'), role: 'ARTIST', artist: { create: { name: 'Alpha Regular' } } },
+    include: { artist: true },
+  });
+  await book(alpha, 'PENDING', { artistId: alphaRegular.artist!.id });
+  await book(beta, 'PENDING'); // beta has bookings, just none of theirs
+  const studioNames = new Map([[alpha.studio.id, 'alpha'], [beta.studio.id, 'beta']]);
+  /** The studios whose announcements a user is given. */
+  const announcementsReadBy = async (user: { id: string; role: string; email: string }, query = '') => {
+    const list = await request(`/admin/announcements${query}`, { headers: auth(user) });
+    assert.equal(list.status, 200, `${user.email} asked for announcements${query}`);
+    return [...new Set(list.body.map((row: any) => studioNames.get(row.studio_id) ?? row.studio_id))];
+  };
+
+  await t.test('an artist reads announcements only from a studio they have booked with', async () => {
+    assert.deepEqual(await announcementsReadBy(alphaRegular, `?studio_id=${beta.studio.id}`), [], 'naming a studio they never booked yields nothing');
+    assert.deepEqual(await announcementsReadBy(alphaRegular), ['alpha'], 'naming no studio, the one they booked');
+    assert.deepEqual(await announcementsReadBy(alphaRegular, `?studio_id=${alpha.studio.id}`), ['alpha'], 'naming the studio they booked');
+  });
+
+  await t.test('a studio admin reads their own studio\'s announcements', async () => {
+    assert.deepEqual(await announcementsReadBy(adminAlpha), ['alpha']);
+    // Staff get there past the artist-facing route mounted first, which artists must still reach.
+    const creditRequest = await request('/admin/credit-request', { method: 'POST', headers: auth(alphaRegular) });
+    assert.equal(creditRequest.status, 200, 'an artist still reaches the artist-facing admin route');
+  });
 });
