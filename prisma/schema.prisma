@@ -244,11 +244,12 @@ model StudioStaff {
   // one a request is currently scoped to.
   @@unique([user_id, studio_id])
   @@index([user_id])
+  @@index([studio_id, position])
   @@map("studio_staff")
 }
 
 model StudioStaffInvitation {
-  id           String   @id @default(uuid())
+  id           String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   studio_id    String
   studio       Studio   @relation(fields: [studio_id], references: [id], onDelete: Cascade)
   email        String
@@ -601,7 +602,7 @@ model Booking {
 // by the policy engine; domain/subject remain strings so studios can add new
 // service and workflow policy families without a database enum migration.
 model StudioPolicy {
-  id                  String            @id @default(uuid())
+  id                  String            @id @default(dbgenerated("(gen_random_uuid())::text"))
   studio_id           String
   studio              Studio            @relation(fields: [studio_id], references: [id], onDelete: Cascade)
   domain              String
@@ -628,7 +629,7 @@ model StudioPolicy {
 }
 
 model PolicyException {
-  id               String       @id @default(uuid())
+  id               String       @id @default(dbgenerated("(gen_random_uuid())::text"))
   studio_id        String
   studio           Studio       @relation(fields: [studio_id], references: [id], onDelete: Cascade)
   policy_id        String
@@ -658,7 +659,7 @@ model PolicyException {
 }
 
 model SessionCompletionRequest {
-  id              String   @id @default(uuid())
+  id              String   @id @default(uuid()) @db.Uuid
   booking_id      String
   booking         Booking  @relation(fields: [booking_id], references: [id], onDelete: Cascade)
   idempotency_key String
@@ -939,7 +940,7 @@ model RightsAgreement {
 }
 
 model FinancialTransaction {
-  id          String                 @id @default(uuid())
+  id          String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   source_type String
   source_id   String
   currency    String                 @default("USD")
@@ -956,8 +957,8 @@ model FinancialTransaction {
 }
 
 model FinancialLedgerEntry {
-  id             String               @id @default(uuid())
-  transaction_id String
+  id             String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  transaction_id String               @db.Uuid
   transaction    FinancialTransaction @relation(fields: [transaction_id], references: [id], onDelete: Restrict)
   account_code   String
   direction      String
@@ -972,7 +973,7 @@ model FinancialLedgerEntry {
 }
 
 model RightsDecision {
-  id             String          @id @default(uuid())
+  id             String          @id @default(dbgenerated("(gen_random_uuid())::text"))
   agreement_id   String
   agreement      RightsAgreement @relation(fields: [agreement_id], references: [id], onDelete: Cascade)
   holder_user_id String
@@ -982,7 +983,7 @@ model RightsDecision {
   evidence       Json?
   responded_at   DateTime?
   created_at     DateTime        @default(now())
-  updated_at     DateTime        @updatedAt
+  updated_at     DateTime        @default(now()) @updatedAt
 
   @@unique([agreement_id, holder_user_id])
   @@index([holder_user_id, status])
@@ -1136,7 +1137,7 @@ model CommunicationThread {
   archived_at        DateTime?
   last_event_at      DateTime                 @default(now())
   created_at         DateTime                 @default(now())
-  updated_at         DateTime                 @updatedAt
+  updated_at         DateTime                 @default(now()) @updatedAt
   participants       CommunicationParticipant[]
   events             CommunicationEvent[]
 
