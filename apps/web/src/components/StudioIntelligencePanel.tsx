@@ -49,25 +49,25 @@ const INSIGHT_STYLE: Record<Insight['severity'], { border: string; bg: string; i
 
 const MANTRAS = [
   { text: "The booth is the most honest room in the building.", author: "OIANO" },
-  { text: "Every rough cut is next year's classic.", author: "Dreamz ML" },
+  { text: "Every rough cut is next year's classic.", author: "OIANO" },
   { text: "Frequency doesn't lie. Neither does the work.", author: "OIANO" },
   { text: "Great sessions aren't booked — they're built.", author: "Studio law" },
   { text: "The room is ready. Are you?", author: "OIANO" },
-  { text: "Your sound is your signature. Protect it.", author: "Dreamz ML" },
+  { text: "Your sound is your signature. Protect it.", author: "OIANO" },
   { text: "Today's session could be the one that changes everything.", author: "Studio law" },
   { text: "Studio time is sacred. Use it well.", author: "OIANO" },
-  { text: "Behind every great record is a team in a great room.", author: "Dreamz ML" },
+  { text: "Behind every great record is a team in a great room.", author: "OIANO" },
   { text: "The best take is the next one.", author: "Studio law" },
-  { text: "Dreamz Music Lab — where sound becomes legacy.", author: "OIANO" },
+  { text: "A great room is where sound becomes legacy.", author: "OIANO" },
   { text: "The mic doesn't know who you used to be. Only who you are now.", author: "Studio law" },
   { text: "Every great artist was once in this room, figuring it out.", author: "OIANO" },
-  { text: "Consistency builds catalogs. Catalogs build careers.", author: "Dreamz ML" },
+  { text: "Consistency builds catalogs. Catalogs build careers.", author: "OIANO" },
   { text: "Today's discipline is tomorrow's masterpiece.", author: "Studio law" },
   { text: "When the red light comes on, the world waits.", author: "OIANO" },
-  { text: "Greatness is built one session at a time.", author: "Dreamz ML" },
+  { text: "Greatness is built one session at a time.", author: "OIANO" },
   { text: "The studio doesn't lie. It only amplifies what you bring.", author: "Studio law" },
   { text: "Every session is a new chapter. Write it well.", author: "OIANO" },
-  { text: "The booth is where excuses end and music begins.", author: "Dreamz ML" },
+  { text: "The booth is where excuses end and music begins.", author: "OIANO" },
 ];
 
 function getDayMantra() {

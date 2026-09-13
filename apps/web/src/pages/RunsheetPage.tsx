@@ -308,7 +308,7 @@ export default function RunsheetPage() {
         {/* Header */}
         <div className="rs-header">
           <div>
-            <div className="rs-studio-name">DREAMZ MUSIC LAB</div>
+            <div className="rs-studio-name">{(data?.studio_name ?? 'Studio').toUpperCase()}</div>
             <div className="rs-sheet-title">DAILY RUNSHEET{isEngineer ? ' — STUDIO TEAM VIEW' : ''}</div>
           </div>
           <div className="rs-header-right" style={{ textAlign: 'right' }}>

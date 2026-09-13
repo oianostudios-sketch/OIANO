@@ -465,7 +465,7 @@ export default function ArtistPassportCard({ artist, editable = false, size = 'm
                 margin: 0,
                 letterSpacing: 4,
               }}>
-                DREAMZ MUSIC LAB
+                OIANO
               </p>
             </div>
           </div>
