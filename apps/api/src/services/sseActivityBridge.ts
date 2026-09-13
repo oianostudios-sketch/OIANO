@@ -5,7 +5,7 @@
 // own browser — without each call site having to know about SSE.
 //
 // Deliberately narrow: this only reaches the one artist the event is about
-// (via their own user_id), never broadcastAll — an activity event describing
+// (via their own user_id), never every connected user — an activity event describing
 // one artist's own booking/profile/session is not something every connected
 // user should see. Modeled on clockActivityConsumer.ts's safety contract:
 // bus listeners run synchronously inside emit(), so a bug here must never

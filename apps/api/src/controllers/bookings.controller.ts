@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
 import { emitActivityEvent } from '../lib/activityEvents';
-import { broadcastToUser, broadcastAll } from '../routes/notifications.routes';
+import { broadcastToUser } from '../routes/notifications.routes';
+import { publishBookingUpdate } from '../services/liveUpdates';
 import {
   sendBookingConfirmed,
   sendSessionComplete,
@@ -561,16 +562,8 @@ export async function updateBookingStatus(req: Request, res: Response, next: Nex
       }).catch(() => {});
     }
 
-    // Broadcast live update to the artist and to all admin clients
-    // broadcastToUser is keyed by user_id (JWT sub), NOT artist_id
-    if (existing.artist?.user_id) {
-      broadcastToUser(existing.artist.user_id, {
-        type: 'booking_updated',
-        bookingId: booking.id,
-        status,
-      });
-    }
-    broadcastAll({ type: 'booking_updated', bookingId: booking.id, status });
+    // Live update for everyone who can read this booking, and nobody else (A01).
+    await publishBookingUpdate(booking.id, status);
 
     // Send transactional email (fire-and-forget — don't block response)
     const artistEmail = existing.artist?.user?.email;

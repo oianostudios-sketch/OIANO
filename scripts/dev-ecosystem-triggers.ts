@@ -10,7 +10,7 @@
 //   ts-node -r tsconfig-paths/register ../../scripts/dev-ecosystem-triggers.ts confirm-credit credit-after-sun-nia
 //
 // Each action calls the exact same Prisma mutation, emitActivityEvent(), and
-// broadcastToUser/broadcastAll() the real API route calls — so a client with
+// publishBookingUpdate() the real API route calls — so a client with
 // useSSE() connected genuinely receives the same live update a real user
 // action would produce. This intentionally does NOT hit HTTP: no server or
 // auth token juggling needed, while still exercising the real side effects
@@ -18,7 +18,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import { emitActivityEvent } from '../apps/api/src/lib/activityEvents';
-import { broadcastToUser, broadcastAll } from '../apps/api/src/routes/notifications.routes';
+import { publishBookingUpdate } from '../apps/api/src/services/liveUpdates';
 import { syncStudioCircleMembership } from '../apps/api/src/services/studio-circle.service';
 
 if (process.env.NODE_ENV === 'production') throw new Error('dev-ecosystem-triggers.ts refuses to run when NODE_ENV=production');
@@ -33,13 +33,12 @@ async function startSession(bookingId = 'bk-after-sun-2') {
   const startsAt = new Date();
   const endsAt = new Date(startsAt.getTime() + durationMs);
   const booking = await prisma.booking.update({ where: { id: bookingId }, data: { status: 'IN_PROGRESS', starts_at: startsAt, ends_at: endsAt } });
-  broadcastToUser(existing.artist.user_id, { type: 'booking_updated', bookingId: booking.id, status: 'IN_PROGRESS' });
-  broadcastAll({ type: 'booking_updated', bookingId: booking.id, status: 'IN_PROGRESS' });
+  await publishBookingUpdate(booking.id, 'IN_PROGRESS');
   console.log(`▶ ${bookingId} is now IN_PROGRESS (${startsAt.toISOString()} → ${endsAt.toISOString()})`);
 }
 
 async function completeSession(bookingId = 'bk-after-sun-2') {
-  const existing = await prisma.booking.findUniqueOrThrow({ where: { id: bookingId }, include: { artist: true } });
+  await prisma.booking.findUniqueOrThrow({ where: { id: bookingId } });
   const booking = await prisma.booking.update({ where: { id: bookingId }, data: { status: 'COMPLETED' } });
   await prisma.sessionLog.upsert({
     where: { booking_id: booking.id },
@@ -48,18 +47,16 @@ async function completeSession(bookingId = 'bk-after-sun-2') {
   });
   await emitActivityEvent('session.completed', { artist_id: booking.artist_id, booking_id: booking.id });
   await syncStudioCircleMembership(booking.studio_id, booking.artist_id);
-  broadcastToUser(existing.artist.user_id, { type: 'booking_updated', bookingId: booking.id, status: 'COMPLETED' });
-  broadcastAll({ type: 'booking_updated', bookingId: booking.id, status: 'COMPLETED' });
+  await publishBookingUpdate(booking.id, 'COMPLETED');
   console.log(`✔ ${bookingId} is now COMPLETED — session.completed emitted, Studio Circle membership resynced`);
 }
 
 async function confirmBooking(bookingId: string) {
   if (!bookingId) throw new Error('confirm-booking requires a booking id');
-  const existing = await prisma.booking.findUniqueOrThrow({ where: { id: bookingId }, include: { artist: true } });
+  await prisma.booking.findUniqueOrThrow({ where: { id: bookingId } });
   const booking = await prisma.booking.update({ where: { id: bookingId }, data: { status: 'CONFIRMED' } });
   await emitActivityEvent('booking.confirmed', { artist_id: booking.artist_id, booking_id: booking.id });
-  broadcastToUser(existing.artist.user_id, { type: 'booking_updated', bookingId: booking.id, status: 'CONFIRMED' });
-  broadcastAll({ type: 'booking_updated', bookingId: booking.id, status: 'CONFIRMED' });
+  await publishBookingUpdate(booking.id, 'CONFIRMED');
   console.log(`✔ ${bookingId} is now CONFIRMED — booking.confirmed emitted`);
 }
 

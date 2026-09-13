@@ -24,18 +24,13 @@ export function broadcastToUser(userId: string, event: Record<string, unknown>) 
   }
 }
 
-/** Broadcast to ALL connected clients (e.g. admin sees live updates too) */
-export function broadcastAll(event: Record<string, unknown>) {
-  const payload = `data: ${JSON.stringify(event)}\n\n`;
-  for (const conns of clients.values()) {
-    for (const res of [...conns]) {
-      try {
-        res.write(payload);
-      } catch {
-        conns.delete(res);
-      }
-    }
-  }
+/**
+ * Send one event to each listed user's connections, once per user however often
+ * they are listed. There is deliberately no way to reach every connected client:
+ * an event goes to the people entitled to what it describes (services/liveUpdates.ts, A01).
+ */
+export function broadcastToUsers(userIds: Iterable<string>, event: Record<string, unknown>) {
+  for (const userId of new Set(userIds)) broadcastToUser(userId, event);
 }
 
 // Exchange the normal Authorization header for a short-lived, purpose-bound

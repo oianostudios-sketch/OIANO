@@ -339,4 +339,119 @@ test('bookings, access scope and Stripe webhooks hold their invariants', async (
     }
     assert.equal((await prisma.payment.findUniqueOrThrow({ where: { id: refunded.payment.id } })).status, 'REFUNDED', 'a refund is never reset to processing');
   });
+
+  // A01, fixed: a live update reaches the people entitled to what it describes,
+  // once each. Studio beta must hear nothing about studio alpha.
+  await t.test('live updates reach only the people entitled to them, once each', async () => {
+    const { broadcastToUser } = await import('../routes/notifications.routes');
+    const adminBeta = await staff('admin-beta', 'STUDIO_ADMIN', beta.studio.id);
+    const operator = await prisma.user.create({ data: { email: email('operator'), role: 'OIANO_ADMIN' } });
+    // A membership alone is not enough. The booking routes still treat a producer
+    // as a producer, so one linked to alpha hears only what they could read.
+    const linkedProducer = await producer('producer-linked', 'Linked Producer');
+    await prisma.studioStaff.create({ data: { user_id: linkedProducer.id, studio_id: alpha.studio.id, role: 'ENGINEER' } });
+    // New artists, so each has booked at exactly one studio.
+    const newArtist = (label: string) => prisma.user.create({
+      data: { email: email(label), role: 'ARTIST', artist: { create: { name: label } } },
+      include: { artist: true },
+    });
+    const alphaArtist = await newArtist('live-alpha-artist');
+    const betaArtist = await newArtist('live-beta-artist');
+    const alphaProject = await prisma.project.create({
+      data: { producer_id: owningProducer.producer!.id, artist_id: alphaArtist.artist!.id, title: 'Live Project' },
+    });
+    const alphaBooking = await book(alpha, 'PENDING', { artistId: alphaArtist.artist!.id, projectId: alphaProject.id });
+    const betaBooking = await book(beta, 'PENDING', { artistId: betaArtist.artist!.id });
+
+    const labels = new Map([[alphaBooking.id, 'alpha booking'], [betaBooking.id, 'beta booking'], [alphaArtist.artist!.id, 'alpha artist']]);
+    // The updates this test is about, in words. Notifications and activity events are left out.
+    const summarize = (event: any): string | null => {
+      if (event.type === 'booking_updated') return `${labels.get(event.bookingId) ?? event.bookingId} is ${event.status}`;
+      if (event.type === 'studio_announcement') return `announcement: ${event.announcement.title}`;
+      if (event.type === 'artist_status_changed') return `${labels.get(event.artistId) ?? event.artistId} is ${event.status}`;
+      return null;
+    };
+
+    const listen = async (user: { id: string; role: string }) => {
+      const ticket = await request('/notifications/stream-ticket', { method: 'POST', headers: auth(user) });
+      const aborter = new AbortController();
+      const response = await fetch(`${baseUrl}/notifications/stream?ticket=${encodeURIComponent(ticket.body.ticket)}`, { signal: aborter.signal });
+      assert.equal(response.status, 200);
+      const events: any[] = [];
+      let onChunk = () => {};
+      void (async () => {
+        const reader = response.body!.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) return;
+          buffer += decoder.decode(value, { stream: true });
+          for (let end = buffer.indexOf('\n\n'); end !== -1; end = buffer.indexOf('\n\n')) {
+            const frame = buffer.slice(0, end);
+            buffer = buffer.slice(end + 2);
+            if (frame.startsWith('data: ')) events.push(JSON.parse(frame.slice('data: '.length)));
+          }
+          onChunk();
+        }
+      })().catch(() => { /* the test closed the stream */ });
+      const received = (type: string) => new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(`${user.id} never received ${type}`)), 5_000);
+        onChunk = () => {
+          if (!events.some((event) => event.type === type)) return;
+          clearTimeout(timer);
+          resolve();
+        };
+        onChunk();
+      });
+      await received('connected');
+      return { events, received, close: () => aborter.abort() };
+    };
+
+    const listeners = { adminAlpha, engineerAlpha, alphaArtist, owningProducer, operator, adminBeta, engineerBeta, betaArtist, unrelatedProducer, linkedProducer };
+    const streams = new Map<string, Awaited<ReturnType<typeof listen>>>();
+    try {
+      for (const [name, user] of Object.entries(listeners)) streams.set(name, await listen(user));
+
+      assert.equal((await setStatus(alphaBooking.id, 'CONFIRMED')).status, 200);
+      const announcement = await request('/admin/announcements', {
+        method: 'POST', headers: auth(adminAlpha), body: JSON.stringify({ title: 'Alpha closes early Friday', body: 'Doors close at six.' }),
+      });
+      assert.equal(announcement.status, 201);
+      const availability = await request('/artists/me/status', {
+        method: 'PATCH', headers: auth(alphaArtist), body: JSON.stringify({ status: 'IN_SESSION' }),
+      });
+      assert.equal(availability.status, 200);
+      assert.equal((await setStatus(betaBooking.id, 'CONFIRMED', adminBeta)).status, 200);
+
+      // Each update above was written to its streams before its request returned,
+      // so a marker sent now lands after everything those requests delivered.
+      for (const user of Object.values(listeners)) broadcastToUser(user.id, { type: 'marker' });
+
+      const alphaConfirmed = 'alpha booking is CONFIRMED';
+      const betaConfirmed = 'beta booking is CONFIRMED';
+      const alphaNotice = 'announcement: Alpha closes early Friday';
+      const alphaArtistBusy = 'alpha artist is IN_SESSION';
+      const expected: Record<keyof typeof listeners, string[]> = {
+        adminAlpha: [alphaConfirmed, alphaNotice, alphaArtistBusy],
+        engineerAlpha: [alphaConfirmed, alphaNotice, alphaArtistBusy],
+        alphaArtist: [alphaConfirmed, alphaNotice],
+        owningProducer: [alphaConfirmed],
+        operator: [alphaConfirmed, betaConfirmed],
+        adminBeta: [betaConfirmed],
+        engineerBeta: [betaConfirmed],
+        betaArtist: [betaConfirmed],
+        unrelatedProducer: [],
+        linkedProducer: [],
+      };
+      for (const [name, updates] of Object.entries(expected)) {
+        const stream = streams.get(name)!;
+        await stream.received('marker');
+        const beforeMarker = stream.events.slice(0, stream.events.findIndex((event) => event.type === 'marker'));
+        assert.deepEqual(beforeMarker.map(summarize).filter(Boolean), updates, `${name} heard the wrong live updates`);
+      }
+    } finally {
+      for (const stream of streams.values()) stream.close();
+    }
+  });
 });

@@ -5,7 +5,7 @@ import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
 import { emitActivityEvent } from '../lib/activityEvents';
 import { computeArtistTier } from '../lib/artistTier';
-import { broadcastAll } from './notifications.routes';
+import { publishArtistStatus } from '../services/liveUpdates';
 import { writeAdminAudit } from '../lib/adminAudit';
 import { resolveStaffStudio } from '../middleware/studioScope.middleware';
 
@@ -27,14 +27,9 @@ artistsRouter.patch('/me/status', requireRole('ARTIST'), async (req: any, res, n
 
     await emitActivityEvent('status.changed', { artist_id: artist.id, status });
 
-    // Was written to ActivityEvent but never pushed live -- studio-wide since
-    // admin/engineer dashboards want to see "who's available" without a poll.
-    broadcastAll({
-      type: 'artist_status_changed',
-      artistId: artist.id,
-      artistName: artist.name,
-      status,
-    });
+    // Pushed live so staff see who's available without a poll: staff at the
+    // studios this artist has booked with, not every studio (A01).
+    await publishArtistStatus(artist, status);
 
     res.json({ status: updated.status });
   } catch (err) { next(err); }

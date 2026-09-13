@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
-import { broadcastAll } from './notifications.routes';
+import { publishBookingUpdate, publishStudioAnnouncement } from '../services/liveUpdates';
 import { attachStudioScope } from '../middleware/studioScope.middleware';
 import { applyWalletDelta } from '../lib/walletLedger';
 
@@ -379,7 +379,7 @@ adminRouter.post('/walkin', async (req, res, next) => {
       include: { room: true, service: true, payment: true, artist: true },
     });
 
-    broadcastAll({ type: 'booking_updated', bookingId: booking.id, status: booking.status });
+    await publishBookingUpdate(booking.id, booking.status);
 
     res.status(201).json(booking);
   } catch (err) { next(err); }
@@ -433,8 +433,8 @@ adminRouter.post('/announcements', requireRole('STUDIO_ADMIN'), async (req: any,
       data: { title, body, studio_id: studio.id, created_by: req.userId },
     });
 
-    // Broadcast to ALL connected clients
-    broadcastAll({ type: 'studio_announcement', announcement });
+    // To this studio's staff and the artists who have booked here (A01).
+    await publishStudioAnnouncement(announcement);
 
     res.status(201).json(announcement);
   } catch (err) { next(err); }

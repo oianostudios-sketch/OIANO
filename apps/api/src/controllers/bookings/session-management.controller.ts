@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../lib/errors';
-import { broadcastAll } from '../../routes/notifications.routes';
+import { publishBookingUpdate } from '../../services/liveUpdates';
 import { resolveStaffStudio } from '../../middleware/studioScope.middleware';
 import { upsertSessionLog } from '../../lib/sessionLog';
 import { evaluateStudioPolicies, policiesAffectedByChanges, type PolicyContract } from '../../lib/studioPolicyEngine';
@@ -84,7 +84,7 @@ export async function rescheduleBooking(req: Request, res: Response, next: NextF
       data: { starts_at: newStart, ends_at: newEnd },
       include: { room: true, service: true },
     });
-    broadcastAll({ type: 'booking_updated', bookingId: booking.id, status: updated.status });
+    await publishBookingUpdate(booking.id, updated.status);
     res.json(updated);
   } catch (error) {
     next(error);

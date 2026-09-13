@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../store/auth.store';
 import { useToast } from '../components/Toast';
+import { bookingUpdateToast } from '../lib/bookingUpdateToast';
 
 const API = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
 
@@ -91,23 +92,11 @@ export function useSSE() {
               qc.invalidateQueries({ queryKey: ['booking', event.bookingId] });
             }
 
-            // Toast the status change so the artist knows without refreshing
-            switch (event.status) {
-              case 'CONFIRMED':
-                toast.success('Your session is confirmed — see you in the studio.');
-                break;
-              case 'CANCELLED':
-                toast.error('A booking was cancelled. Check your sessions for details.');
-                break;
-              case 'COMPLETED':
-                toast.info('Session marked complete. Check your profile for the update.');
-                break;
-              case 'NO_SHOW':
-                toast.error('A session was marked as no-show.');
-                break;
-              default:
-                break;
-            }
+            // Toast the status change so the artist knows without refreshing.
+            // Everyone else who can read the booking gets the same event only to
+            // refresh their view; see lib/bookingUpdateToast.ts.
+            const notice = bookingUpdateToast(useAuthStore.getState().user?.role, event.status);
+            if (notice) toast[notice.tone](notice.message);
           }
 
           // ── session_delivered ──────────────────────────────────────────────

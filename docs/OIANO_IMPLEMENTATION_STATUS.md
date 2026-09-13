@@ -95,6 +95,41 @@ duplicate-evidence catch in `lib/weave/sync.ts` would run inside an aborted tran
   or expire an open session — typechecked, with the decision unit-tested, but never run
   against Stripe.
 
+**Fixed after Session 4 — A01.**
+
+- Live updates no longer go to every connected user. `broadcastAll` is gone, so nothing
+  can reach every stream, and `services/liveUpdates.ts` decides who hears each event, looked
+  up when it is sent, so someone removed from a studio stops hearing about it at once.
+  - A booking update reaches the people who can read the booking: its artist, its studio's
+    admins and engineers, the producer who owns its project, and platform operators.
+  - An announcement reaches the studio's staff and the artists who have booked there.
+  - An artist's availability reaches staff at the studios that artist has booked with.
+  - A studio membership alone does not make a producer staff, matching the booking routes.
+- The artist used to receive each status change twice, once addressed and once in the
+  broadcast; now once. The "your session is confirmed" toasts show only to artists, because
+  staff, producers and operators now receive the same event to refresh what they see
+  (`lib/bookingUpdateToast.ts`).
+- **Evidence.** One integration test opens real streams for ten users across two studios.
+  It changes a booking, posts an announcement and changes an artist's availability at one
+  studio, changes a booking at the other, and checks what each stream heard, in order and
+  exactly once. Nine defects were put back one at a time and every one failed it, and every
+  file was restored byte-identical. The toast rule is unit-tested, and removing its role
+  check fails that test. **Not exercised:** the toasts in a browser, and the updates from
+  reschedule, the completion screen and walk-in bookings, which call the same publisher as
+  the tested status change.
+
+**Observed while fixing A01, not changed** (read in the code, not tested):
+
+- The artist-facing `GET /api/admin/announcements` accepts any `studio_id`, so an artist can
+  still read another studio's announcements by asking for them. No page in the web app
+  passes one.
+- On that same path, staff are answered with "Artist not found": the artist-facing route is
+  mounted first and fails before the admin route is reached.
+- A payment confirmed by Stripe still sends its live update only to the artist, so staff
+  dashboards learn of it on their next refresh.
+- A stream is checked only when it opens, so a revoked session keeps receiving its own
+  updates until the stream closes.
+
 **Schema redesign:** designed for review in [schema redesign](OIANO_SCHEMA_REDESIGN.md),
 against the owner decisions of 2026-09-12. No migration is written; implementation
 waits for Session 5.

@@ -3,7 +3,8 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../lib/errors';
-import { broadcastAll, broadcastToUser, createNotification } from '../../routes/notifications.routes';
+import { broadcastToUser, createNotification } from '../../routes/notifications.routes';
+import { publishBookingUpdate } from '../../services/liveUpdates';
 import { sendSessionComplete } from '../../services/email.service';
 import { resolveStaffStudio } from '../../middleware/studioScope.middleware';
 import { recordBookingCompleted } from '../../lib/bookingCompletion';
@@ -257,10 +258,7 @@ export async function completeSession(req: Request, res: Response, next: NextFun
         }).catch(() => {});
       }
 
-      if (booking.artist?.user_id) {
-        broadcastToUser(booking.artist.user_id, { type: 'booking_updated', bookingId: booking.id, status: 'COMPLETED' });
-      }
-      broadcastAll({ type: 'booking_updated', bookingId: booking.id, status: 'COMPLETED' });
+      await publishBookingUpdate(booking.id, 'COMPLETED');
 
       const startsLabel = booking.starts_at.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
       if (booking.artist?.user_id) {
