@@ -217,6 +217,36 @@ across currencies and transfer it in `Studio.currency` (`lib/studioPayout.ts:14�
 payouts are off; it must be fixed before a studio with a non-USD currency takes a payout.
 *Fixed in the stabilization pass of 2026-09-14, above.*
 
+**Fixed after the stabilization pass — the integration suite on a fresh checkout,
+2026-09-24.** `npm run test:integration:local` could not pass after `npm ci` until
+someone had built `packages/shared` by hand.
+
+- The API imports `@oiano/shared`, which resolves through that package's `main`,
+  `dist/index.js`. `dist` is gitignored and no install step writes it, so on a fresh
+  checkout the four integration files that import it failed to load with
+  `MODULE_NOT_FOUND`. The fifth, `stabilization.integration.test.ts`, does not import
+  it: it loaded and passed, so the run still read like a suite that works.
+- The import resolves through `node_modules/@oiano/shared` rather than from source
+  because the runner registers `tsconfig-paths` with the repository root as its working
+  directory, and the root `tsconfig.json` declares no `baseUrl` or `paths`. The
+  `@oiano/shared` mapping lives only in `apps/api/tsconfig.json`.
+- `scripts/run-api-integration-tests.js` now builds `packages/shared` when
+  `dist/index.js` is missing. That runner is the one path both CI and
+  `npm run test:integration:local` take, so neither caller has to remember; CI's own
+  "Build shared package" step still runs first and this finds its work done. The
+  database-name checks are unchanged and still run before it. A `dist` that is present
+  but stale is left alone, exactly as `npm run dev:local` leaves it.
+- **Evidence.** With `packages/shared/dist` deleted: before the change, 11 tests with
+  four of the five files failing to load; after it, all five files load and 39 of 39
+  pass on a fresh local database. The defect was put back once — the runner restored to
+  its committed version, `dist` deleted again — and the run failed four of 11 as before.
+  Both typechecks, API security 88/88, API intelligence 31/31, web 75/75, secret scan
+  across 419 tracked files, full build.
+- **Not done.** `npm test` cannot pass in a worktree that has no `.env`:
+  `src/lib/creatorContext.test.ts` reaches `lib/prisma.ts`, which builds a
+  `PrismaClient` at import time and throws when `DATABASE_URL` is unset. It was run here
+  with the unreachable, credential-free URL CI uses, never with `.env` present.
+
 ## Verification performed for Phase 1
 
 Both typechecks · API security 53/53 · API intelligence 31/31 · web 57/57 ·
