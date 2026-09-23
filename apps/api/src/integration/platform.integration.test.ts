@@ -900,8 +900,8 @@ test('auth, booking payment, and rights operate through real database transactio
   assert.equal(payoutDebits, payoutCredits, 'a payout transaction must balance');
   assert.equal(payoutDebits, payableBefore);
 
-  // The guard that matters: a second request finds nothing left, because the
-  // reservation already moved the ledger — not because of a lock or a status flag.
+  // A later request finds nothing left, because the reservation already moved the
+  // ledger. Requests at the same moment are held in money-integrity.integration.test.ts.
   await assert.rejects(
     () => reserveStudioPayout({ studioId: registeredStudio.id, requestedBy: ownerUser.id }),
     /Nothing is currently payable/,

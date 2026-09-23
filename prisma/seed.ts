@@ -4,6 +4,7 @@
 import { PrismaClient, UserRole, ServiceCategory } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { applyWalletDelta } from '../apps/api/src/lib/walletLedger';
+import { recordSeedWalletGrant } from '../apps/api/src/lib/financialLedger';
 
 const prisma = new PrismaClient();
 
@@ -342,7 +343,11 @@ async function main() {
     });
     const transactionCount = await prisma.walletTransaction.count({ where: { wallet_id: demoWallet.id } });
     if (transactionCount === 0 && Number(demoWallet.balance_usd) === 0) {
-      await prisma.$transaction((tx) => applyWalletDelta(tx, demoWallet.id, 500.0, 'initial_grant', 'Demo wallet funding (seed)'));
+      // Posted to the ledger like any money in a wallet, so a seeded database reconciles.
+      await prisma.$transaction(async (tx) => {
+        const grant = await applyWalletDelta(tx, demoWallet.id, 500.0, 'initial_grant', 'Demo wallet funding (seed)');
+        await recordSeedWalletGrant(tx, { walletTransactionId: grant.id, walletId: demoWallet.id, amountUsd: 500.0, description: 'Demo wallet funding (seed)' });
+      });
     }
     const novaState = await prisma.artistRelease.findFirst({ where: { artist_id: demoArtist.id, title: 'NOVA STATE' } });
     const novaStateData = {

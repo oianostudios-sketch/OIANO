@@ -61,10 +61,12 @@ export interface PayoutRequest {
 
 // Reserves the studio's outstanding balance and records the intent to pay it.
 //
-// The payout row and the ledger debit are written in one transaction on purpose:
-// the payable drops the moment the payout exists, so a second concurrent request
-// reads the reduced balance and has nothing left to pay. Reserving in the ledger
-// is what makes a double payout impossible — not a lock, not a status check.
+// The studio row is locked before the payable is read, so reservations for one
+// studio take turns. The payable is read and reserved inside one transaction, and
+// without the lock two requests at the same moment each read the whole balance and
+// each reserved it. FOR NO KEY UPDATE, so writes that only refer to the studio,
+// such as a new booking, are not held up. The payout row and its ledger debit are
+// written together, so the request that waited reads the reduced payable.
 //
 // The external transfer happens afterwards and can still fail. That is why the
 // row carries a status: a PENDING payout means money was reserved and the rail
@@ -72,6 +74,7 @@ export interface PayoutRequest {
 // post a compensating reversal (see releaseFailedPayout).
 export async function reserveStudioPayout(input: PayoutRequest) {
   return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM studios WHERE id = ${input.studioId} FOR NO KEY UPDATE`;
     const studio = await tx.studio.findUnique({
       where: { id: input.studioId },
       select: { id: true, stripe_account_id: true },
@@ -147,11 +150,37 @@ export async function releaseFailedPayout(payoutId: string, reason: string) {
   });
 }
 
+// Sends a reserved payout through the rail and records what happened. Only the
+// rail refusing releases the reservation. Once the rail accepts a transfer the
+// money has left, so if recording that fails the payout stays PENDING, still
+// reserved, for someone to reconcile: releasing it would make the same money
+// payable a second time.
+export async function transferReservedPayout(payoutId: string, transfer: () => Promise<{ id: string }>) {
+  let transferId: string;
+  try {
+    ({ id: transferId } = await transfer());
+  } catch (transferError: any) {
+    // The money never left. Put it back where the ledger can see it.
+    await releaseFailedPayout(payoutId, transferError?.message ?? 'Transfer failed');
+    throw new AppError('Payout could not be completed; the balance remains payable', 502);
+  }
+  return markPayoutPaid(payoutId, transferId);
+}
+
+// Records the transfer that paid a payout. Only a PENDING payout becomes PAID: a
+// FAILED one was released back to the payable, and a PAID one already names the
+// transfer that paid it. The same transfer recorded again changes nothing.
 export async function markPayoutPaid(payoutId: string, stripeTransferId: string) {
-  const paid = await prisma.studioPayout.update({
-    where: { id: payoutId },
+  const claimed = await prisma.studioPayout.updateMany({
+    where: { id: payoutId, status: 'PENDING' },
     data: { status: 'PAID', stripe_transfer_id: stripeTransferId },
   });
+  const paid = await prisma.studioPayout.findUnique({ where: { id: payoutId } });
+  if (!paid) throw new AppError('Payout not found', 404);
+  if (claimed.count === 0) {
+    if (paid.status === 'PAID' && paid.stripe_transfer_id === stripeTransferId) return paid;
+    throw new AppError(`Payout ${paid.id} is ${paid.status} and cannot be recorded as paid by transfer ${stripeTransferId}`, 409);
+  }
 
   // Money reaching a studio is the most consequential thing that happens to it,
   // and until the event subject was widened beyond Artist there was no way to

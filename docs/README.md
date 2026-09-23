@@ -11,6 +11,7 @@ nobody works from an expired brief.
 | [OIANO_IMPLEMENTATION_STATUS.md](OIANO_IMPLEMENTATION_STATUS.md) | What has landed, with evidence, and what is still open. |
 | [OIANO_STABILIZATION_GATE.md](OIANO_STABILIZATION_GATE.md) | Whether the canonical migration may start, and what blocks it. |
 | [OIANO_BUILD_DIRECTION.md](OIANO_BUILD_DIRECTION.md) | What gets built next, in what order, and what "done" means at each stage. |
+| [OIANO_EVENT_READINESS.md](OIANO_EVENT_READINESS.md) | What it takes to run the full project live at an event, and what blocks it. |
 | [OIANO_SCHEMA_REDESIGN.md](OIANO_SCHEMA_REDESIGN.md) | The designed canonical schema, step by step. |
 | [OIANO_ARCHITECTURE_DELTA.md](OIANO_ARCHITECTURE_DELTA.md) | How today's models map to the target, with contradictions and migration risks. |
 | [ARCHITECTURE_AUDIT_2026_09_06.md](ARCHITECTURE_AUDIT_2026_09_06.md) | Findings A01–A11. Check implementation status before reopening one. |

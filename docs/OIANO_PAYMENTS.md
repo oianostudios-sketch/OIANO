@@ -24,13 +24,16 @@ system:
 - `POST /api/payments/wallet/top-up` — Stripe Checkout for adding funds to an
   artist's wallet (separate from paying for a specific booking).
 - `GET /api/payments/wallet/transactions` — reads the ledger.
-- Every wallet balance change, from any source (top-up, booking debit, admin
-  credit), goes through one function: `apps/api/src/lib/walletLedger.ts`'s
+- Every wallet balance change, from any source (top-up, booking debit, a
+  seed's demo grant), goes through one function: `apps/api/src/lib/walletLedger.ts`'s
   `applyWalletDelta()`. It writes a signed `WalletTransaction` row
   (positive = credit, negative = debit) and updates `Wallet.balance_usd` in
   the same operation — this is why `SUM(WalletTransaction.amount_usd)` always
   equals the wallet balance, and why `findWalletDrift()` (same file) can
   cheaply detect if the two ever disagree.
+- Each of those movements is posted to the reconciliation ledger in the same
+  transaction. Studios cannot put money in a wallet: studio credit was removed
+  on 2026-09-15, because it reached no ledger and was spendable at any studio.
 
 ## Webhooks
 
@@ -47,6 +50,8 @@ system:
 - Stripe bookings: debit cash clearing; credit studio payable and platform
   revenue.
 - Wallet top-ups: debit cash clearing; credit wallet liability.
+- Seed demo grants (local and demo data only): debit demo funding; credit
+  wallet liability.
 - Partial and full refunds reverse the corresponding studio payable and
   platform revenue allocation and credit cash clearing.
 - Each source can post only once. Every transaction must balance to the cent.
