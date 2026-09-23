@@ -22,6 +22,7 @@
 import { PrismaClient, UserRole } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { applyWalletDelta } from '../apps/api/src/lib/walletLedger';
+import { recordSeedWalletGrant } from '../apps/api/src/lib/financialLedger';
 import { syncStudioCircleMembership } from '../apps/api/src/services/studio-circle.service';
 
 if (process.env.NODE_ENV === 'production') {
@@ -157,7 +158,11 @@ async function main() {
   async function fund(walletId: string, amount: number, label: string) {
     const w = await prisma.wallet.findUnique({ where: { id: walletId } });
     if (!w || Number(w.balance_usd) !== 0) return; // don't stack on re-run
-    await prisma.$transaction((tx) => applyWalletDelta(tx, walletId, amount, 'initial_grant', label));
+    // Posted to the ledger like any money in a wallet, so a seeded database reconciles.
+    await prisma.$transaction(async (tx) => {
+      const grant = await applyWalletDelta(tx, walletId, amount, 'initial_grant', label);
+      await recordSeedWalletGrant(tx, { walletTransactionId: grant.id, walletId, amountUsd: amount, description: label });
+    });
   }
   await fund(joseph.wallet.id, 300, 'Ecosystem fixture funding');
   await fund(mariama.wallet.id, 5, 'Ecosystem fixture funding (intentionally low)');

@@ -5,44 +5,21 @@ import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
 import { publishBookingUpdate, publishStudioAnnouncement } from '../services/liveUpdates';
 import { attachStudioScope } from '../middleware/studioScope.middleware';
-import { applyWalletDelta } from '../lib/walletLedger';
-
 export const adminRouter = Router();
 
-// POST /api/admin/credit-request — artist-facing; no admin role required
-// Must be declared BEFORE the adminRouter.use(authenticate, requireRole) middleware
-const creditRequestRouter = Router();
-creditRequestRouter.use(authenticate);
-creditRequestRouter.post('/credit-request', async (req, res, next) => {
-  try {
-    const userId = (req as any).userId;
-    const artist = await prisma.artist.findUnique({ where: { user_id: userId } });
-    if (!artist) throw new AppError('Artist not found', 404);
-
-    let wallet = await prisma.wallet.findUnique({ where: { artist_id: artist.id } });
-    if (!wallet) {
-      wallet = await prisma.wallet.create({ data: { artist_id: artist.id, balance_usd: 0 } });
-    }
-
-    await prisma.walletTransaction.create({
-      data: {
-        wallet_id: wallet.id,
-        amount_usd: 0,
-        type: 'credit_request',
-        description: `${artist.name} requested studio credit`,
-      },
-    });
-
-    res.json({ success: true, message: 'Credit request sent to studio admin' });
-  } catch (err) { next(err); }
-});
+// Artist-facing routes, mounted before adminRouter, whose role check would refuse
+// artists. Studios no longer put money in wallets, or take requests for it: a
+// studio's credit reached no ledger and was spent at any studio, so OIANO came to
+// owe another studio money nobody paid in. Only a paid top-up funds a wallet.
+const artistAdminRouter = Router();
+artistAdminRouter.use(authenticate);
 
 // Artist-facing read endpoint. Posting announcements remains admin-only.
 // An artist reads only a studio they have booked with, the same artists who hear
 // announcements live (services/liveUpdates.ts): the studio_id they name, or else
 // the studio of their latest booking. Staff go on to adminRouter's own route,
 // which this one, mounted first, used to answer with "Artist not found".
-creditRequestRouter.get('/announcements', async (req, res, next) => {
+artistAdminRouter.get('/announcements', async (req, res, next) => {
   try {
     if ((req as any).userRole !== 'ARTIST') return next();
     const db = prisma;
@@ -66,7 +43,7 @@ creditRequestRouter.get('/announcements', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-export { creditRequestRouter };
+export { artistAdminRouter };
 
 adminRouter.use(authenticate, requireRole('STUDIO_ADMIN'), attachStudioScope);
 
@@ -170,37 +147,6 @@ adminRouter.get('/analytics', async (req, res, next) => {
         cancelled: funnelMap['CANCELLED']   ?? 0,
       },
     });
-  } catch (err) { next(err); }
-});
-
-// POST /api/admin/wallet/credit — add funds to an artist's wallet
-const WalletCreditSchema = z.object({
-  artist_id: z.string().uuid(),
-  amount_usd: z.number().positive().max(10000),
-  description: z.string().optional(),
-});
-
-adminRouter.post('/wallet/credit', async (req, res, next) => {
-  try {
-    const { artist_id, amount_usd, description } = WalletCreditSchema.parse(req.body);
-
-    const studioId = (req as any).studioId as string;
-    const artist = await prisma.artist.findFirst({
-      where: { id: artist_id, bookings: { some: { studio_id: studioId } } },
-    });
-    if (!artist) throw new AppError('Artist not found', 404);
-
-    const newBalance = await prisma.$transaction(async (tx) => {
-      const wallet = await tx.wallet.upsert({
-        where: { artist_id },
-        update: {},
-        create: { artist_id, balance_usd: 0 },
-      });
-      await applyWalletDelta(tx, wallet.id, amount_usd, 'credit', description ?? `Admin credit — $${amount_usd}`);
-      return tx.wallet.findUniqueOrThrow({ where: { id: wallet.id } });
-    });
-
-    res.json({ success: true, artist_id, new_balance_usd: newBalance.balance_usd });
   } catch (err) { next(err); }
 });
 
@@ -388,39 +334,6 @@ adminRouter.post('/walkin', async (req, res, next) => {
     await publishBookingUpdate(booking.id, booking.status);
 
     res.status(201).json(booking);
-  } catch (err) { next(err); }
-});
-
-// ── GET /api/admin/credit-requests — pending credit requests ─────────────────
-adminRouter.get('/credit-requests', async (req, res, next) => {
-  try {
-    const db = prisma;
-    // credit_request transactions with amount 0 — join wallet → artist
-    const requests = await db.walletTransaction.findMany({
-      where: {
-        type: 'credit_request',
-        wallet: { artist: { bookings: { some: { studio_id: (req as any).studioId } } } },
-      },
-      orderBy: { created_at: 'desc' },
-      take: 50,
-      include: {
-        wallet: {
-          include: {
-            artist: { select: { id: true, name: true, alias: true } },
-          },
-        },
-      },
-    });
-
-    const shaped = requests.map((r: any) => ({
-      id: r.id,
-      artist_id: r.wallet?.artist?.id,
-      artist_name: r.wallet?.artist?.alias ?? r.wallet?.artist?.name ?? 'Unknown',
-      requested_at: r.created_at,
-      description: r.description,
-    }));
-
-    res.json(shaped);
   } catch (err) { next(err); }
 });
 

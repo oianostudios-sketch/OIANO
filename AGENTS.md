@@ -62,6 +62,10 @@ with their migration steps; do not put those names on today's screens.
 | Build | `npm run build` |
 | Secrets | `npm run security:secrets` |
 
+A fresh worktree needs `npm ci` and `npm run build --workspace=packages/shared` before
+any of these: the integration command does not build the shared package, and every test
+that loads the API app fails without it.
+
 A green run is not proof a test works. For any load-bearing assertion, put the defect
 back, watch the test fail, then restore the file. CI (GitHub Actions) runs on pushes to
 `main` and on pull requests; its failures are re-emitted as annotations, which the
