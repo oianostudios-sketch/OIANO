@@ -6,18 +6,26 @@
 // apps/api/src/app.ts and lib/prisma.ts load .env with override unless
 // NODE_ENV=test, which silently replaces an exported DATABASE_URL.
 //
-//   node scripts/local-db.js start          start the local cluster, creating it on first use
+//   node scripts/local-db.js start          start this checkout's cluster, creating it on first use
 //   node scripts/local-db.js stop           stop it
-//   node scripts/local-db.js status         say whether it runs, and list its databases
+//   node scripts/local-db.js status         say whether it runs and on which port, and list its databases
 //   node scripts/local-db.js fresh [label]  create an empty database and print its URL
 //   node scripts/local-db.js test           run the integration suite on a fresh database
 //   node scripts/local-db.js dev            run the API and web app against a seeded local database
-//   node scripts/local-db.js prune          drop every database `fresh` created
+//   node scripts/local-db.js prune          drop the databases `fresh` created in this checkout
 //
 // Requires PostgreSQL 14+ command-line tools: set PG_BIN to their folder, put
 // pg_ctl on PATH, or install PostgreSQL in its default location. Data stays in
 // .oiano/ (gitignored). The cluster trusts local connections and listens on
-// 127.0.0.1 only. OIANO_LOCAL_PG_PORT changes its port (default 55432).
+// 127.0.0.1 only.
+//
+// Each checkout and worktree has its own cluster. A server answering on the
+// port is used only when it reports this checkout's data directory; otherwise
+// these commands would create, migrate and drop databases on another checkout's
+// cluster. The cluster listens on 55432. When another server holds the port it
+// wants, it starts on the first free port from 55432 up, and .oiano/port keeps
+// the choice. OIANO_LOCAL_PG_PORT names the port instead, and a command stops
+// rather than use that port while another server holds it.
 'use strict';
 
 const { spawn, spawnSync } = require('node:child_process');
@@ -28,11 +36,18 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const dataDir = path.join(root, '.oiano', 'postgres');
 const logFile = path.join(root, '.oiano', 'postgres.log');
+const portFile = path.join(root, '.oiano', 'port');
+// One name per line, written by `fresh`. `prune` drops only these, so a
+// database another checkout created on this cluster survives it.
+const createdFile = path.join(root, '.oiano', 'created-databases');
 const host = '127.0.0.1';
-const port = String(process.env.OIANO_LOCAL_PG_PORT || 55432);
+const defaultPort = 55432;
+const portsToTry = 100;
 const superuser = 'oiano';
 const devDatabase = 'oiano_dev_test';
 const windows = process.platform === 'win32';
+// The port this checkout's running cluster listens on, set by start() or status().
+let port;
 
 function fail(message) {
   console.error(`local-db: ${message}`);
@@ -59,64 +74,197 @@ function tool(name, args, options = {}) {
 
 const urlFor = (database) => `postgresql://${superuser}@${host}:${port}/${database}`;
 const clusterExists = () => fs.existsSync(path.join(dataDir, 'PG_VERSION'));
-const running = () => tool('pg_isready', ['-h', host, '-p', port]).status === 0;
 const query = (database, sql) => tool('psql', ['-h', host, '-p', port, '-U', superuser, '-d', database, '-Atc', sql]);
+const isPort = (value) => /^\d{1,5}$/.test(value) && Number(value) >= 1 && Number(value) <= 65535;
 
-function start({ quiet = false } = {}) {
+function readFile(file) {
+  try {
+    return fs.readFileSync(file, 'utf8');
+  } catch {
+    return '';
+  }
+}
+
+function chosenPort() {
+  const chosen = process.env.OIANO_LOCAL_PG_PORT;
+  if (!chosen) return undefined;
+  if (!isPort(chosen)) fail(`OIANO_LOCAL_PG_PORT must be a port number, not "${chosen}"`);
+  return String(Number(chosen));
+}
+
+// The port this checkout's cluster starts on: the one OIANO_LOCAL_PG_PORT names,
+// else the one it last ran on, else the default.
+function preferredPort() {
+  const saved = readFile(portFile).trim();
+  return chosenPort() || (isPort(saved) ? saved : String(defaultPort));
+}
+
+// PostgreSQL reports its data directory in its own spelling (C:/projects/...),
+// so both sides are resolved through links and, on Windows, compared without case.
+function sameDirectory(reported, expected) {
+  const canonical = (dir) => {
+    let resolved = path.resolve(dir);
+    try {
+      resolved = fs.realpathSync.native(resolved);
+    } catch {
+      // A directory this machine cannot see keeps the spelling it was given.
+    }
+    return windows ? resolved.toLowerCase() : resolved;
+  };
+  return canonical(reported) === canonical(expected);
+}
+
+// What answers on a port: nothing ('free'), this checkout's cluster ('own'),
+// another cluster ('other', with the data directory it reports), or something
+// psql cannot ask ('unknown'). The TCP check comes first because psql takes two
+// seconds to give up on a closed port on Windows.
+async function probe(candidate) {
+  if (!(await inUse(candidate))) return { state: 'free' };
+  const answer = tool('psql', ['-w', '-h', host, '-p', candidate, '-U', superuser, '-d', 'postgres', '-Atc', 'show data_directory'], {
+    env: { ...process.env, PGCONNECT_TIMEOUT: '5' },
+  });
+  const reported = answer.status === 0 ? answer.stdout.trim() : '';
+  if (!reported) return { state: 'unknown', detail: (answer.stderr || '').trim().split(/\r?\n/)[0] };
+  return { state: sameDirectory(reported, dataDir) ? 'own' : 'other', dataDirectory: reported };
+}
+
+function holder(found) {
+  if (found.state === 'other') return `the PostgreSQL cluster in ${found.dataDirectory}`;
+  return `a server that psql could not ask for its data directory${found.detail ? ` (${found.detail})` : ''}`;
+}
+
+// Finds this checkout's cluster. A running server writes its port into the lock
+// file in its data directory, but a crash leaves that file behind, so the server
+// on the port must also report this data directory.
+async function locate() {
+  const preferred = preferredPort();
+  const locked = (readFile(path.join(dataDir, 'postmaster.pid')).split(/\r?\n/)[3] || '').trim();
+  if (isPort(locked) && locked !== preferred && (await probe(locked)).state === 'own') return { running: true, port: locked };
+  const found = await probe(preferred);
+  return { running: found.state === 'own', port: preferred, found };
+}
+
+// A port another server holds is never used. When OIANO_LOCAL_PG_PORT named it,
+// the command stops; otherwise the cluster takes the first free port from the default.
+async function portInstead(held, found) {
+  if (chosenPort()) {
+    fail(`port ${held} from OIANO_LOCAL_PG_PORT is held by ${holder(found)}, not this checkout's cluster. Choose a free port, or unset OIANO_LOCAL_PG_PORT and this checkout will pick one.`);
+  }
+  for (let candidate = defaultPort; candidate < defaultPort + portsToTry; candidate += 1) {
+    if (await inUse(candidate)) continue;
+    console.error(`local-db: port ${held} is held by ${holder(found)}, so this checkout's cluster starts on port ${candidate} instead`);
+    return String(candidate);
+  }
+  return fail(`ports ${defaultPort} to ${defaultPort + portsToTry - 1} are all in use; set OIANO_LOCAL_PG_PORT to a free port`);
+}
+
+// Another checkout can take a free port between the check and the start, so a
+// start that fails while something else answers on the port tries another one.
+async function startServer(candidate, found) {
+  for (let attempt = 1; ; attempt += 1) {
+    if (found.state !== 'free') candidate = await portInstead(candidate, found);
+    // The server outlives this command, so it must not inherit this process's pipes.
+    const started = tool('pg_ctl', ['-D', dataDir, '-o', `-p ${candidate} -c listen_addresses=${host}`, '-l', logFile, '-w', 'start'], { stdio: 'ignore' });
+    found = await probe(candidate);
+    if (found.state === 'own') return candidate;
+    if (started.status === 0 || found.state === 'free' || attempt === 3) fail(`the local cluster did not start; see ${path.relative(root, logFile)}`);
+  }
+}
+
+async function start({ quiet = false } = {}) {
   if (!clusterExists()) {
     fs.mkdirSync(dataDir, { recursive: true });
     const init = tool('initdb', ['-D', dataDir, '-U', superuser, '-A', 'trust', '-E', 'UTF8', '--no-locale']);
     if (init.status !== 0) fail(`initdb failed:\n${init.stderr || init.stdout}`);
     console.log(`Created a local PostgreSQL cluster in ${path.relative(root, dataDir)}`);
   }
-  if (!running()) {
-    // The server outlives this command, so it must not inherit this process's pipes.
-    const started = tool('pg_ctl', ['-D', dataDir, '-o', `-p ${port} -c listen_addresses=${host}`, '-l', logFile, '-w', 'start'], { stdio: 'ignore' });
-    if (started.status !== 0 || !running()) fail(`the local cluster did not start; see ${path.relative(root, logFile)}`);
+  const cluster = await locate();
+  if (cluster.running) {
+    const chosen = chosenPort();
+    if (chosen && chosen !== cluster.port) fail(`this checkout's cluster is already running on port ${cluster.port}; stop it before starting it on OIANO_LOCAL_PG_PORT=${chosen}`);
+    port = cluster.port;
+  } else {
+    // A server that is still starting or stopping holds the lock file but does not answer yet.
+    if (tool('pg_ctl', ['status', '-D', dataDir]).status === 0) fail(`this checkout's cluster is starting or stopping; try again shortly, or see ${path.relative(root, logFile)}`);
+    port = await startServer(cluster.port, cluster.found);
   }
+  if (readFile(portFile).trim() !== port) fs.writeFileSync(portFile, `${port}\n`);
   if (!quiet) console.log(`Local PostgreSQL is running on ${host}:${port}`);
 }
 
-function stop() {
-  if (!clusterExists() || !running()) return console.log('Local PostgreSQL is not running');
-  const stopped = tool('pg_ctl', ['-D', dataDir, '-m', 'fast', 'stop'], { stdio: 'ignore' });
-  if (stopped.status !== 0) fail('the local cluster did not stop cleanly');
-  console.log('Local PostgreSQL stopped');
+async function stop() {
+  // pg_ctl -D signals only the server whose lock file is in this checkout's data
+  // directory, so it cannot stop another checkout's cluster.
+  if (clusterExists() && tool('pg_ctl', ['status', '-D', dataDir]).status === 0) {
+    const stopped = tool('pg_ctl', ['-D', dataDir, '-m', 'fast', 'stop'], { stdio: 'ignore' });
+    if (stopped.status !== 0) fail('the local cluster did not stop cleanly');
+    return console.log('Local PostgreSQL stopped');
+  }
+  const preferred = preferredPort();
+  const found = await probe(preferred);
+  if (found.state === 'other' || found.state === 'unknown') {
+    return console.log(`This checkout's local PostgreSQL is not running. Port ${preferred} belongs to ${holder(found)}, which was left running.`);
+  }
+  console.log('Local PostgreSQL is not running');
 }
 
-function status() {
+async function status() {
   if (!clusterExists()) return console.log('No local cluster yet; `npm run db:local:start` creates one');
-  if (!running()) return console.log(`Local PostgreSQL is stopped (${path.relative(root, dataDir)})`);
+  const cluster = await locate();
+  if (!cluster.running) {
+    console.log(`Local PostgreSQL is stopped (${path.relative(root, dataDir)})`);
+    if (cluster.found.state !== 'free') {
+      console.log(`  port ${cluster.port} belongs to ${holder(cluster.found)}; \`npm run db:local:start\` ${chosenPort() ? 'will refuse it' : 'will use another port'}`);
+    }
+    return;
+  }
+  port = cluster.port;
   const names = query('postgres', "select datname from pg_database where datname like 'oiano%' order by datname").stdout.split(/\r?\n/).filter(Boolean);
   console.log(`Local PostgreSQL is running on ${host}:${port}`);
   console.log(names.length ? names.map((name) => `  ${urlFor(name)}`).join('\n') : '  (no OIANO databases yet)');
 }
 
-function fresh(label = 'check', { quiet = false } = {}) {
-  start({ quiet: true });
+async function fresh(label = 'check', { quiet = false } = {}) {
+  await start({ quiet: true });
   const slug = String(label).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 24) || 'check';
   const stamp = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 17);
   // The standalone "test" segment is what scripts/run-api-integration-tests.js requires.
   const database = `oiano_${slug}_${stamp}_test`;
   const created = tool('createdb', ['-h', host, '-p', port, '-U', superuser, database]);
   if (created.status !== 0) fail(`createdb failed:\n${created.stderr || created.stdout}`);
+  fs.appendFileSync(createdFile, `${database}\n`);
   if (!quiet) console.log(urlFor(database));
   return urlFor(database);
 }
 
-function prune() {
-  start({ quiet: true });
-  const names = query('postgres', `select datname from pg_database where datname like 'oiano\\_%\\_test' and datname <> '${devDatabase}'`)
-    .stdout.split(/\r?\n/).filter(Boolean);
-  if (!names.length) return console.log('Nothing to prune');
-  for (const name of names) {
+async function prune() {
+  await start({ quiet: true });
+  const listed = query('postgres', `select datname from pg_database where datname like 'oiano\\_%\\_test' and datname <> '${devDatabase}' order by datname`);
+  if (listed.status !== 0) fail(`could not list the local databases:\n${listed.stderr || listed.stdout}`);
+  const names = listed.stdout.split(/\r?\n/).filter(Boolean);
+  const recorded = new Set(readFile(createdFile).split(/\r?\n/).filter(Boolean));
+  // Recorded names that are gone from the server, or are dropped below, leave the record.
+  const forget = new Set([...recorded].filter((name) => !names.includes(name)));
+  for (const name of names.filter((name) => recorded.has(name))) {
     const dropped = tool('dropdb', ['-h', host, '-p', port, '-U', superuser, name]);
+    if (dropped.status === 0) forget.add(name);
     console.log(dropped.status === 0 ? `dropped ${name}` : `could not drop ${name}: ${(dropped.stderr || '').trim()}`);
   }
+  if (forget.size) {
+    // Read the record again: a `fresh` running meanwhile may have added to it.
+    const kept = readFile(createdFile).split(/\r?\n/).filter((name) => name && !forget.has(name));
+    fs.writeFileSync(createdFile, kept.map((name) => `${name}\n`).join(''));
+  }
+  const unrecorded = names.filter((name) => !recorded.has(name));
+  if (unrecorded.length) {
+    console.log(`Left in place, because \`fresh\` in this checkout did not record creating them:\n${unrecorded.map((name) => `  ${name}`).join('\n')}`);
+    console.log(`Drop one that is yours with: dropdb -h ${host} -p ${port} -U ${superuser} <name>`);
+  }
+  if (!names.length) console.log('Nothing to prune');
 }
 
-function integration() {
-  const databaseUrl = fresh('integration', { quiet: true });
+async function integration() {
+  const databaseUrl = await fresh('integration', { quiet: true });
   console.log(`Integration suite on ${databaseUrl}`);
   const result = spawnSync(process.execPath, [path.join(root, 'scripts', 'run-api-integration-tests.js')], {
     cwd: root,
@@ -202,7 +350,7 @@ async function dev() {
   const apiPort = await choosePort('API', process.env.OIANO_LOCAL_API_PORT, [4000, 4100, 4200, 4300], 'OIANO_LOCAL_API_PORT');
   const webPort = await choosePort('web app', process.env.OIANO_LOCAL_WEB_PORT || process.env.PORT, [5173, 5174, 5175], 'OIANO_LOCAL_WEB_PORT');
 
-  start({ quiet: true });
+  await start({ quiet: true });
   if (!query('postgres', `select 1 from pg_database where datname = '${devDatabase}'`).stdout.trim()) {
     const created = tool('createdb', ['-h', host, '-p', port, '-U', superuser, devDatabase]);
     if (created.status !== 0) fail(`createdb failed:\n${created.stderr || created.stdout}`);

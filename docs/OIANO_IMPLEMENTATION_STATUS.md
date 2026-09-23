@@ -239,3 +239,41 @@ Neon database, for six read-only requests, before it was caught and stopped.
 Set `NODE_ENV=test` when pointing a local API at a disposable database, and prove
 the binding before trusting a verification run — compare a row the two databases
 cannot share, such as the studio id.
+
+**Fixed 2026-09-15 — local databases across worktrees.** `scripts/local-db.js` took any
+server answering on 55432 for the checkout's own cluster. A worktree that found another
+worktree's cluster there never started its own: its `fresh`, `test` and `dev` created and
+migrated databases on the other cluster, its `prune` dropped the other worktree's
+databases, and its `stop` failed, because its own cluster had never started. On
+2026-09-15 one worktree's `prune` dropped three of another's integration databases this
+way.
+
+- A running server is used only when `SHOW data_directory` names the checkout's own
+  `.oiano/postgres`. When another server holds the port, the cluster starts on the first
+  free port from 55432 and `.oiano/port` keeps it; later commands also find a running
+  cluster through its lock file. A port named by `OIANO_LOCAL_PG_PORT` that another
+  server holds is refused, naming that server's data directory. A start that loses its
+  port to another checkout starting at the same moment tries the next free one.
+- `fresh` records each database it creates in `.oiano/created-databases`, and `prune`
+  drops only those. Other test databases on the cluster are listed and left.
+- `stop` stops only the checkout's own server, and says so when the port belongs to
+  another cluster.
+- **Evidence.** A simulation ran copies of the script as separate checkouts, each with its
+  own throwaway cluster. The committed script reproduced all three defects. With the new
+  script, 40 checks passed: two checkouts that wanted one port each kept to their own
+  cluster through start, fresh, status, prune and stop; commands pointed at the other
+  checkout's port refused; `prune` left a database another checkout had created; and a
+  start that lost its port to a process binding it at the same moment moved to another.
+  For a single checkout, nine steps of start, status, fresh, prune and stop printed
+  exactly what the committed script prints. Seven protections were removed one at a
+  time, and each removal failed its intended check. The cluster another session was
+  running on 55432 was only read, and kept its data directory and all six databases. In
+  this worktree, after building `packages/shared`, `npm run test:integration:local`
+  passed all 39 tests on the worktree's own cluster, which started on 55433 because
+  55432 was taken; `prune` then dropped exactly the two databases `fresh` had recorded.
+- **Not changed.** A worktree still running the committed script attaches to whatever
+  answers on its port, and can still drop databases there, until it picks up this change.
+  Databases created before this change are in no record, so `prune` lists them instead
+  of dropping them. On a fresh checkout the integration suite cannot load
+  `@oiano/shared` until `npm run build --workspace=packages/shared` has run; that gap is
+  older than this change and needs its own fix.
