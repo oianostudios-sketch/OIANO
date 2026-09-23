@@ -15,19 +15,19 @@ how much of this applies — they are at the end.
 | What is deployed | `NODE_ENV=staging` on Render's **free** plan: spins down after 15 minutes idle, ~512MB (`render.yaml`) |
 | Does money move | No. `STRIPE_ENABLED=false`; no Stripe call in the money path has ever run |
 | How many API instances | One, and only one is safe: the SSE registry and the rate limiter are in process |
-| Who the rate limiter counts | An IP address (`apps/api/src/middleware/rateLimit.middleware.ts`) |
+| Who the rate limiter counts | The caller: a token it can verify, else the address (fixed 2026-09-24) |
 | Migrations | Applied by hand before a deploy (`render.yaml`) |
 | Stabilization gate | Seven of eight; gate 2 is fixed on `claude/gate-2-schema-declarations`, unmerged |
-| Files | Uploads buffer in the Node process; the R2 path has never been exercised live |
+| Files | Direct-to-R2 upload exists (presign, PUT, complete); nothing has ever been uploaded with real R2 credentials, and without R2 configured the presign route answers 501 and uploads fall back to the buffered route |
 
 ## Blockers
 
 Ordered by how certainly they break an event, not by effort.
 
-1. **The venue is one caller.** The limiter keys on IP, so everyone on the venue network
-   shares one budget: 300 requests a minute for the whole room, 20 booking attempts, 10
-   sign-ins. Key it on the authenticated user, with the IP as the fallback only for
-   anonymous routes.
+1. ~~**The venue is one caller.**~~ **Fixed 2026-09-24.** Limits count a caller rather than
+   an address, and sign-ins are counted per account within an address with a wider ceiling
+   for the address itself. What remains is that the counter lives in one process, which is
+   blocker 2 below.
 2. **One instance, no redundancy and no zero-downtime deploy.** A second instance would
    silently stop delivering live updates to anyone whose stream landed elsewhere, and
    rate limits would stop being enforced across instances. Either size one instance for
@@ -38,8 +38,9 @@ Ordered by how certainly they break an event, not by effort.
    35 days — which means a restore actually performed, not a backup taken.
 4. **The free plan cold-starts.** An event has a hard start time; a spun-down instance
    does not. `plan: standard`, and re-add the staging service the load test needs.
-5. **Files.** A real multi-megabyte upload buffers in process memory, and no upload has
-   ever reached R2 with real credentials (roadmap 0.3, not started).
+5. **Files.** No upload has ever been made with real R2 credentials. The direct-to-R2
+   path is written and careful — it verifies the object before recording it — but until
+   R2 is configured and exercised, a real upload takes the buffered fallback.
 6. **The money rails have never run** (only if money moves — see decisions). Checkout,
    the wallet top-up webhook, refunds and payouts are proven against test doubles alone.
 7. **Unbacked wallet credit** (only if money moves). Studio-issued credit was removed on
@@ -57,7 +58,7 @@ Ordered by how certainly they break an event, not by effort.
 | 0. Land | Merge gate 2 after its read-only production diff; re-run the gate; merge the money guards; resume the roster disclosure fix | Eight of eight gates pass and nothing load-bearing is unmerged |
 | 1. Production | Satisfy `env.ts`; standard plan; real Sentry, SendGrid and R2 credentials; a performed restore; a written deploy-and-migrate runbook | The API boots with `NODE_ENV=production` and an error reaches Sentry |
 | 2. Money | Stripe test mode end to end — checkout, top-up webhook, refund, payout to a Connect account — then live keys, then reconcile unbacked credit | A test payout reaches a Connect account and the ledger balances |
-| 3. Capacity | Fix limiter keying; decide one instance or Redis; run `npm run load-test` at the real concurrency against standard-tier staging; frontend request timeout and pagination | The load test holds the target with SSE connections open |
+| 3. Capacity | Decide one instance or Redis; run `npm run load-test` at the real concurrency against standard-tier staging; frontend pagination | The load test holds the target with SSE connections open |
 | 4. Operations | Real studio, rooms, services and staff; demo accounts gone; runsheet and walk-in rehearsed; on-call named; rollback written; offline fallback agreed; dress rehearsal; freeze | A dress rehearsal runs the Golden Journey on real phones |
 
 ## Event-day operations

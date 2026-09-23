@@ -300,6 +300,51 @@ before any of it was written.
   - **Not exercised:** a payout against Stripe. No rail was called; the tests supply the
     transfer as a function.
 
+**Rate limits count a caller, 2026-09-24 — a venue is not one person.** Every limiter
+counted an address (`middleware/rateLimit.middleware.ts`), and read it from the first
+`X-Forwarded-For` value, which the caller writes. A studio, an office and an event venue
+each reach the API from one public address, so the global 300 requests a minute,
+booking's 20 and sign-in's 10 were budgets a whole room shared: fifty people at a venue
+had ten sign-in attempts between them.
+
+- **Who a limit counts** is now decided in `lib/rateLimitKey.ts`: the subject of a token
+  the request can prove, and only otherwise the address. The token is verified rather
+  than decoded — an unverified `sub` would let anyone mint themselves a fresh budget by
+  inventing a subject, which is worse than counting by address.
+- **The address is the one the proxy reports.** `app.set('trust proxy', …)` makes `req.ip`
+  authoritative instead of a header the caller wrote; `TRUST_PROXY_HOPS` changes the hop
+  count if another proxy is ever put in front. The global ceiling is 600 a minute, per
+  caller, sized for a room of anonymous callers rather than for one person.
+- **Sign-in cannot be counted per caller**, because it is anonymous by definition. An
+  account keeps ten attempts a minute, scoped to the address so nobody can lock someone
+  out of their own account from elsewhere, and the address keeps 120 of its own. Guessing
+  one account from one machine is unchanged at ten a minute; what a shared address buys
+  is room for everyone else behind it. A request naming no account (an MFA challenge, a
+  reset token) is still counted by address, as every auth route was.
+- **Evidence.** Six unit tests hold the key itself, including a forged subject, an expired
+  token and a token signed with another secret, each counted by address. Two integration
+  tests hold it end to end: one artist's 21 booking attempts refuse only the 21st and
+  leave a second artist's budget untouched, and 11 sign-in attempts on one account refuse
+  only the 11th while the next account from the same address still gets its 401. Both
+  defects were put back one at a time, each failed only its own test, and both files were
+  restored byte-identical. 54 of 54 integration tests on a fresh database; unit suites 94,
+  31 and 75.
+- **Not changed.** The counter still lives in this process, so a second API instance would
+  enforce its own share of every budget (`SCALE_READINESS_ROADMAP.md` Tier 1.2). With
+  `trust proxy` on, the address is only as trustworthy as the proxy in front of it — one
+  hop matches today's deployment.
+
+**Corrections to earlier records, found while doing this.**
+
+- `SCALE_READINESS_ROADMAP.md` Tier 0.3 says direct-to-R2 upload is not started. It
+  exists: `POST /api/artists/:id/files/presign` returns a short-lived PUT URL, the browser
+  uploads straight to R2, and `/files/complete` verifies the object is there and no larger
+  than was authorized before recording it, deleting the stray if not. What has never
+  happened is an upload with real R2 credentials; without R2 configured, presign answers
+  501 and uploads take the buffered fallback.
+- Tier 1.8's request timeout exists: `apps/web/src/lib/api.ts` times out at 20 seconds.
+  Pagination is still not wired into the frontend's lists.
+
 ## Verification performed for Phase 1
 
 Both typechecks · API security 53/53 · API intelligence 31/31 · web 57/57 ·
