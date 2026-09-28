@@ -207,6 +207,41 @@ is in [build direction](OIANO_BUILD_DIRECTION.md).
   test; every file was restored byte-identical. **Not exercised:** the studio clock and the
   booked-value label in a browser, and a payout against Stripe.
 
+**Credit record, 2026-09-28 — a confirmed credit belongs to the contributor.** Two
+findings from the canonical reconciliation report (§1, finding 5).
+
+- **The lead can no longer delete a confirmed credit.** `DELETE
+  /api/producer/projects/:id/credits/:creditId` hard-deleted any credit, so a producer could
+  erase a contribution the credited person had confirmed, with no trace and no notice. The
+  lead may still withdraw a credit nobody has confirmed (DRAFT) or one the contributor
+  disputed; a confirmed one is a 409. The delete is guarded on the status in the same
+  statement, so a confirmation that lands after the lead's read still wins. The project
+  page no longer offers removal on a confirmed credit, and a refused removal now says why
+  and refreshes the sheet instead of failing silently.
+- **An engineer's confirmed credits are their own.** `GET /api/network-metrics` counted every
+  confirmed credit whose `credited_name` matched the engineer's name, so a namesake's credits
+  counted and the engineer's own, credited under another spelling, did not. It now counts
+  confirmed credits on participations the engineer's account accepted — the same link that
+  lets them confirm a credit.
+- **Evidence.** `credit-record.integration.test.ts`, four tests, registered in the runner; the
+  suite passes 44 of 44 on a fresh local database. Four defects were put back one at a time,
+  and each failed exactly its intended test: the unguarded delete, a guard that also refuses
+  disputed credits, a read-then-delete with its window widened by 15 ms, and name matching
+  for the engineer count. Every file was restored byte-identical. Both typechecks, API unit
+  88, intelligence 31, web 75, the build and the secret scan pass.
+- **Not exercised.** The read-then-delete race without a widened window passed the race test
+  in three of three runs, so that test catches the race only when it is forced; the
+  single-statement guard is what holds it. The project page's hidden control was not seen in
+  a browser: `oiano-local` launches from the main checkout, not this branch's worktree.
+- **Observed, not changed.**
+  - Artist and producer "Confirmed credits" count confirmed credits on projects they own,
+    including credits to other people, rather than credits confirmed by them. Changing that
+    changes both numbers, so it is a decision.
+  - Once confirmed, a credit has no correction path: neither side can retract or amend it.
+    A retraction that keeps the record (Evidence, step 19) is the likely answer.
+  - `POST /api/producer/projects/:id/credits` still binds a credit to an active participant
+    by display name when no participant is named. The participant must still confirm it.
+
 **Schema redesign:** designed for review in [schema redesign](OIANO_SCHEMA_REDESIGN.md),
 against the owner decisions of 2026-09-12. No migration is written; implementation
 waits for Session 5.
