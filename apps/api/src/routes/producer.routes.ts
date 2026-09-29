@@ -290,7 +290,15 @@ producerRouter.delete('/projects/:id/credits/:creditId', requireRole('PRODUCER')
     if (!producer) throw new AppError('Producer not found', 404);
     const credit = await db.projectCredit.findFirst({ where: { id: req.params.creditId, project_id: req.params.id, project: { producer_id: producer.id } } });
     if (!credit) throw new AppError('Project credit not found', 404);
-    await db.projectCredit.delete({ where: { id: credit.id } });
+    // A confirmed credit is the contributor's record, not the lead's draft, so the
+    // lead may withdraw only a credit nobody has confirmed. The delete is guarded
+    // on that status, not just the id, so a confirmation landing after the read
+    // above still wins.
+    const withdrawn = await db.projectCredit.deleteMany({ where: { id: credit.id, status: { not: 'CONFIRMED' } } });
+    if (withdrawn.count !== 1) {
+      if (!await db.projectCredit.findUnique({ where: { id: credit.id }, select: { id: true } })) throw new AppError('Project credit not found', 404);
+      throw new AppError('A confirmed credit belongs to the contributor’s record and cannot be removed', 409);
+    }
     res.json({ success: true });
   } catch (err) { next(err); }
 });
