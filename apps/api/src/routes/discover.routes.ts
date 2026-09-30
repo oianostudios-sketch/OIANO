@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import { authenticate } from '../middleware/auth.middleware';
 import { computeArtistTiers } from '../lib/artistTier';
+import { byOverlapThenCompletedWork } from '../lib/discoveryRanking';
 
 export const discoverRouter = Router();
 discoverRouter.use(authenticate);
@@ -80,12 +81,15 @@ discoverRouter.get('/', async (req: any, res: Response, next: NextFunction) => {
       };
     });
 
-    // Sort by overlap desc, then by profile_strength
-    scored.sort((a, b) =>
-      b.overlap_score - a.overlap_score || b.profile_strength - a.profile_strength
-    );
+    // Completeness is still returned, for the profile prompt, but ranks no one.
+    const completed = await prisma.booking.groupBy({
+      by: ['artist_id'],
+      where: { artist_id: { in: scored.map((a) => a.id) }, status: 'COMPLETED' },
+      _count: { _all: true },
+    });
+    const ranked = byOverlapThenCompletedWork(scored, new Map(completed.map((row) => [row.artist_id, row._count._all])));
 
-    const top = scored.slice(0, 20);
+    const top = ranked.slice(0, 20);
     const tiers = await computeArtistTiers(top.map((a) => a.id));
     const withTier = top.map((a) => ({ ...a, tier: tiers[a.id] ?? null }));
 

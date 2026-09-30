@@ -207,6 +207,78 @@ is in [build direction](OIANO_BUILD_DIRECTION.md).
   test; every file was restored byte-identical. **Not exercised:** the studio clock and the
   booked-value label in a browser, and a payout against Stripe.
 
+**Credit record, 2026-09-28 — a confirmed credit belongs to the contributor.** Two
+findings from the canonical reconciliation report (§1, finding 5).
+
+- **The lead can no longer delete a confirmed credit.** `DELETE
+  /api/producer/projects/:id/credits/:creditId` hard-deleted any credit, so a producer could
+  erase a contribution the credited person had confirmed, with no trace and no notice. The
+  lead may still withdraw a credit nobody has confirmed (DRAFT) or one the contributor
+  disputed; a confirmed one is a 409. The delete is guarded on the status in the same
+  statement, so a confirmation that lands after the lead's read still wins. The project
+  page no longer offers removal on a confirmed credit, and a refused removal now says why
+  and refreshes the sheet instead of failing silently.
+- **An engineer's confirmed credits are their own.** `GET /api/network-metrics` counted every
+  confirmed credit whose `credited_name` matched the engineer's name, so a namesake's credits
+  counted and the engineer's own, credited under another spelling, did not. It now counts
+  confirmed credits on participations the engineer's account accepted — the same link that
+  lets them confirm a credit.
+- **Evidence.** `credit-record.integration.test.ts`, four tests, registered in the runner; the
+  suite passes 44 of 44 on a fresh local database. Four defects were put back one at a time,
+  and each failed exactly its intended test: the unguarded delete, a guard that also refuses
+  disputed credits, a read-then-delete with its window widened by 15 ms, and name matching
+  for the engineer count. Every file was restored byte-identical. Both typechecks, API unit
+  88, intelligence 31, web 75, the build and the secret scan pass.
+- **Not exercised.** The read-then-delete race without a widened window passed the race test
+  in three of three runs, so that test catches the race only when it is forced; the
+  single-statement guard is what holds it. The project page's hidden control was not seen in
+  a browser: `oiano-local` launches from the main checkout, not this branch's worktree.
+- **Observed, not changed.**
+  - Artist and producer "Confirmed credits" count confirmed credits on projects they own,
+    including credits to other people, rather than credits confirmed by them. Changing that
+    changes both numbers, so it is a decision.
+  - Once confirmed, a credit has no correction path: neither side can retract or amend it.
+    A retraction that keeps the record (Evidence, step 19) is the likely answer.
+  - `POST /api/producer/projects/:id/credits` still binds a credit to an active participant
+    by display name when no participant is named. The participant must still confirm it.
+
+**Standing from work, 2026-09-30 — C18 and C19.** Owner decision of 2026-09-30: an
+artist's tier rests only on work other people took part in. This completes A07, whose audit
+row already said "DM interest is not completed work"; the 2026-09-14 pass had kept accepted
+connections in the tier.
+
+- **TRADED comes from recent work, not contacts.** It used to need two accepted message
+  connections in 30 days, and replying to a message request accepts it
+  (`connect.routes.ts`). It now needs PRECIOUS standing and completed sessions at two or
+  more distinct studios that started in the last 30 days, read from the Weave's evidence
+  joined to its bookings. The connection's stored `last_activity_at` is not used, because it
+  can lag until its next sync (A08). Evidence whose booking is no longer COMPLETED, left by
+  a reversal before A02, does not count.
+- **Completeness no longer gates standing.** A tier used to appear only above 60% profile
+  completeness, a score the artist raises by filling in their own profile. CUT now needs
+  one completed session, and PRECIOUS and TRADED are unchanged apart from the above.
+- **Discovery breaks ties by completed sessions**, not by completeness
+  (`lib/discoveryRanking.ts`). Completeness is still returned for the profile prompt.
+- **Evidence.** The A07 connection test is replaced by three: accepted connections leave an
+  artist PRECIOUS; recent work makes one TRADED only across two studios, within the window,
+  and only while its bookings are completed; an artist at 0% completeness with ten rated
+  sessions is PRECIOUS. Two unit tests hold the discovery order. Integration 46 of 46 on a
+  fresh local database; API unit 90, intelligence 31, web 75, both typechecks, the build
+  and the secret scan pass. Six defects were put back one at a time: the previous tier rule
+  whole, no window, no status filter, a threshold of one studio, evidence rows counted
+  instead of distinct studios, and completeness as the tie-break. Each failed its intended
+  test; the fifth survived the first version of the test, which gained a second session at
+  one studio to catch it. Every file was restored byte-identical.
+- **Not done.** Artists who are TRADED today through contacts become PRECIOUS on their next
+  read; nothing is stored, so nothing is migrated. Tiers read Weave evidence, so an artist
+  whose completed bookings were never synced (before the Weave, or after a failed sync)
+  counts none of that work toward TRADED until `prisma/backfill-weave.ts` runs; nothing was
+  run against production. Not seen in a browser.
+- **Observed, not changed.** Replying to a message request still accepts it; it no longer
+  affects standing. Discovery still ranks only the first 50 artists the database returns,
+  in no set order (C39, step 14). The studio market view still counts profiles above 60%
+  completeness as "qualified"; it is an aggregate, not anyone's standing.
+
 **Schema redesign:** designed for review in [schema redesign](OIANO_SCHEMA_REDESIGN.md),
 against the owner decisions of 2026-09-12. No migration is written; implementation
 waits for Session 5.
@@ -216,6 +288,85 @@ across currencies and transfer it in `Studio.currency` (`lib/studioPayout.ts:14�
 `routes/payouts.routes.ts:110–113`), while booking payments post as USD. Latent while
 payouts are off; it must be fixed before a studio with a non-USD currency takes a payout.
 *Fixed in the stabilization pass of 2026-09-14, above.*
+
+**Fixed after the stabilization pass — the integration suite on a fresh checkout,
+2026-09-24.** `npm run test:integration:local` could not pass after `npm ci` until
+someone had built `packages/shared` by hand.
+
+- The API imports `@oiano/shared`, which resolves through that package's `main`,
+  `dist/index.js`. `dist` is gitignored and no install step writes it, so on a fresh
+  checkout the four integration files that import it failed to load with
+  `MODULE_NOT_FOUND`. The fifth, `stabilization.integration.test.ts`, does not import
+  it: it loaded and passed, so the run still read like a suite that works.
+- The import resolves through `node_modules/@oiano/shared` rather than from source
+  because the runner registers `tsconfig-paths` with the repository root as its working
+  directory, and the root `tsconfig.json` declares no `baseUrl` or `paths`. The
+  `@oiano/shared` mapping lives only in `apps/api/tsconfig.json`.
+- `scripts/run-api-integration-tests.js` now builds `packages/shared` when
+  `dist/index.js` is missing. That runner is the one path both CI and
+  `npm run test:integration:local` take, so neither caller has to remember; CI's own
+  "Build shared package" step still runs first and this finds its work done. The
+  database-name checks are unchanged and still run before it. A `dist` that is present
+  but stale is left alone, exactly as `npm run dev:local` leaves it.
+- **Evidence.** With `packages/shared/dist` deleted: before the change, 11 tests with
+  four of the five files failing to load; after it, all five files load and 39 of 39
+  pass on a fresh local database. The defect was put back once — the runner restored to
+  its committed version, `dist` deleted again — and the run failed four of 11 as before.
+  Both typechecks, API security 88/88, API intelligence 31/31, web 75/75, secret scan
+  across 419 tracked files, full build.
+- **Not done.** `npm test` cannot pass in a worktree that has no `.env`:
+  `src/lib/creatorContext.test.ts` reaches `lib/prisma.ts`, which builds a
+  `PrismaClient` at import time and throws when `DATABASE_URL` is unset. It was run here
+  with the unreachable, credential-free URL CI uses, never with `.env` present.
+
+**Pre-commit tests, 2026-09-24 — `npm test` no longer needs a `.env`, or reaches the
+shared database.** AGENTS.md tells every agent to run `npm test` before committing, but
+the command only worked where a `.env` happened to be readable, and what it did there was
+worse than failing.
+
+- **The cause.** `lib/prisma.ts` constructs a `PrismaClient` at import time
+  (`apps/api/src/lib/prisma.ts:33–38`). Two files in the unit suites reach it,
+  `creatorContext.test.ts` and `bookingTransitions.test.ts`, though every assertion in
+  them is over pure functions and nothing queries. The suite's datasource therefore came
+  from whatever `.env` the process found, with two outcomes and no third.
+- **Where a worktree has its own `node_modules`:** `DATABASE_URL` is undefined,
+  `buildDbUrl()` returns undefined, and the constructor throws
+  `PrismaClientConstructorValidationError: Invalid value undefined for datasource "db"`.
+  The file fails to load before one assertion runs.
+- **Where it has none** — which is every worktree the desktop app creates — Node resolves
+  `@prisma/client` up to the main checkout's `node_modules`, and that generated client
+  carries the main checkout's schema path and loads the `.env` beside it. Importing
+  `@prisma/client` is enough to inject the **shared Neon URL** into `process.env`.
+  Measured on 2026-09-24: the suite reported 88/88 green while every module in it held the
+  shared database's credentials, one query away from using them. This is what rule 1
+  exists to prevent, and it reported nothing.
+- **The fix.** `apps/api/scripts/test-env.js`, loaded by `node -r` from `test:security`
+  and `test:intelligence`, pins `NODE_ENV=test` and the same deliberately unreachable,
+  credential-free `postgresql://127.0.0.1:5432/validate_only` that CI already sets at the
+  job level (`.github/workflows/ci.yml`, `verify`), so a local run and a CI run are
+  configured identically. Neither Prisma's own loader nor `dotenv` without `override`
+  displaces a variable that is already set, and `NODE_ENV=test` is what holds
+  `lib/prisma.ts:12` to `override: false`, so `apps/api/.env` cannot replace it again in a
+  checkout that has one. The test runner propagates `-r` to the child process it spawns
+  per file.
+- **The guard.** `apps/api/src/lib/testEnv.test.ts` fails if the unit suites are pointed at
+  a non-loopback host. Loopback separates the two cases by construction: the shared
+  database is remote, while CI's placeholder and the local cluster on 55432 are not.
+- **Evidence.** In a worktree with no `.env` and no `node_modules`: API security 89/89,
+  API intelligence 31/31, web 9 files / 75 tests, secret scan across 419 tracked files.
+  Both defects were put back and watched to fail — the guard run without the preload fails
+  on the missing pin; an import of `@prisma/client` without it resolves to the Neon host
+  and the loopback check fires; `new PrismaClient` with `url: undefined` still throws the
+  reported error, while the placeholder constructs cleanly. **Not exercised:** nothing here
+  runs in a browser, and no database was connected to at any point.
+- **Found, not fixed.** `npm run typecheck --workspace=apps/api` and `npm run build` fail
+  in a worktree with 119 errors, almost all of the form "Property 'artist' does not exist
+  on type". The count is identical with and without this change, so it is pre-existing.
+  `prisma/schema.prisma` is byte-identical to the main checkout's and does declare those
+  relations, so the generated client in the shared `node_modules` is stale; CI never sees
+  it because it runs `npx prisma generate` before typechecking. Regenerating writes into
+  the shared `node_modules` that other agents' worktrees resolve through, so it is left for
+  the owner to run rather than done as a side effect of this work.
 
 ## Verification performed for Phase 1
 
@@ -239,6 +390,10 @@ Neon database, for six read-only requests, before it was caught and stopped.
 Set `NODE_ENV=test` when pointing a local API at a disposable database, and prove
 the binding before trusting a verification run — compare a row the two databases
 cannot share, such as the studio id.
+
+That is one of two ways the shared database arrives unasked. The other reaches a
+process that never reads `.env` at all, through Prisma’s generated client — see
+the pre-commit tests entry of 2026-09-24 above.
 
 **Fixed 2026-09-15 — local databases across worktrees.** `scripts/local-db.js` took any
 server answering on 55432 for the checkout's own cluster. A worktree that found another
