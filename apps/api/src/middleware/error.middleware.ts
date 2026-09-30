@@ -3,6 +3,7 @@ import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import { AppError } from '../lib/errors';
 import { captureError } from '../lib/sentry';
+import { redactUrlForLog } from '../lib/logRedaction';
 
 // One structured JSON line per error, covering every branch below (not just
 // the unhandled-500 case) — DIAG-01/03: a failed request should be
@@ -14,7 +15,7 @@ function logError(req: Request, statusCode: number, message: string, err: unknow
     timestamp: new Date().toISOString(),
     requestId: (req as any).requestId,
     method: req.method,
-    path: req.originalUrl,
+    path: redactUrlForLog(req.originalUrl),
     statusCode,
     userId: (req as any).userId,
     userRole: (req as any).userRole,
