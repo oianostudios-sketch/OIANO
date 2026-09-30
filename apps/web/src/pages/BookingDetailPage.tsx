@@ -102,14 +102,15 @@ export default function BookingDetailPage() {
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [rescheduleStart, setRescheduleStart] = useState('');
-  const [rescheduleEnd, setRescheduleEnd] = useState('');
+  const [rescheduleLengthMs, setRescheduleLengthMs] = useState(0);
   const [policyOpen, setPolicyOpen] = useState(false);
 
   const reschedule = useMutation({
     mutationFn: () => {
-      const starts_at = new Date(`${rescheduleDate}T${rescheduleStart}`).toISOString();
-      const ends_at   = new Date(`${rescheduleDate}T${rescheduleEnd}`).toISOString();
-      return api.patch(`/bookings/${id}/reschedule`, { starts_at, ends_at });
+      // A reschedule keeps the booked length, so the new end follows the new start.
+      const startsAt = new Date(`${rescheduleDate}T${rescheduleStart}`);
+      const ends_at  = new Date(startsAt.getTime() + rescheduleLengthMs).toISOString();
+      return api.patch(`/bookings/${id}/reschedule`, { starts_at: startsAt.toISOString(), ends_at });
     },
     onSuccess: () => {
       toast.success('Booking rescheduled');
@@ -610,7 +611,7 @@ export default function BookingDetailPage() {
                 const e = new Date(booking.ends_at);
                 setRescheduleDate(s.toISOString().slice(0,10));
                 setRescheduleStart(s.toTimeString().slice(0,5));
-                setRescheduleEnd(e.toTimeString().slice(0,5));
+                setRescheduleLengthMs(e.getTime() - s.getTime());
                 setRescheduleOpen(true);
               }}
               className="w-full py-3 rounded-xl border border-studio-border text-zinc-400 text-sm hover:border-dome/30 hover:text-dome transition-colors"
@@ -694,7 +695,7 @@ export default function BookingDetailPage() {
             onClick={e => e.stopPropagation()}
           >
             <p className="font-display text-lg text-white mb-1">Reschedule Session</p>
-            <p className="text-zinc-500 text-xs mb-5">Pick a new date and time for this booking. The room stays the same.</p>
+            <p className="text-zinc-500 text-xs mb-5">Pick a new date and start time. The room and the booked length stay the same.</p>
             <div className="space-y-4">
               <div>
                 <label className="label-mono text-zinc-500 block mb-1.5">Date</label>
@@ -717,19 +718,16 @@ export default function BookingDetailPage() {
                   />
                 </div>
                 <div>
-                  <label className="label-mono text-zinc-500 block mb-1.5">End time</label>
-                  <input
-                    type="time"
-                    value={rescheduleEnd}
-                    onChange={e => setRescheduleEnd(e.target.value)}
-                    className="w-full bg-studio-bg border border-studio-border text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-dome"
-                  />
+                  <span className="label-mono text-zinc-500 block mb-1.5">Length</span>
+                  <p className="w-full border border-studio-border text-zinc-400 text-sm rounded-lg px-3 py-2.5">
+                    {fmtDuration(booking.starts_at, booking.ends_at)}
+                  </p>
                 </div>
               </div>
             </div>
             <button
               onClick={() => reschedule.mutate()}
-              disabled={!rescheduleDate || !rescheduleStart || !rescheduleEnd || reschedule.isPending}
+              disabled={!rescheduleDate || !rescheduleStart || reschedule.isPending}
               className="w-full mt-5 py-3 bg-dome hover:bg-dome-light text-black font-semibold text-sm rounded-xl transition-colors disabled:opacity-40"
             >
               {reschedule.isPending ? 'Rescheduling…' : 'Confirm new time →'}
