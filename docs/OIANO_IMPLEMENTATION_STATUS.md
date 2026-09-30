@@ -279,6 +279,46 @@ connections in the tier.
   in no set order (C39, step 14). The studio market view still counts profiles above 60%
   completeness as "qualified"; it is an aggregate, not anyone's standing.
 
+**Deliverable versions and reviews, 2026-09-30 — C38, deliverable review.** Delivered
+files are one Deliverable per booking, each delivery a numbered version, and the
+artist's review answers one version. Under concurrency none of that held.
+
+- **An approval can no longer land on a version the artist did not see.** Review read
+  `current_version`, then wrote APPROVED with no condition, so a delivery of version 4
+  arriving while the artist approved version 3 left version 4 approved. The review is
+  now written only while its version is still current and the deliverable is not
+  already approved, in one statement, with the review row in the same transaction
+  (`lib/deliverableVersions.ts`). The booking page sends the version it shows; a newer
+  delivery answers 409 and refreshes the page. A request without a version, from an
+  older page, reviews the version current when it is read, under the same guard.
+- **Two approvals at once record one.** The "already approved" check ran before the
+  write, so both passed; now the second is a 409 and records nothing.
+- **Deliveries at once become consecutive versions of one deliverable.** Both delivery
+  paths, `POST /bookings/:id/deliver` and the completion screen, read the latest
+  version and wrote the next: two at once both wrote N+1, and the loser hit the
+  version's unique key as a 500; two first deliveries created two deliverables for one
+  booking. Both now go through one helper that locks the booking row first
+  (`FOR NO KEY UPDATE`).
+- **Evidence.** `deliverable-review.integration.test.ts`, five tests, registered in the
+  runner: six deliveries at once; a stale approval refused and then the current one
+  recorded; five approvals at once; eight rounds of a review racing a delivery; another
+  artist refused. Integration 52 of 52 on a fresh database; API unit 90, intelligence
+  31, web 75, both typechecks, the build and the secret scan pass. Put back one at a
+  time, each failed its intended test and every file was restored byte-identical: no
+  lock (five of five runs), no version condition, no approved condition. `main`'s
+  controllers failed three of the tests in one run; the concurrent-delivery test caught
+  them in one run of two.
+- **Not exercised.** The review-against-delivery race test did not catch `main`'s
+  read-then-write on its own; with that window widened by 25 ms it failed in its first
+  round. The guarded statement is what holds it. The booking page's refresh on refusal
+  was not seen in a browser.
+- **Observed, not changed.** A flaky test, outside this change: `platform.integration.test.ts`
+  reads the `studio.registered` event right after registration, which writes it without
+  waiting; it failed once in the four full runs made on 2026-09-28 and 2026-09-30, and is
+  left for a separate fix. A studio can
+  still deliver a new version after the artist approved one, which reopens review; the
+  approval stays in the review history, attributed to its version.
+
 **Schema redesign:** designed for review in [schema redesign](OIANO_SCHEMA_REDESIGN.md),
 against the owner decisions of 2026-09-12. No migration is written; implementation
 waits for Session 5.

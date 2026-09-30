@@ -9,6 +9,7 @@ import { sendSessionComplete } from '../../services/email.service';
 import { resolveStaffStudio } from '../../middleware/studioScope.middleware';
 import { recordBookingCompleted } from '../../lib/bookingCompletion';
 import { upsertSessionLog } from '../../lib/sessionLog';
+import { addDeliverableVersion } from '../../lib/deliverableVersions';
 import { requireTransition, transitionBookingStatus } from '../../lib/bookingTransitions';
 
 // POST /api/bookings/:id/complete — the session completion screen.
@@ -149,39 +150,14 @@ export async function completeSession(req: Request, res: Response, next: NextFun
       let deliverable = null;
       if (data.deliverables) {
         const { file_urls, title, notes, visibility } = data.deliverables;
-        const existingDeliverable = await tx.deliverable.findFirst({
-          where: { booking_id: booking.id },
-          orderBy: { created_at: 'asc' },
+        deliverable = await addDeliverableVersion(tx, {
+          bookingId: booking.id,
+          userId,
+          file_urls,
+          notes,
+          title: title ?? `${booking.service?.name ?? 'Session'} files`,
+          visibility,
         });
-        if (!existingDeliverable) {
-          deliverable = await tx.deliverable.create({
-            data: {
-              booking_id: booking.id,
-              title: title ?? `${booking.service?.name ?? 'Session'} files`,
-              status: 'PENDING_REVIEW',
-              visibility,
-              current_version: 1,
-              review_due_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-              created_by: userId,
-              versions: { create: { version_number: 1, file_urls, notes, created_by: userId } },
-            },
-            include: { versions: true },
-          });
-        } else {
-          const nextVersion = existingDeliverable.current_version + 1;
-          deliverable = await tx.deliverable.update({
-            where: { id: existingDeliverable.id },
-            data: {
-              current_version: nextVersion,
-              status: 'PENDING_REVIEW',
-              visibility,
-              reviewed_at: null,
-              review_due_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-              versions: { create: { version_number: nextVersion, file_urls, notes, created_by: userId } },
-            },
-            include: { versions: { orderBy: { version_number: 'desc' } } },
-          });
-        }
       }
 
       let credits: Prisma.ProjectCreditGetPayload<{}>[] = [];
