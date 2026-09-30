@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../lib/errors';
 import { publishBookingUpdate } from '../../services/liveUpdates';
@@ -12,6 +13,14 @@ const RescheduleSchema = z.object({
   ends_at: z.string().datetime(),
   policy_exception_ids: z.array(z.string().uuid()).max(10).optional().default([]),
 });
+
+// A write the room's exclusion constraint refused (Postgres 23P01), or the deadlock
+// two such writes can end in (40P01). Prisma 5.22 reports both from an update as
+// unknown request errors; P2004 and P2034 are its own codes for the same failures.
+function isRoomClash(error: unknown) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) return ['P2004', 'P2034'].includes(error.code);
+  return error instanceof Prisma.PrismaClientUnknownRequestError && /\b(23P01|40P01)\b/.test(error.message);
+}
 
 export async function rescheduleBooking(req: Request, res: Response, next: NextFunction) {
   try {
@@ -34,6 +43,12 @@ export async function rescheduleBooking(req: Request, res: Response, next: NextF
     if (booking.artist?.user_id !== userId) throw new AppError('Not authorised', 403);
     if (!['PENDING', 'CONFIRMED'].includes(booking.status)) {
       throw new AppError(`Cannot reschedule a ${booking.status} booking`, 409);
+    }
+    // The price, the payment and its ledger posting were all set for the booked
+    // length, and nothing here re-prices, so a reschedule moves the time and keeps
+    // the length (owner decision, 2026-09-15).
+    if (newEnd.getTime() - newStart.getTime() !== booking.ends_at.getTime() - booking.starts_at.getTime()) {
+      throw new AppError('A reschedule keeps the booked length; only the start time can change', 409);
     }
 
     // Same hard/controlled-boundary check createBooking enforces at creation
@@ -79,10 +94,15 @@ export async function rescheduleBooking(req: Request, res: Response, next: NextF
     });
     if (conflict) throw new AppError('That time slot is not available', 409);
 
+    // The room's exclusion constraint is what keeps a slot to one booking; the check
+    // above only answers early. A booking written between the two, or one the check
+    // misses, fails this update instead.
     const updated = await prisma.booking.update({
       where: { id: booking.id },
       data: { starts_at: newStart, ends_at: newEnd },
       include: { room: true, service: true },
+    }).catch((error) => {
+      throw isRoomClash(error) ? new AppError('That time slot is not available', 409) : error;
     });
     await publishBookingUpdate(booking.id, updated.status);
     res.json(updated);
