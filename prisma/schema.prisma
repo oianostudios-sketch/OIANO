@@ -464,8 +464,8 @@ model ArtistPassport {
   ai_summary              String? // cached AI brief
   ai_summary_updated_at   DateTime? // for cache invalidation
   ai_summary_edited       Boolean        @default(false) // true if artist manually edited
-  ai_summary_public       Boolean        @default(true) // false = hidden from engineers
-  profile_views           Int            @default(0) // incremented on non-owner views
+  ai_summary_public       Boolean        @default(true) // false = only the artist reads it
+  profile_views           Int            @default(0) // PassportView rows, set by GET /api/passport/public/:code
   location                String?
   // PLACE GIVES CONTEXT, IT ISN'T IDENTITY BY DEFAULT — location has always
   // been silently public on the passport response below; this makes that a

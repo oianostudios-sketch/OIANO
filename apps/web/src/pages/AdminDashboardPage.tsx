@@ -427,9 +427,6 @@ export default function AdminDashboardPage() {
                             </p>
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                            <span className="metric-number text-xs text-zinc-400">
-                              ${Number(a.wallet?.balance_usd ?? 0).toFixed(0)}
-                            </span>
                             <button
                               onClick={() => {
                                 if (window.confirm(`Delete ${a.name}? This only works for accounts with zero booking/session/file history — anything else will be refused.`)) {
