@@ -242,6 +242,43 @@ findings from the canonical reconciliation report (§1, finding 5).
   - `POST /api/producer/projects/:id/credits` still binds a credit to an active participant
     by display name when no participant is named. The participant must still confirm it.
 
+**Standing from work, 2026-09-30 — C18 and C19.** Owner decision of 2026-09-30: an
+artist's tier rests only on work other people took part in. This completes A07, whose audit
+row already said "DM interest is not completed work"; the 2026-09-14 pass had kept accepted
+connections in the tier.
+
+- **TRADED comes from recent work, not contacts.** It used to need two accepted message
+  connections in 30 days, and replying to a message request accepts it
+  (`connect.routes.ts`). It now needs PRECIOUS standing and completed sessions at two or
+  more distinct studios that started in the last 30 days, read from the Weave's evidence
+  joined to its bookings. The connection's stored `last_activity_at` is not used, because it
+  can lag until its next sync (A08). Evidence whose booking is no longer COMPLETED, left by
+  a reversal before A02, does not count.
+- **Completeness no longer gates standing.** A tier used to appear only above 60% profile
+  completeness, a score the artist raises by filling in their own profile. CUT now needs
+  one completed session, and PRECIOUS and TRADED are unchanged apart from the above.
+- **Discovery breaks ties by completed sessions**, not by completeness
+  (`lib/discoveryRanking.ts`). Completeness is still returned for the profile prompt.
+- **Evidence.** The A07 connection test is replaced by three: accepted connections leave an
+  artist PRECIOUS; recent work makes one TRADED only across two studios, within the window,
+  and only while its bookings are completed; an artist at 0% completeness with ten rated
+  sessions is PRECIOUS. Two unit tests hold the discovery order. Integration 46 of 46 on a
+  fresh local database; API unit 90, intelligence 31, web 75, both typechecks, the build
+  and the secret scan pass. Six defects were put back one at a time: the previous tier rule
+  whole, no window, no status filter, a threshold of one studio, evidence rows counted
+  instead of distinct studios, and completeness as the tie-break. Each failed its intended
+  test; the fifth survived the first version of the test, which gained a second session at
+  one studio to catch it. Every file was restored byte-identical.
+- **Not done.** Artists who are TRADED today through contacts become PRECIOUS on their next
+  read; nothing is stored, so nothing is migrated. Tiers read Weave evidence, so an artist
+  whose completed bookings were never synced (before the Weave, or after a failed sync)
+  counts none of that work toward TRADED until `prisma/backfill-weave.ts` runs; nothing was
+  run against production. Not seen in a browser.
+- **Observed, not changed.** Replying to a message request still accepts it; it no longer
+  affects standing. Discovery still ranks only the first 50 artists the database returns,
+  in no set order (C39, step 14). The studio market view still counts profiles above 60%
+  completeness as "qualified"; it is an aggregate, not anyone's standing.
+
 **Schema redesign:** designed for review in [schema redesign](OIANO_SCHEMA_REDESIGN.md),
 against the owner decisions of 2026-09-12. No migration is written; implementation
 waits for Session 5.
