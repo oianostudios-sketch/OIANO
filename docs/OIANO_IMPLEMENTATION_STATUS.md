@@ -536,6 +536,68 @@ worse than failing.
   the shared `node_modules` that other agents' worktrees resolve through, so it is left for
   the owner to run rather than done as a side effect of this work.
 
+**Audit follow-up, 2026-09-15 — the load test, request logs and the rate-limit key.** From
+the read-only architecture audit at `682d052`. Committed 2026-09-30; see the last bullet.
+
+- **Load test, streams.** `apps/api/scripts/load-test.js` sent a Bearer header to the
+  notification stream, which accepts only a ticket, and counted every response as opened,
+  401s included. Each connection now fetches its own ticket just before opening, because a
+  ticket lasts 60 seconds. Only a 200 counts as opened. The phase reports ticket and stream
+  responses by status, streams that dropped before the end, and network errors.
+  `SSE_OPEN_CONCURRENCY` (default 100) bounds how many streams are set up at once.
+- **Load test, bookings.** The burst sent no bookings at all, which is worse than the audit
+  thought. autocannon runs `setupRequest` only from an entry in `requests`; the script passed
+  it at the top level, where autocannon 8 ignores it, so every request went out without a body
+  and could only be refused with a 400 or a 429. Bookings are now built per request, take the
+  accounts in `ARTIST_ACCOUNTS_FILE` in turn (`ARTIST_EMAIL` and `ARTIST_PASSWORD` still work
+  for one), and are reported by status. The old "429" figure counted every 4xx. Signing in
+  more than ten accounts waits out the auth limiter instead of failing.
+- **Load test, recovery check.** `/health` sits behind the global limiter, so after the burst
+  it could answer 429 from the test machine's spent budget, and the script could report a hard
+  blocker the database did not cause. A 429 is now waited out and reported separately.
+- **Rate limits.** When this was written, every limiter keyed on the client address, so one
+  machine got 300 requests and 20 bookings a minute however many accounts it used. PR #1,
+  merged 2026-09-30, keys signed-in traffic per account, so the burst now spreads across
+  `ARTIST_ACCOUNTS_FILE`. The script has still not been run against a deploy.
+- **A14, request logs.** `accessLog.middleware.ts` and `error.middleware.ts` logged
+  `req.originalUrl`, so a stream or file-download ticket reached the logs. Both now log it
+  through `redactUrlForLog` (`lib/logRedaction.ts`), which replaces every query value, not
+  only `ticket`, and anything sent in place of a parameter name. Names stay.
+- **Rate-limit key: not carried.** A proposal was written with this fix
+  (`OIANO_RATE_LIMIT_PROPOSAL.md`, never committed). PR #1 has since built per-caller limits
+  ("Rate limits count a caller", 2026-09-24), so the proposal was left out when this landed.
+  Whether the first `X-Forwarded-For` entry can be spoofed on Render is for PR #1's
+  `trust proxy` setting to settle.
+- **Evidence.** Both typechecks pass. `npm test` passes with CI's credential-free
+  `DATABASE_URL`: API security 92/92 (four new tests), intelligence 31/31, web 75/75. The
+  secret scan passes, and the three new files, which it does not scan until tracked, match
+  none of its patterns. Six defects were put back one at a time: the helper returning the URL
+  unchanged, each log site logging the raw URL, and three narrower rules. Each failed exactly
+  its intended tests, and every file was restored byte-identical.
+- **Evidence, load test.** Its functions were run against a stub server on 127.0.0.1, with no
+  OIANO API and no database. The old booking options sent 20 of 20 requests without a body.
+  The new ones sent 60 bookings across three accounts and 60 hour slots. Of 12 streams, with
+  the stub refusing two tickets, rejecting one stream and dropping another, 9 opened and 8
+  were still open at the end. A rate-limited health check was waited out. Putting back the
+  three stream and booking defects (any response counted as opened, a Bearer header instead of
+  a ticket, one account for every booking) failed that run each time.
+- **Not exercised.** The load test against a deploy, the integration suite, and the redacted
+  lines in Render's log stream.
+- **Landed 2026-09-30.** Left uncommitted in a worktree from 2026-09-15 and carried onto
+  `main` at `6ad78b1`, without the rate-limit proposal (see above). First integration run on
+  this change: 46 of 46 on a fresh database. API unit 94, intelligence 31, web 75, both
+  typechecks, the build and the secret scan pass; the load test parses. With
+  `redactUrlForLog` returning the URL unchanged, three of its four tests fail.
+
+**Observed while fixing A14, not changed** (read in the code, not tested):
+
+- The rest of A14: `services/clockActivityConsumer.ts:17-21` logs each event's full payload.
+- With `SENTRY_DSN` set, Sentry attaches the request URL and query string to a captured error
+  by default, so a 5xx on a ticketed file download would send its ticket there. `render.yaml`
+  does not set `SENTRY_DSN`.
+- The admin audit log stores `req.originalUrl` (`lib/adminAudit.ts:13`). No ticketed route
+  writes to it today.
+
 ## Verification performed for Phase 1
 
 Both typechecks · API security 53/53 · API intelligence 31/31 · web 57/57 ·
