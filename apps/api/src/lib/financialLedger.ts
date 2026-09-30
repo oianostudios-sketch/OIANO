@@ -36,3 +36,12 @@ export async function recordWalletTopUp(tx: Tx, input: { topUpId: string; wallet
     { account_code: 'WALLET_LIABILITY', direction: 'CREDIT', amount_usd: input.amountUsd, owner_type: 'WALLET', owner_id: input.walletId },
   ] });
 }
+
+// Demo money the seeds put in a wallet. Nobody paid it in, so it is funded from
+// DEMO_FUNDING instead of cash, and a seeded database still reconciles.
+export async function recordSeedWalletGrant(tx: Tx, input: { walletTransactionId: string; walletId: string; amountUsd: number; description: string }) {
+  return postFinancialTransaction(tx, { source_type: 'SEED_WALLET_GRANT', source_id: input.walletTransactionId, description: input.description, lines: [
+    { account_code: 'DEMO_FUNDING', direction: 'DEBIT', amount_usd: input.amountUsd },
+    { account_code: 'WALLET_LIABILITY', direction: 'CREDIT', amount_usd: input.amountUsd, owner_type: 'WALLET', owner_id: input.walletId },
+  ] });
+}

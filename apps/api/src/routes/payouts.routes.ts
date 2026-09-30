@@ -8,8 +8,7 @@ import {
   PAYABLE_CURRENCY,
   studioPayable,
   reserveStudioPayout,
-  releaseFailedPayout,
-  markPayoutPaid,
+  transferReservedPayout,
 } from '../lib/studioPayout';
 
 // Money leaving OIANO. STUDIO_PAYABLE accrued from the first booking and had no
@@ -93,10 +92,11 @@ payoutsRouter.post('/connect', requireRole('STUDIO_ADMIN'), async (req: any, res
 // POST /api/payouts — settle the outstanding balance.
 //
 // Order matters and is deliberate. The balance is reserved in the ledger first,
-// inside a transaction with the payout row, so a second concurrent request finds
+// in a transaction that locks the studio, so a second concurrent request finds
 // nothing left to pay. Only then is the transfer attempted. If the rail refuses,
 // the reservation is released with a compensating entry rather than by editing
-// the original transaction.
+// the original transaction; once the rail accepts, it never is
+// (transferReservedPayout).
 payoutsRouter.post('/', requireRole('STUDIO_ADMIN'), async (req: any, res, next) => {
   try {
     const studio = await resolveStaffStudio(req.userId);
@@ -109,25 +109,17 @@ payoutsRouter.post('/', requireRole('STUDIO_ADMIN'), async (req: any, res, next)
       requestedBy: req.userId,
     });
 
-    try {
-      const stripe = getStripe();
-      const transfer = await stripe.transfers.create(
-        {
-          amount: Math.round(outstanding * 100),
-          currency: (payout.currency ?? 'USD').toLowerCase(),
-          destination: connectAccountId!,
-          metadata: { payout_id: payout.id, studio_id: studio.id },
-        },
-        // The payout id is the idempotency key, so a retried request cannot
-        // transfer twice even if this process dies between call and response.
-        { idempotencyKey: `oiano-payout-${payout.id}` },
-      );
-      const paid = await markPayoutPaid(payout.id, transfer.id);
-      res.status(201).json(paid);
-    } catch (transferError: any) {
-      // The money never left. Put it back where the ledger can see it.
-      await releaseFailedPayout(payout.id, transferError?.message ?? 'Transfer failed');
-      throw new AppError('Payout could not be completed; the balance remains payable', 502);
-    }
+    const paid = await transferReservedPayout(payout.id, () => getStripe().transfers.create(
+      {
+        amount: Math.round(outstanding * 100),
+        currency: (payout.currency ?? 'USD').toLowerCase(),
+        destination: connectAccountId!,
+        metadata: { payout_id: payout.id, studio_id: studio.id },
+      },
+      // The payout id is the idempotency key, so a retried request cannot
+      // transfer twice even if this process dies between call and response.
+      { idempotencyKey: `oiano-payout-${payout.id}` },
+    ));
+    res.status(201).json(paid);
   } catch (error) { next(error); }
 });
