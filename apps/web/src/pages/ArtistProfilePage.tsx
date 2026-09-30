@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
+import { isArtistProfileOwner } from '../lib/artistProfileOwner';
 import { useToast } from '../components/Toast';
 import OianoBrand from '../components/OianoBrand';
 import { BookingStatus, STATUS_HEX } from '../lib/bookingStatus';
@@ -194,16 +195,16 @@ export default function ArtistProfilePage() {
   const [briefEditOpen, setBriefEditOpen] = useState(false);
   const [briefDraft, setBriefDraft] = useState('');
   const [briefSaving, setBriefSaving] = useState(false);
-  const isOwner = user?.role === 'ARTIST'; // refined below after artist loads
 
   const { data: artist, isLoading } = useQuery({
     queryKey: ['artist', id],
     queryFn: async () => (await api.get(`/artists/${id}`)).data,
     enabled: !!id,
   });
-  // true only if ARTIST viewing their own profile; used for Connect button
-  const isMyProfile = artist?.user_id === user?.id;
-  const canConnect = user?.role === 'ARTIST' && !isMyProfile;
+  // Owner controls act on the signed-in account, not the profile on screen, so they
+  // show only on the viewer's own profile. Another artist's profile carries no user_id.
+  const isOwner = isArtistProfileOwner(user, artist);
+  const canConnect = user?.role === 'ARTIST' && !isOwner;
 
   const uploadFile = useMutation({
     // Uploads straight from the browser to R2 via a presigned URL — the file
@@ -274,6 +275,10 @@ export default function ArtistProfilePage() {
       const { data } = await api.get(`/artists/${id}/summary`);
       setAiSummary(data.summary);
       setBriefExpanded(true);
+    } catch (err: any) {
+      // Refused while AI is off, to anyone who doesn't work with the artist, and to staff
+      // when the artist keeps the brief private. Say which, rather than doing nothing.
+      toast.error(err.response?.data?.error ?? 'Could not generate a brief');
     } finally { setLoadingAI(false); }
   }
 
@@ -454,17 +459,6 @@ export default function ArtistProfilePage() {
                 <p style={{ fontSize:11, color:'#2a2a2a', marginTop:8 }}>Complete your passport to generate an AI brief.</p>
               )}
             </div>
-
-            {/* Wallet — admin only */}
-            {user?.role === 'STUDIO_ADMIN' && (
-              <div className="ap-panel">
-                <div className="ap-panel-label">Wallet</div>
-                <p style={{ fontFamily:"'Playfair Display',serif", fontSize:28, fontWeight:700, color:'#C9A84C' }}>
-                  ${Number(artist.wallet?.balance_usd ?? 0).toFixed(2)}
-                </p>
-                <p style={{ fontSize:11, color:'#3a3a3a', marginTop:4 }}>Available balance</p>
-              </div>
-            )}
           </div>
         )}
 
