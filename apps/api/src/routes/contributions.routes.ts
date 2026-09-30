@@ -3,22 +3,20 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { authenticate } from '../middleware/auth.middleware';
 import { AppError } from '../lib/errors';
-import { nextContributionStatus, participantBelongsToUser } from '../lib/contributionInvitation';
+import { hashInvitationToken, nextContributionStatus, participantBelongsToUser } from '../lib/contributionInvitation';
 import { createNotification } from './notifications.routes';
 import { respondToNamedRightsShare } from '../lib/rightsDecision';
 
 export const contributionsRouter = Router();
 contributionsRouter.use(authenticate);
 
+// Only invitations this identity claimed. An account at the invited email address
+// used to see them too, but signup never proves an address belongs to whoever
+// registered it.
 contributionsRouter.get('/inbox', async (req: any, res, next) => {
   try {
-    const user = await prisma.user.findUnique({ where: { id: req.userId }, select: { id: true, email: true } });
-    if (!user) throw new AppError('Account not found', 404);
     const invitations = await prisma.projectParticipant.findMany({
-      where: {
-        OR: [{ participant_ref_id: user.id }, { email: { equals: user.email, mode: 'insensitive' } }],
-        status: { not: 'REMOVED' },
-      },
+      where: { participant_ref_id: req.userId, status: { not: 'REMOVED' } },
       include: {
         project: {
           select: {
@@ -45,11 +43,51 @@ contributionsRouter.get('/inbox', async (req: any, res, next) => {
   } catch (error) { next(error); }
 });
 
+const ClaimSchema = z.object({ token: z.string().min(30).max(200) }).strict();
+
+// POST /api/contributions/claim — bind an invitation to the signed-in identity
+// with the link its project lead passed on. Claiming does not join the project:
+// the invitation then waits in the inbox to be accepted, declined or corrected.
+contributionsRouter.post('/claim', async (req: any, res, next) => {
+  try {
+    const { token } = ClaimSchema.parse(req.body);
+    const invitation = await prisma.contributionInvitation.findUnique({
+      where: { token_hash: hashInvitationToken(token) },
+      select: {
+        id: true, status: true, expires_at: true, invited_by: true,
+        participant: { select: { id: true, project_id: true, status: true, participant_ref_id: true } },
+      },
+    });
+    const now = new Date();
+    // One answer for missing, spent, replaced, expired and withdrawn alike: a
+    // caller probing tokens learns nothing about which of those a guess was.
+    if (!invitation || invitation.status !== 'PENDING' || invitation.expires_at <= now
+      || invitation.participant.status !== 'INVITED' || invitation.participant.participant_ref_id !== null) {
+      throw new AppError('That invitation is no longer valid', 410);
+    }
+    if (invitation.invited_by === req.userId) throw new AppError('You cannot accept your own invitation', 409);
+
+    // Single use, enforced by the updates' own filters rather than by the read
+    // above: of two claims at the same moment, only one can match either row.
+    await prisma.$transaction(async tx => {
+      const claimed = await tx.contributionInvitation.updateMany({
+        where: { id: invitation.id, status: 'PENDING', expires_at: { gt: now } },
+        data: { status: 'CLAIMED', claimed_by: req.userId, claimed_at: now },
+      });
+      if (claimed.count !== 1) throw new AppError('That invitation is no longer valid', 410);
+      const bound = await tx.projectParticipant.updateMany({
+        where: { id: invitation.participant.id, status: 'INVITED', participant_ref_id: null },
+        data: { participant_ref_id: req.userId, participant_type: 'OIANO_USER' },
+      });
+      if (bound.count !== 1) throw new AppError('That invitation is no longer valid', 410);
+    });
+    res.json({ id: invitation.participant.id, project_id: invitation.participant.project_id, status: invitation.participant.status });
+  } catch (error) { next(error); }
+});
+
 contributionsRouter.patch('/credits/:creditId/respond', async (req: any, res, next) => {
   try {
     const { decision } = z.object({ decision: z.enum(['CONFIRM', 'DISPUTE']) }).parse(req.body);
-    const user = await prisma.user.findUnique({ where: { id: req.userId }, select: { id: true, email: true } });
-    if (!user) throw new AppError('Account not found', 404);
     const credit = await prisma.projectCredit.findUnique({
       where: { id: req.params.creditId },
       include: {
@@ -58,7 +96,7 @@ contributionsRouter.patch('/credits/:creditId/respond', async (req: any, res, ne
     });
     if (!credit?.participant_id) throw new AppError('Contribution credit not found', 404);
     const participant = await prisma.projectParticipant.findUnique({ where: { id: credit.participant_id } });
-    if (!participant || participant.status !== 'ACTIVE' || !participantBelongsToUser(participant, user)) {
+    if (!participant || participant.status !== 'ACTIVE' || !participantBelongsToUser(participant, req.userId)) {
       throw new AppError('Contribution credit not found', 404);
     }
     if (credit.status !== 'DRAFT') throw new AppError('This credit has already been answered', 409);
@@ -88,8 +126,6 @@ contributionsRouter.patch('/credits/:creditId/respond', async (req: any, res, ne
 
 contributionsRouter.get('/:id/workspace', async (req: any, res, next) => {
   try {
-    const user = await prisma.user.findUnique({ where: { id: req.userId }, select: { id: true, email: true } });
-    if (!user) throw new AppError('Account not found', 404);
     const participant = await prisma.projectParticipant.findUnique({
       where: { id: req.params.id },
       include: { project: { include: {
@@ -105,7 +141,7 @@ contributionsRouter.get('/:id/workspace', async (req: any, res, next) => {
         rights_agreements: { include: { shares: { orderBy: { percentage: 'desc' } }, decisions: { orderBy: { created_at: 'asc' } } }, orderBy: { created_at: 'desc' } },
       } } },
     });
-    if (!participant || participant.status !== 'ACTIVE' || !participantBelongsToUser(participant, user)) throw new AppError('Contribution workspace not found', 404);
+    if (!participant || participant.status !== 'ACTIVE' || !participantBelongsToUser(participant, req.userId)) throw new AppError('Contribution workspace not found', 404);
     res.json(participant);
   } catch (error) { next(error); }
 });
@@ -129,13 +165,11 @@ contributionsRouter.patch('/:id/respond', async (req: any, res, next) => {
     }).parse(req.body);
     if (data.decision === 'REQUEST_CORRECTION' && !data.note) throw new AppError('Tell the project lead what needs correcting', 400);
 
-    const user = await prisma.user.findUnique({ where: { id: req.userId }, select: { id: true, email: true } });
-    if (!user) throw new AppError('Account not found', 404);
     const participant = await prisma.projectParticipant.findUnique({
       where: { id: req.params.id },
       include: { project: { include: { producer: { select: { user_id: true, name: true, alias: true } } } } },
     });
-    if (!participant || !participantBelongsToUser(participant, user)) throw new AppError('Contribution invitation not found', 404);
+    if (!participant || !participantBelongsToUser(participant, req.userId)) throw new AppError('Contribution invitation not found', 404);
     const status = nextContributionStatus(participant.status, data.decision);
     if (!status) throw new AppError('This invitation has already been answered', 409);
 
@@ -145,12 +179,12 @@ contributionsRouter.patch('/:id/respond', async (req: any, res, next) => {
     // double-processing an invitation that should only be answerable once.
     const updated = await prisma.$transaction(async tx => {
       const claimed = await tx.projectParticipant.updateMany({
-        where: { id: participant.id, status: participant.status },
-        data: { status, participant_ref_id: user.id, participant_type: 'OIANO_USER' },
+        where: { id: participant.id, status: participant.status, participant_ref_id: req.userId },
+        data: { status, participant_type: 'OIANO_USER' },
       });
       if (claimed.count !== 1) throw new AppError('This invitation has already been answered', 409);
       if (data.note) await tx.projectMessage.create({
-        data: { project_id: participant.project_id, sender_id: user.id, kind: 'CONTRIBUTION_RESPONSE', body: data.note },
+        data: { project_id: participant.project_id, sender_id: req.userId, kind: 'CONTRIBUTION_RESPONSE', body: data.note },
       });
       return tx.projectParticipant.findUniqueOrThrow({ where: { id: participant.id } });
     });

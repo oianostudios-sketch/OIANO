@@ -235,6 +235,9 @@ ACCEPTED, as lead. That is what lets Joseph start BAD HABITS alone. Notification
 permissions that today go to `project.producer.user_id` go to the Work's leads instead.
 Until Work-specific invitations (step 11) carry tokens, the contribution inbox keeps
 today's email match as a compatibility read; it is removed when they do.
+*Superseded 2026-09-15: the email match granted access, because signup never proves an
+address, so it was removed ahead of step 11. Contribution invitations now carry a hashed,
+expiring, single-use link; see [implementation status](OIANO_IMPLEMENTATION_STATUS.md).*
 
 **Backfilling a Project preserves today's permissions.** It creates a Work with the
 project's id, an ACCEPTED PRODUCER contribution marked lead for `producer_id`, an

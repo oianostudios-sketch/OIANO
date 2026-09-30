@@ -293,11 +293,18 @@ test('auth, booking payment, and rights operate through real database transactio
   });
   assert.equal(invitation.response.status, 201);
   assert.equal(invitation.body.status, 'INVITED');
-  assert.equal(invitation.body.participant_ref_id, artistUserIdFromToken(artistToken));
+  // Holding an account at the invited address binds nothing; the link does.
+  assert.equal(invitation.body.participant_ref_id, null);
+  const claimedContribution = await request('/contributions/claim', {
+    method: 'POST',
+    headers: { authorization: `Bearer ${artistToken}` },
+    body: JSON.stringify({ token: new URL(invitation.body.invite_url).searchParams.get('token') }),
+  });
+  assert.equal(claimedContribution.response.status, 200);
 
   const contributionInbox = await request('/contributions/inbox', { headers: { authorization: `Bearer ${artistToken}` } });
   assert.equal(contributionInbox.response.status, 200);
-  assert.ok(contributionInbox.body.some((item: any) => item.id === invitation.body.id && item.status === 'INVITED'));
+  assert.ok(contributionInbox.body.some((item: any) => item.id === invitation.body.id && item.status === 'INVITED' && item.participant_ref_id === artistUserIdFromToken(artistToken)));
   const acceptedContribution = await request(`/contributions/${invitation.body.id}/respond`, {
     method: 'PATCH',
     headers: { authorization: `Bearer ${artistToken}` },
