@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { Filter, Megaphone, Wallet, Zap, Activity, Calendar, ClipboardList, LogOut, Command, Plus, ArrowRight, ShieldCheck, Users } from 'lucide-react';
+import { Filter, Megaphone, Zap,Activity, Calendar, ClipboardList, LogOut, Command, Plus, ArrowRight, ShieldCheck, Users } from 'lucide-react';
 import { useAuthStore } from '../store/auth.store';
 import { api } from '../lib/api';
 import { useToast } from '../components/Toast';
@@ -65,7 +65,6 @@ function BookingFunnel({ funnel }: { funnel: { pending: number; confirmed: numbe
 const BOOKING_TABS = ['All', 'Pending', 'Confirmed', 'Completed', 'Cancelled'] as const;
 type BookingTab = typeof BOOKING_TABS[number];
 
-const CREDIT_AMOUNTS = [50, 100, 200, 500];
 const DURATION_PRESETS = [60, 120, 180, 240];
 
 // Static lookup — never interpolate Tailwind class names dynamically (purge-safe)
@@ -91,8 +90,6 @@ export default function AdminDashboardPage() {
   const toast = useToast();
 
   const [bookingTab, setBookingTab] = useState<BookingTab>('All');
-  const [creditTarget, setCreditTarget] = useState<{ id: string; name: string } | null>(null);
-  const [creditAmount, setCreditAmount] = useState<number>(100);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [completingBooking, setCompletingBooking] = useState<any>(null);
 
@@ -133,12 +130,6 @@ export default function AdminDashboardPage() {
     onError: (error: any) => toast.error(error?.response?.data?.error ?? 'Could not delete artist'),
   });
 
-  const { data: creditRequests = [] } = useQuery({
-    queryKey: ['credit-requests'],
-    queryFn: async () => (await api.get('/admin/credit-requests')).data,
-    refetchInterval: 60_000,
-  });
-
   const { data: studio } = useQuery({
     queryKey: ['studio'],
     queryFn: async () => (await api.get('/studio/current')).data,
@@ -166,17 +157,6 @@ export default function AdminDashboardPage() {
   const mutate = useCallback((id: string, status: string) => {
     updateStatus.mutate({ id, status });
   }, [updateStatus]);
-
-  const creditWallet = useMutation({
-    mutationFn: ({ artist_id, amount_usd }: { artist_id: string; amount_usd: number }) =>
-      api.post('/admin/wallet/credit', { artist_id, amount_usd }),
-    onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: ['artists'] });
-      toast.success(`$${vars.amount_usd} credited to ${creditTarget?.name}`);
-      setCreditTarget(null);
-    },
-    onError: () => toast.error('Wallet credit failed'),
-  });
 
   const walkIn = useMutation({
     mutationFn: () => {
@@ -311,7 +291,7 @@ export default function AdminDashboardPage() {
           <button onClick={()=>setShowAnnounce(true)} className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-studio-surface p-4 text-left hover:border-white/[.12]"><Megaphone size={16} className="text-amber-400"/><span><b className="block text-xs">Broadcast</b><small className="text-[9px] text-zinc-600">Message artists</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></button>
         </section>
 
-        {(pending.length>0||(creditRequests as any[]).length>0)&&<section className="rounded-2xl border border-amber-500/15 bg-[linear-gradient(120deg,rgba(245,158,11,.07),rgba(255,255,255,.015))] p-5"><div className="flex flex-wrap items-center gap-4"><div className="grid h-10 w-10 place-items-center rounded-xl bg-amber-500/10 text-amber-400"><Zap size={17}/></div><div><p className="text-[9px] font-mono uppercase tracking-[.2em] text-amber-400">Needs attention</p><h2 className="mt-1 text-sm font-semibold">{pending.length} booking request{pending.length===1?'':'s'} · {(creditRequests as any[]).length} credit request{(creditRequests as any[]).length===1?'':'s'}</h2></div><button onClick={()=>setBookingTab('Pending')} className="ml-auto rounded-lg border border-amber-500/20 bg-amber-500/[.07] px-4 py-2 text-[10px] text-amber-300">Open queue</button></div></section>}
+        {pending.length>0&&<section className="rounded-2xl border border-amber-500/15 bg-[linear-gradient(120deg,rgba(245,158,11,.07),rgba(255,255,255,.015))] p-5"><div className="flex flex-wrap items-center gap-4"><div className="grid h-10 w-10 place-items-center rounded-xl bg-amber-500/10 text-amber-400"><Zap size={17}/></div><div><p className="text-[9px] font-mono uppercase tracking-[.2em] text-amber-400">Needs attention</p><h2 className="mt-1 text-sm font-semibold">{pending.length} booking request{pending.length===1?'':'s'}</h2></div><button onClick={()=>setBookingTab('Pending')} className="ml-auto rounded-lg border border-amber-500/20 bg-amber-500/[.07] px-4 py-2 text-[10px] text-amber-300">Open queue</button></div></section>}
 
         <NetworkExchangePanel />
 
@@ -342,42 +322,14 @@ export default function AdminDashboardPage() {
           }
         </div>
 
-        {/* ── Two-column: funnel/credit/broadcast + roster ─────────────────────── */}
+        {/* ── Two-column: funnel/broadcast + roster ─────────────────────── */}
         <div className="grid gap-6 lg:grid-cols-2">
 
-          {/* Funnel + credit requests + broadcast */}
+          {/* Funnel + broadcast */}
           <div className="space-y-6">
 
             {/* Booking funnel */}
             {analytics?.funnel && <BookingFunnel funnel={analytics.funnel} />}
-
-            {/* Credit requests (urgent — show if any) */}
-            {(creditRequests as any[]).length > 0 && (
-              <div className="animate-surface-1">
-                <div className="flex items-center gap-2 mb-3">
-                  <p className="label-mono">Credit requests</p>
-                  <span className="text-[10px] bg-yellow-900/30 text-yellow-400 border border-yellow-900/30 px-1.5 py-0.5 rounded-full font-mono">
-                    {(creditRequests as any[]).length}
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  {(creditRequests as any[]).map((r: any) => (
-                    <div key={r.id} className="bg-studio-surface border border-yellow-900/20 rounded-xl px-4 py-3 flex items-center justify-between">
-                      <div>
-                        <p className="text-white text-sm">{r.artist_name}</p>
-                        <p className="text-zinc-600 text-[10px] font-mono mt-0.5">
-                          {new Date(r.requested_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => { setCreditTarget({ id: r.artist_id, name: r.artist_name }); setCreditAmount(100); }}
-                        className="text-xs bg-dome/10 border border-dome/20 text-dome px-3 py-1.5 rounded-lg hover:bg-dome/20 transition-colors"
-                      >+ Credit</button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {/* Announce to all artists */}
             <div className="animate-surface-1">
@@ -478,10 +430,6 @@ export default function AdminDashboardPage() {
                             <span className="metric-number text-xs text-zinc-400">
                               ${Number(a.wallet?.balance_usd ?? 0).toFixed(0)}
                             </span>
-                            <button
-                              onClick={() => { setCreditTarget({ id: a.id, name: a.name }); setCreditAmount(100); }}
-                              className="text-[10px] bg-dome/10 border border-dome/20 text-dome px-2 py-0.5 rounded hover:bg-dome/20 transition-colors"
-                            >+$</button>
                             <button
                               onClick={() => {
                                 if (window.confirm(`Delete ${a.name}? This only works for accounts with zero booking/session/file history — anything else will be refused.`)) {
@@ -713,62 +661,6 @@ export default function AdminDashboardPage() {
                 disabled={!wiValid || walkIn.isPending}
                 className="flex-1 bg-dome text-black font-semibold py-2.5 rounded-lg text-sm hover:bg-dome-light transition-colors disabled:opacity-40"
               >{walkIn.isPending ? 'Booking…' : 'Book walk-in'}</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Wallet credit modal ────────────────────────────────────────────────── */}
-      {creditTarget && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.8)' }}
-          onClick={(e) => e.target === e.currentTarget && setCreditTarget(null)}
-        >
-          <div className="bg-studio-surface border border-studio-border rounded-xl p-6 w-full max-w-sm space-y-5 animate-surface">
-            <div>
-              <p className="label-mono mb-1 flex items-center gap-2"><Wallet size={12} strokeWidth={2} /> Credit wallet</p>
-              <h3 className="font-display text-lg text-white animate-heading">{creditTarget.name}</h3>
-            </div>
-
-            <div className="grid grid-cols-4 gap-2">
-              {CREDIT_AMOUNTS.map((amt) => (
-                <button
-                  key={amt}
-                  onClick={() => setCreditAmount(amt)}
-                  className={`py-2 text-sm rounded-lg border transition-colors ${
-                    creditAmount === amt
-                      ? 'border-dome bg-dome/10 text-dome'
-                      : 'border-studio-border bg-studio-muted text-zinc-400 hover:border-zinc-600'
-                  }`}
-                >${amt}</button>
-              ))}
-            </div>
-
-            <div>
-              <label className="text-zinc-500 text-xs mb-1 block">Custom amount ($)</label>
-              <input
-                type="number"
-                min={1}
-                max={10000}
-                value={creditAmount}
-                onChange={(e) => setCreditAmount(Number(e.target.value))}
-                className="w-full bg-studio-muted border border-studio-border text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-dome transition-colors"
-              />
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setCreditTarget(null)}
-                className="flex-1 border border-studio-border text-zinc-400 py-2.5 rounded-lg text-sm hover:text-white transition-colors"
-              >Cancel</button>
-              <button
-                onClick={() => creditWallet.mutate({ artist_id: creditTarget.id, amount_usd: creditAmount })}
-                disabled={creditWallet.isPending || !creditAmount}
-                className="flex-1 bg-dome text-black font-semibold py-2.5 rounded-lg text-sm disabled:opacity-50 hover:bg-dome-light transition-colors"
-              >
-                {creditWallet.isPending ? 'Crediting…' : `Credit $${creditAmount}`}
-              </button>
             </div>
           </div>
         </div>
