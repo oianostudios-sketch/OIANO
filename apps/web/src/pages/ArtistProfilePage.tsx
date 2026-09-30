@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
+import { isArtistProfileOwner } from '../lib/artistProfileOwner';
 import { useToast } from '../components/Toast';
 import OianoBrand from '../components/OianoBrand';
 import { BookingStatus, STATUS_HEX } from '../lib/bookingStatus';
@@ -194,16 +195,16 @@ export default function ArtistProfilePage() {
   const [briefEditOpen, setBriefEditOpen] = useState(false);
   const [briefDraft, setBriefDraft] = useState('');
   const [briefSaving, setBriefSaving] = useState(false);
-  const isOwner = user?.role === 'ARTIST'; // refined below after artist loads
 
   const { data: artist, isLoading } = useQuery({
     queryKey: ['artist', id],
     queryFn: async () => (await api.get(`/artists/${id}`)).data,
     enabled: !!id,
   });
-  // true only if ARTIST viewing their own profile; used for Connect button
-  const isMyProfile = artist?.user_id === user?.id;
-  const canConnect = user?.role === 'ARTIST' && !isMyProfile;
+  // Owner controls act on the signed-in account, not the profile on screen, so they
+  // show only on the viewer's own profile. Another artist's profile carries no user_id.
+  const isOwner = isArtistProfileOwner(user, artist);
+  const canConnect = user?.role === 'ARTIST' && !isOwner;
 
   const uploadFile = useMutation({
     // Uploads straight from the browser to R2 via a presigned URL — the file
