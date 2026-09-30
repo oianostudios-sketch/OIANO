@@ -319,6 +319,55 @@ someone had built `packages/shared` by hand.
   `PrismaClient` at import time and throws when `DATABASE_URL` is unset. It was run here
   with the unreachable, credential-free URL CI uses, never with `.env` present.
 
+**Pre-commit tests, 2026-09-24 — `npm test` no longer needs a `.env`, or reaches the
+shared database.** AGENTS.md tells every agent to run `npm test` before committing, but
+the command only worked where a `.env` happened to be readable, and what it did there was
+worse than failing.
+
+- **The cause.** `lib/prisma.ts` constructs a `PrismaClient` at import time
+  (`apps/api/src/lib/prisma.ts:33–38`). Two files in the unit suites reach it,
+  `creatorContext.test.ts` and `bookingTransitions.test.ts`, though every assertion in
+  them is over pure functions and nothing queries. The suite's datasource therefore came
+  from whatever `.env` the process found, with two outcomes and no third.
+- **Where a worktree has its own `node_modules`:** `DATABASE_URL` is undefined,
+  `buildDbUrl()` returns undefined, and the constructor throws
+  `PrismaClientConstructorValidationError: Invalid value undefined for datasource "db"`.
+  The file fails to load before one assertion runs.
+- **Where it has none** — which is every worktree the desktop app creates — Node resolves
+  `@prisma/client` up to the main checkout's `node_modules`, and that generated client
+  carries the main checkout's schema path and loads the `.env` beside it. Importing
+  `@prisma/client` is enough to inject the **shared Neon URL** into `process.env`.
+  Measured on 2026-09-24: the suite reported 88/88 green while every module in it held the
+  shared database's credentials, one query away from using them. This is what rule 1
+  exists to prevent, and it reported nothing.
+- **The fix.** `apps/api/scripts/test-env.js`, loaded by `node -r` from `test:security`
+  and `test:intelligence`, pins `NODE_ENV=test` and the same deliberately unreachable,
+  credential-free `postgresql://127.0.0.1:5432/validate_only` that CI already sets at the
+  job level (`.github/workflows/ci.yml`, `verify`), so a local run and a CI run are
+  configured identically. Neither Prisma's own loader nor `dotenv` without `override`
+  displaces a variable that is already set, and `NODE_ENV=test` is what holds
+  `lib/prisma.ts:12` to `override: false`, so `apps/api/.env` cannot replace it again in a
+  checkout that has one. The test runner propagates `-r` to the child process it spawns
+  per file.
+- **The guard.** `apps/api/src/lib/testEnv.test.ts` fails if the unit suites are pointed at
+  a non-loopback host. Loopback separates the two cases by construction: the shared
+  database is remote, while CI's placeholder and the local cluster on 55432 are not.
+- **Evidence.** In a worktree with no `.env` and no `node_modules`: API security 89/89,
+  API intelligence 31/31, web 9 files / 75 tests, secret scan across 419 tracked files.
+  Both defects were put back and watched to fail — the guard run without the preload fails
+  on the missing pin; an import of `@prisma/client` without it resolves to the Neon host
+  and the loopback check fires; `new PrismaClient` with `url: undefined` still throws the
+  reported error, while the placeholder constructs cleanly. **Not exercised:** nothing here
+  runs in a browser, and no database was connected to at any point.
+- **Found, not fixed.** `npm run typecheck --workspace=apps/api` and `npm run build` fail
+  in a worktree with 119 errors, almost all of the form "Property 'artist' does not exist
+  on type". The count is identical with and without this change, so it is pre-existing.
+  `prisma/schema.prisma` is byte-identical to the main checkout's and does declare those
+  relations, so the generated client in the shared `node_modules` is stale; CI never sees
+  it because it runs `npx prisma generate` before typechecking. Regenerating writes into
+  the shared `node_modules` that other agents' worktrees resolve through, so it is left for
+  the owner to run rather than done as a side effect of this work.
+
 ## Verification performed for Phase 1
 
 Both typechecks · API security 53/53 · API intelligence 31/31 · web 57/57 ·
@@ -341,3 +390,7 @@ Neon database, for six read-only requests, before it was caught and stopped.
 Set `NODE_ENV=test` when pointing a local API at a disposable database, and prove
 the binding before trusting a verification run — compare a row the two databases
 cannot share, such as the studio id.
+
+That is one of two ways the shared database arrives unasked. The other reaches a
+process that never reads `.env` at all, through Prisma’s generated client — see
+the pre-commit tests entry of 2026-09-24 above.
