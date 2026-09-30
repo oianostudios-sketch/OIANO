@@ -17,6 +17,7 @@ import { resolveStaffStudio } from '../middleware/studioScope.middleware';
 import { recordBookingCompleted } from '../lib/bookingCompletion';
 import { requireTransition, transitionBookingStatus } from '../lib/bookingTransitions';
 import { upsertSessionLog } from '../lib/sessionLog';
+import { addDeliverableVersion, recordDeliverableReview } from '../lib/deliverableVersions';
 import { applyWalletDelta } from '../lib/walletLedger';
 import { recordBookingPayment } from '../lib/financialLedger';
 import { getNextAction, getSessionSummary } from '../intelligence/intelligence.service';
@@ -653,38 +654,13 @@ export async function deliverSessionFiles(req: Request, res: Response, next: Nex
 
     // Every delivery is an immutable version. Re-delivery never overwrites the
     // artist's review history or the files attached to an earlier version.
-    const deliverable = await prisma.$transaction(async (tx) => {
-      const existing = await tx.deliverable.findFirst({
-        where: { booking_id: booking.id },
-        orderBy: { created_at: 'asc' },
-      });
-      if (!existing) {
-        return tx.deliverable.create({
-          data: {
-            booking_id: booking.id,
-            title: `${booking.service?.name ?? 'Session'} files`,
-            status: 'PENDING_REVIEW',
-            current_version: 1,
-            review_due_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-            created_by: (req as any).userId,
-            versions: { create: { version_number: 1, file_urls: data.file_urls, notes: data.notes, created_by: (req as any).userId } },
-          },
-          include: { versions: true },
-        });
-      }
-      const nextVersion = existing.current_version + 1;
-      return tx.deliverable.update({
-        where: { id: existing.id },
-        data: {
-          current_version: nextVersion,
-          status: 'PENDING_REVIEW',
-          reviewed_at: null,
-          review_due_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-          versions: { create: { version_number: nextVersion, file_urls: data.file_urls, notes: data.notes, created_by: (req as any).userId } },
-        },
-        include: { versions: { orderBy: { version_number: 'desc' } } },
-      });
-    });
+    const deliverable = await prisma.$transaction((tx) => addDeliverableVersion(tx, {
+      bookingId: booking.id,
+      userId: (req as any).userId,
+      file_urls: data.file_urls,
+      notes: data.notes,
+      title: `${booking.service?.name ?? 'Session'} files`,
+    }));
 
     // Delivery completes a session that was confirmed or under way. Deciding that at the
     // moment of writing means it never re-completes, or revives, a booking another
@@ -724,6 +700,9 @@ export async function deliverSessionFiles(req: Request, res: Response, next: Nex
 const DeliverableReviewSchema = z.object({
   decision: z.enum(['APPROVED', 'CHANGES_REQUESTED']),
   note: z.string().trim().max(1500).optional(),
+  // The version the artist was looking at. Optional so an older page still works;
+  // without it the review applies to the version current when the request is read.
+  version_number: z.number().int().positive().optional(),
 }).refine(value => value.decision !== 'CHANGES_REQUESTED' || Boolean(value.note), {
   message: 'Tell the studio what should change', path: ['note'],
 });
@@ -738,17 +717,15 @@ export async function reviewDeliverable(req: Request, res: Response, next: NextF
       include: { booking: { include: { studio: { include: { staff: true } } } } },
     });
     if (!deliverable) throw new AppError('Deliverable not found', 404);
-    if (deliverable.status === 'APPROVED') throw new AppError('This deliverable is already approved', 409);
 
-    const updated = await prisma.deliverable.update({
-      where: { id: deliverable.id },
-      data: {
-        status: data.decision,
-        reviewed_at: new Date(),
-        reviews: { create: { version_number: deliverable.current_version, decision: data.decision, note: data.note, reviewed_by: (req as any).userId } },
-      },
-      include: { versions: { orderBy: { version_number: 'desc' } }, reviews: { orderBy: { created_at: 'desc' } } },
-    });
+    const versionNumber = data.version_number ?? deliverable.current_version;
+    const updated = await prisma.$transaction((tx) => recordDeliverableReview(tx, {
+      deliverableId: deliverable.id,
+      versionNumber,
+      decision: data.decision,
+      note: data.note,
+      reviewedBy: (req as any).userId,
+    }));
 
     const staffUserIds = deliverable.booking.studio.staff.map(staff => staff.user_id);
     if (staffUserIds.length) {
@@ -758,8 +735,8 @@ export async function reviewDeliverable(req: Request, res: Response, next: NextF
           type: data.decision === 'APPROVED' ? 'DELIVERABLE_APPROVED' : 'DELIVERABLE_CHANGES_REQUESTED',
           title: data.decision === 'APPROVED' ? 'Deliverable approved' : 'Artist requested changes',
           body: data.decision === 'APPROVED'
-            ? `Version ${deliverable.current_version} of ${deliverable.title} was approved.`
-            : `Revision requested for version ${deliverable.current_version} of ${deliverable.title}.`,
+            ? `Version ${versionNumber} of ${deliverable.title} was approved.`
+            : `Revision requested for version ${versionNumber} of ${deliverable.title}.`,
           payload: { booking_id: req.params.id, deliverable_id: deliverable.id },
         })),
       });
