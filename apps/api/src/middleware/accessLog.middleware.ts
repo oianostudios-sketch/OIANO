@@ -1,5 +1,6 @@
 // apps/api/src/middleware/accessLog.middleware.ts
 import { Request, Response, NextFunction } from 'express';
+import { redactUrlForLog } from '../lib/logRedaction';
 
 // error.middleware.ts logs every failed request as structured JSON — but
 // only failures. During a live event, normal traffic (which is most of it)
@@ -26,7 +27,7 @@ export function accessLog(req: Request, res: Response, next: NextFunction) {
       timestamp: new Date().toISOString(),
       requestId: (req as any).requestId,
       method: req.method,
-      path: req.originalUrl,
+      path: redactUrlForLog(req.originalUrl),
       statusCode: res.statusCode,
       durationMs: Date.now() - startedAt,
       userId: (req as any).userId,
