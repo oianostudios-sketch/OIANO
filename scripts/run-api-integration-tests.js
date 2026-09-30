@@ -84,4 +84,5 @@ run('node', [
   'apps/api/src/integration/stabilization.integration.test.ts',
   'apps/api/src/integration/money-integrity.integration.test.ts',
   'apps/api/src/integration/rate-limits.integration.test.ts',
+  'apps/api/src/integration/credit-record.integration.test.ts',
 ]);

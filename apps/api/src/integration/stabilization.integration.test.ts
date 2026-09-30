@@ -9,9 +9,9 @@ test('payouts, rights decisions and standing hold their invariants', async (t) =
   const database = new URL(process.env.DATABASE_URL!);
   assert.match(`${database.pathname}/${database.searchParams.get('schema') ?? ''}`, /(^|[/_-])test([/_-]|$)/i);
 
-  const [{ prisma }, payouts, { postFinancialTransaction }, { respondToNamedRightsShare }, { computeArtistTier }] = await Promise.all([
+  const [{ prisma }, payouts, { postFinancialTransaction }, { respondToNamedRightsShare }, { computeArtistTier }, { syncConnectionFromBooking }] = await Promise.all([
     import('../lib/prisma'), import('../lib/studioPayout'), import('../lib/financialLedger'),
-    import('../lib/rightsDecision'), import('../lib/artistTier'),
+    import('../lib/rightsDecision'), import('../lib/artistTier'), import('../lib/weave/sync'),
   ]);
   t.after(() => prisma.$disconnect());
 
@@ -120,11 +120,11 @@ test('payouts, rights decisions and standing hold their invariants', async (t) =
     prisma.engineer.create({ data: { studio_id: tierStudio.id, name: `Tier Engineer ${n}`, specialties: [] } })));
   let slot = 0;
   // Ten completed sessions with three engineers: enough for PRECIOUS when the ratings count.
-  const artistWithSessions = async (label: string, ratings: { byEngineer?: number; byArtist?: number }) => {
+  const artistWithSessions = async (label: string, ratings: { byEngineer?: number; byArtist?: number }, profile_strength = 70) => {
     const user = await prisma.user.create({
       data: {
         email: email(label), role: 'ARTIST',
-        artist: { create: { name: label, passport: { create: { passport_code: unique('OIA').toUpperCase(), profile_strength: 70 } } } },
+        artist: { create: { name: label, passport: { create: { passport_code: unique('OIA').toUpperCase(), profile_strength } } } },
       },
       include: { artist: true },
     });
@@ -152,17 +152,64 @@ test('payouts, rights decisions and standing hold their invariants', async (t) =
     assert.equal(await computeArtistTier(ratingEngineers.id), 'CUT', 'what an artist thinks of their engineers is not evidence of the artist');
   });
 
-  await t.test('a connection counts toward standing only once it is accepted', async () => {
+  // A connection used to raise standing once accepted, and replying to a message
+  // request accepts it. Contacts are not work (C19): only recent sessions at more
+  // than one studio, as the Weave records them, make an artist TRADED.
+  await t.test('message connections never raise standing, accepted or not', async () => {
     const soughtAfter = await artistWithSessions('sought-after', { byEngineer: 5 });
-    const admirers = await Promise.all([1, 2].map((n) => prisma.user.create({
+    const admirers = await Promise.all([1, 2, 3].map((n) => prisma.user.create({
       data: { email: email(`admirer-${n}`), role: 'ARTIST', artist: { create: { name: `Admirer ${n}` } } },
       include: { artist: true },
     })));
-    const requests = await Promise.all(admirers.map((admirer) =>
-      prisma.passportConnection.create({ data: { initiator_id: admirer.artist!.id, recipient_id: soughtAfter.id } })));
+    await prisma.passportConnection.createMany({
+      data: admirers.map((admirer) => ({ initiator_id: admirer.artist!.id, recipient_id: soughtAfter.id, status: 'ACCEPTED' })),
+    });
+    assert.equal(await computeArtistTier(soughtAfter.id), 'PRECIOUS', 'accepted contacts are not work');
+  });
 
-    assert.equal(await computeArtistTier(soughtAfter.id), 'PRECIOUS', 'requests nobody accepted are not relationships');
-    await prisma.passportConnection.updateMany({ where: { id: { in: requests.map((request) => request.id) } }, data: { status: 'ACCEPTED' } });
-    assert.equal(await computeArtistTier(soughtAfter.id), 'TRADED');
+  await t.test('recent completed work at two studios makes an artist TRADED; old work does not', async () => {
+    const working = await artistWithSessions('working', { byEngineer: 5 });
+    const otherStudio = await prisma.studio.create({ data: { slug: unique('tier-other'), name: 'Other Tier Studio' } });
+    const otherRoom = await prisma.room.create({ data: { studio_id: otherStudio.id, name: 'Other Tier Room' } });
+    const otherService = await prisma.serviceOffering.create({
+      data: { studio_id: otherStudio.id, category: 'RECORDING', name: 'Other Tier Session', min_price_usd: 50, max_price_usd: 50, unit: 'hour' },
+    });
+    const session = async (at: { studio_id: string; room_id: string; service_id: string }, daysAgo: number) => {
+      slot += 1;
+      // Earlier by the slot, never later, so every session stays in the past.
+      const starts_at = new Date(Date.now() - daysAgo * 86_400_000 - slot * 2 * 3_600_000);
+      const booking = await prisma.booking.create({
+        data: { ...at, artist_id: working.id, starts_at, ends_at: new Date(starts_at.getTime() + 3_600_000), total_usd: 50, status: 'COMPLETED' },
+      });
+      await syncConnectionFromBooking(booking.id);
+      return booking;
+    };
+    const here = { studio_id: tierStudio.id, room_id: tierRoom.id, service_id: tierService.id };
+    const there = { studio_id: otherStudio.id, room_id: otherRoom.id, service_id: otherService.id };
+
+    // Its ten rated sessions are 400 days old; recording them in the Weave is not recent work.
+    for (const booking of await prisma.booking.findMany({ where: { artist_id: working.id }, select: { id: true } })) {
+      await syncConnectionFromBooking(booking.id);
+    }
+    assert.equal(await computeArtistTier(working.id), 'PRECIOUS');
+
+    await session(here, 5);
+    await session(here, 4);
+    await session(there, 60);
+    assert.equal(await computeArtistTier(working.id), 'PRECIOUS', 'two recent sessions at one studio, the other studio only outside the window');
+
+    // Before A02 a completed booking could still be moved to another status, and
+    // its Weave evidence was never retracted. Such a booking is not work.
+    const reversed = await session(there, 3);
+    await prisma.booking.update({ where: { id: reversed.id }, data: { status: 'CANCELLED' } });
+    assert.equal(await computeArtistTier(working.id), 'PRECIOUS', 'evidence of a booking no longer completed does not count');
+
+    await session(there, 2);
+    assert.equal(await computeArtistTier(working.id), 'TRADED', 'completed sessions at two studios within thirty days');
+  });
+
+  await t.test('an unfinished profile does not hide standing earned from work', async () => {
+    const quiet = await artistWithSessions('quiet', { byEngineer: 5 }, 0);
+    assert.equal(await computeArtistTier(quiet.id), 'PRECIOUS', 'profile completeness is what the artist says, not what others confirmed');
   });
 });

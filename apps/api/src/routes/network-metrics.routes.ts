@@ -53,13 +53,16 @@ networkMetricsRouter.get('/', async (req: any, res, next) => {
     }
 
     if (role === 'ENGINEER') {
-      const engineer = await prisma.engineer.findUnique({ where: { user_id: userId }, select: { id: true, name: true } });
+      const engineer = await prisma.engineer.findUnique({ where: { user_id: userId }, select: { id: true } });
       if (!engineer) throw new AppError('Engineer assignment required', 404);
       const now = new Date();
+      // Credits count only through participations this account accepted, the same
+      // link that lets it confirm them. Matching by name counted anyone who shares it.
+      const participations = await prisma.projectParticipant.findMany({ where: { participant_ref_id: userId }, select: { id: true } });
       const [completed, upcoming, credits, memberships] = await Promise.all([
         prisma.booking.count({ where: { engineer_id: engineer.id, status: 'COMPLETED' } }),
         prisma.booking.count({ where: { engineer_id: engineer.id, starts_at: { gte: now }, status: { in: ['PENDING', 'CONFIRMED'] } } }),
-        prisma.projectCredit.count({ where: { credited_name: { equals: engineer.name, mode: 'insensitive' }, status: 'CONFIRMED' } }),
+        prisma.projectCredit.count({ where: { status: 'CONFIRMED', participant_id: { in: participations.map(({ id }) => id) } } }),
         prisma.studioStaff.count({ where: { user_id: userId } }),
       ]);
       return res.json(response('CREATIVE', [
