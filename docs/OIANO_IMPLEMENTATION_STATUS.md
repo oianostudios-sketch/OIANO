@@ -377,7 +377,7 @@ eight new integration tests failed.
   decision. *Fixed 2026-09-30, below.*
 - The profile page treats every artist as the owner of whatever profile they open. Another
   artist sees Edit on the brief, which saves to their own passport, and upload and delete
-  controls the files routes refuse.
+  controls the files routes refuse. *Fixed 2026-09-30, below.*
 - The brief's cache is never used, observed with a probe against a local database. A stored
   brief is served only when `ai_summary_updated_at` is later than the passport's
   `updated_at`, but the write that stores a brief, and the artist's own edit, move
@@ -407,6 +407,19 @@ helpers above landed.
   the file restored byte-identical. **Not exercised:** the dashboard in a browser.
 - **With the money guards.** PR #1, merged 2026-09-30, removed the credit route and the
   dashboard's `+$` button and modal, so the dashboard no longer reads any wallet.
+
+**Fixed 2026-09-30 — the profile page's owner controls.** `ArtistProfilePage` set
+`isOwner` from the viewer's role alone, so every artist was treated as the owner of any
+profile they opened from Discover or Connect. They saw Edit on the brief, which saves to
+`PATCH /api/passport/summary` and so replaced *their own* brief with text about someone
+else, and upload and delete controls the files routes refuse. Ownership is now the viewer
+being the profile's user (`lib/artistProfileOwner.ts`); the profile response carries
+`user_id` only to its owner, which the profile integration tests assert both ways.
+
+- **Evidence.** Five unit tests for the rule (another artist, other roles, missing ids,
+  unloaded data), written 2026-09-15 in a worktree and never wired in. Web 80/80, the web
+  typecheck, the build and the secret scan pass. **Not exercised:** the page in a browser;
+  the wiring, one line, is typechecked, not render-tested.
 
 **Schema redesign:** designed for review in [schema redesign](OIANO_SCHEMA_REDESIGN.md),
 against the owner decisions of 2026-09-12. No migration is written; implementation
