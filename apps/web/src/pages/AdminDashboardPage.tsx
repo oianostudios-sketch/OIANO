@@ -475,9 +475,6 @@ export default function AdminDashboardPage() {
                             </p>
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                            <span className="metric-number text-xs text-zinc-400">
-                              ${Number(a.wallet?.balance_usd ?? 0).toFixed(0)}
-                            </span>
                             <button
                               onClick={() => { setCreditTarget({ id: a.id, name: a.name }); setCreditAmount(100); }}
                               className="text-[10px] bg-dome/10 border border-dome/20 text-dome px-2 py-0.5 rounded hover:bg-dome/20 transition-colors"

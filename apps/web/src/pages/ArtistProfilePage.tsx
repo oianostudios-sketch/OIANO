@@ -274,6 +274,10 @@ export default function ArtistProfilePage() {
       const { data } = await api.get(`/artists/${id}/summary`);
       setAiSummary(data.summary);
       setBriefExpanded(true);
+    } catch (err: any) {
+      // Refused while AI is off, to anyone who doesn't work with the artist, and to staff
+      // when the artist keeps the brief private. Say which, rather than doing nothing.
+      toast.error(err.response?.data?.error ?? 'Could not generate a brief');
     } finally { setLoadingAI(false); }
   }
 
@@ -454,17 +458,6 @@ export default function ArtistProfilePage() {
                 <p style={{ fontSize:11, color:'#2a2a2a', marginTop:8 }}>Complete your passport to generate an AI brief.</p>
               )}
             </div>
-
-            {/* Wallet — admin only */}
-            {user?.role === 'STUDIO_ADMIN' && (
-              <div className="ap-panel">
-                <div className="ap-panel-label">Wallet</div>
-                <p style={{ fontFamily:"'Playfair Display',serif", fontSize:28, fontWeight:700, color:'#C9A84C' }}>
-                  ${Number(artist.wallet?.balance_usd ?? 0).toFixed(2)}
-                </p>
-                <p style={{ fontSize:11, color:'#3a3a3a', marginTop:4 }}>Available balance</p>
-              </div>
-            )}
           </div>
         )}
 

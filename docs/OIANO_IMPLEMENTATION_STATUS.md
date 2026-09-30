@@ -279,6 +279,95 @@ connections in the tier.
   in no set order (C39, step 14). The studio market view still counts profiles above 60%
   completeness as "qualified"; it is an aggregate, not anyone's standing.
 
+**Fixed 2026-09-15 — what an artist's profile and brief disclose.** Found in a read-only
+audit at `682d052`, and reproduced first: against the routes as committed, seven of the
+eight new integration tests failed.
+
+- **Profile, to other accounts.** `GET /api/artists/:id` answers anyone signed in, and
+  discovery hands out artist ids, so whatever it returns to someone other than the artist
+  is public. It returned the artist's last ten session logs (engineer notes, both ratings,
+  private testimonials, session summaries), the whole passport row including a location the
+  artist had not published, and the account id. It now returns listed fields only
+  (`publicArtistSelect` and `publicArtistProfile()` in `routes/artists.routes.ts`): name,
+  alias, bio, avatar, availability, join dates and tier, and from the passport its code,
+  creative DNA, score, photo, bio, links and collaboration interests, with the location and
+  the AI brief only when the artist has published them.
+- **Profile, to a studio admin.** An admin at a studio the artist has booked reads that
+  public profile, their own studio's bookings with the artist, those sessions' logs, and the
+  artist's files, which the files routes already open to them. They no longer read the
+  wallet, which holds the artist's money for every studio, or bookings and session logs from
+  other studios, and the artist's privacy choices now hold for them too. Whether an admin may
+  read the artist was decided from the artist's 50 newest bookings anywhere, so an artist
+  busy elsewhere was "not found" by a studio they had booked; every booking counts now.
+- **The artist** still reads their whole record.
+- **Profile views.** `profile_views` is written only by `GET /api/passport/public/:code`, as
+  the count of `PassportView` rows. The profile route also added one for every signed-in
+  read, so the two writers disagreed.
+- **The AI brief.** `GET /api/artists/:id/summary` let any account make the model write
+  about any artist, store the text on that artist's passport, and read a brief the artist
+  had hidden or replace it with a new one. It now answers only the artist and the staff who
+  work with them: an admin at a studio the artist has booked, or an engineer assigned to one
+  of those bookings, the people the files routes let read the artist's files. Anyone else,
+  platform operators included, gets 403, and so do staff when the artist keeps the brief
+  private. Like the other AI capabilities it is off unless `OIANO_AI_ENABLED` is `true`, and
+  answers 501 while off.
+- **Web.** The profile page says why a brief could not be generated instead of doing
+  nothing, and no longer shows admins a wallet panel, which would now have read $0.00.
+- **Consequence.** `render.yaml` sets `OIANO_AI_ENABLED` to `false`, while the brief route
+  called Anthropic whenever `ANTHROPIC_API_KEY` was set. Where that is the deployed
+  configuration, new briefs stop until the flag is turned on; stored briefs still show.
+- **Evidence.** `integration/artist-profile.integration.test.ts` holds each rule on real
+  Postgres. Every call it causes to Anthropic is answered by a stand-in and counted, so no
+  run reaches the model. Thirteen defects were put back one at a time — each disclosure, the
+  wallet, other studios' bookings and logs, the missing booking check, the view count, the
+  open brief, unassigned engineers, the hidden brief and the AI gate — and each failed its
+  intended assertion; the routes file was restored byte-identical every time. The
+  integration suite passes 48 of 48 on a fresh database; the API security suite passes 88,
+  the intelligence suite 31 and the web suite 75; both typechecks, the build, `prisma
+  validate` and the secret scan pass. `npm test` was run with CI's placeholder
+  `DATABASE_URL`: without one, as in a worktree with no `.env`, `creatorContext.test.ts`
+  fails at import. **Not exercised:** the profile and connect pages in a browser. Both need
+  a signed-in user, so every field they read was traced against the new responses instead.
+
+**Observed while fixing this, not changed** (read in the code, not tested, unless noted):
+
+- The studio roster, `GET /api/artists`, still returns each artist's whole passport, private
+  location and hidden brief included, and their wallet; the admin dashboard shows the balance
+  and offers a wallet credit. Whether a studio may see an artist's balance is an owner
+  decision. *Fixed 2026-09-30, below.*
+- The profile page treats every artist as the owner of whatever profile they open. Another
+  artist sees Edit on the brief, which saves to their own passport, and upload and delete
+  controls the files routes refuse.
+- The brief's cache is never used, observed with a probe against a local database. A stored
+  brief is served only when `ai_summary_updated_at` is later than the passport's
+  `updated_at`, but the write that stores a brief, and the artist's own edit, move
+  `updated_at` a few milliseconds past it. Every request that reaches generation calls the
+  model again and replaces the stored brief, an edited one included. The page asks for a
+  brief only when it has none to show, so this takes a direct call to the route.
+
+**Landed 2026-09-30.** The fix above sat uncommitted in a worktree from 2026-09-15. It was
+carried onto `main` at `6ad78b1` unchanged apart from two append-only merges (this document
+and the integration runner), and re-verified: integration 59 of 59 on a fresh database, API
+unit 90, intelligence 31, web 75, both typechecks, the build, `prisma validate` and the
+secret scan. With the routes reverted to `main`, 9 of the 11 privacy tests fail. The schema
+change is to comments only; no migration.
+
+**Fixed 2026-09-30 — the studio roster.** `GET /api/artists` returned each artist's whole
+passport row, private location and hidden brief included, and their wallet, to every admin
+at every studio the artist had booked. Reproduced 2026-09-15 by
+`artist-roster.integration.test.ts`, written then and left uncommitted until the profile
+helpers above landed.
+
+- Each row is now `publicArtistProfile()`, so the artist's privacy choices hold, plus the
+  account email a studio uses to reach its own customer. No wallet: it holds the artist's
+  money from every studio (owner decision, 2026-09-15). The admin dashboard no longer shows
+  a balance column, which would otherwise have read $0.
+- **Evidence.** The three roster tests fail against `main`'s route; returning the raw rows
+  fails the privacy test and adding the wallet back fails the wallet test, each alone, with
+  the file restored byte-identical. **Not exercised:** the dashboard in a browser.
+- **Not changed.** The dashboard's `+$` wallet-credit button and modal remain on `main`;
+  PR #1 removes the credit route and them.
+
 **Schema redesign:** designed for review in [schema redesign](OIANO_SCHEMA_REDESIGN.md),
 against the owner decisions of 2026-09-12. No migration is written; implementation
 waits for Session 5.
