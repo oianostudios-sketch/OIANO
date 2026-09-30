@@ -255,21 +255,25 @@ artistsRouter.get('/:id/summary', async (req: any, res, next) => {
     if (!isAiEnabled()) throw new AppError('AI briefs are not enabled', 501);
 
     const passport = artist.passport;
-    const profileUpdated = passport?.updated_at ?? new Date(0);
-    const summaryAge     = passport?.ai_summary_updated_at ?? new Date(0);
 
-    // Serve cache if summary exists and was generated after last profile update
-    if (passport?.ai_summary && summaryAge > profileUpdated) {
+    // A stored brief stands until the artist changes it, whoever wrote it, and one the artist
+    // emptied counts as none. It used to be served only while newer than passport.updated_at,
+    // which every write to the passport moves, storing the brief included, so each request
+    // paid the model again and replaced the artist's edit.
+    if (passport?.ai_summary) {
       return res.json({ artist_id: artist.id, summary: passport.ai_summary, cached: true });
     }
 
     // Generate fresh summary
     const summary = await generateArtistSummary(artist);
 
-    // Persist to passport (non-blocking -- don't let a DB write fail the response)
-    if (passport) {
-      prisma.artistPassport.update({
-        where: { artist_id: artist.id },
+    // Stored only while the passport still has no brief, so an edit saved while the model was
+    // writing is kept, and awaited, so the next request finds it. A failed write still answers.
+    // generateArtistSummary says 'Summary unavailable.' when the model sent no text; that is
+    // not a brief, and once stored it would stand.
+    if (passport && summary !== 'Summary unavailable.') {
+      await prisma.artistPassport.updateMany({
+        where: { artist_id: artist.id, OR: [{ ai_summary: null }, { ai_summary: '' }] },
         data: {
           ai_summary:            summary,
           ai_summary_updated_at: new Date(),

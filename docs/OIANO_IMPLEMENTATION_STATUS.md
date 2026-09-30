@@ -383,7 +383,7 @@ eight new integration tests failed.
   `updated_at`, but the write that stores a brief, and the artist's own edit, move
   `updated_at` a few milliseconds past it. Every request that reaches generation calls the
   model again and replaces the stored brief, an edited one included. The page asks for a
-  brief only when it has none to show, so this takes a direct call to the route.
+  brief only when it has none to show, so this takes a direct call to the route. *Fixed; see "the AI brief was rewritten on every request".*
 
 **Landed 2026-09-30.** The fix above sat uncommitted in a worktree from 2026-09-15. It was
 carried onto `main` at `6ad78b1` unchanged apart from two append-only merges (this document
@@ -686,6 +686,55 @@ the read-only architecture audit at `682d052`. Committed 2026-09-30; see the las
   does not set `SENTRY_DSN`.
 - The admin audit log stores `req.originalUrl` (`lib/adminAudit.ts:13`). No ticketed route
   writes to it today.
+
+**Fixed 2026-09-15 — the AI brief was rewritten on every request.** `GET
+/api/artists/:id/summary` served a stored brief only while `ai_summary_updated_at` was later
+than the passport's `updated_at`, which Prisma moves on every write to the passport, storing
+the brief included. So this route never served a stored brief: every request paid the model
+again, and the first request after an artist edited their brief replaced the edit and reset
+`ai_summary_edited`.
+
+- **The owner's rule, decided 2026-09-15.** A stored brief stands until the artist changes
+  it, whether the model or the artist wrote it; a new name, alias, bio, creative DNA, session
+  or profile strength does not rewrite it. A brief is written only for a passport with none,
+  and a brief the artist emptied counts as none, so "Generate brief →" still works after they
+  clear it. No schema change.
+- **Storing.** A brief is stored only while the passport still has none, so an edit saved
+  while the model is writing is kept. The write is awaited, so the next request finds the
+  brief instead of paying for it again. "Summary unavailable.", the service's answer when the
+  model sends no text, is not stored, because under this rule it would stand.
+- Only `routes/artists.routes.ts` changed; `services/ai-summary.service.ts` and
+  `PATCH /api/passport/summary` did not. `ai_summary_updated_at` now only records when the
+  brief was written.
+- **Evidence.** `artist-brief.integration.test.ts` answers and counts every call to
+  Anthropic. Its seven tests all failed against the route as committed (`682d052`), each on
+  its intended assertion, and pass after the fix; the integration suite passes all 47 tests
+  on a fresh database. Six defects were put back one at a time: the old timestamp rule, an
+  unconditional write, an unawaited write, an emptied brief served as a brief, a write that
+  skips emptied briefs, and a stored placeholder. Each failed its intended test, the
+  unawaited write also failing a timing-dependent read in the placeholder test, and the route
+  was restored byte-identical every time. Both typechecks, `npm test` (API 88, intelligence
+  31, web 75), the build and the secret scan pass. **Not exercised:** the brief panel in a
+  browser, which asks for a brief only when it has none, and a real model call.
+- **Landed 2026-09-30.** Written on 2026-09-15 and left uncommitted in a worktree; carried
+  onto the profile and brief fix above (PR #7) unchanged, since that fix left the cache rule
+  as it was. With both in place the seven brief tests and the profile tests pass together;
+  with the route reverted to PR #7's, all seven brief tests fail. Integration 67 of 67 on a
+  fresh database; API unit 90, intelligence 31, web 75, both typechecks, the build and the
+  secret scan pass.
+
+**Observed while fixing the brief, not changed** (read in the code, not tested):
+
+- On this branch the brief route still answers any signed-in account and ignores
+  `OIANO_AI_ENABLED`. Access to it and the AI gate are uncommitted work on
+  `claude/great-pasteur-c19503`.
+- `services/ai-summary.service.ts` still has no timeout, so a model call that hangs holds the
+  request open. The [Stage 1 audit](../INTELLIGENCE_LAYER_STAGE1_AUDIT.md) keeps that service
+  untouched.
+- Two first requests at the same moment both call the model. The first brief stored stands,
+  and the other request answers with a brief that was not stored.
+- Edits the defect already replaced cannot be recovered or told apart from generated briefs,
+  because it also reset `ai_summary_edited`.
 
 ## Verification performed for Phase 1
 

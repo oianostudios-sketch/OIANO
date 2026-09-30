@@ -89,4 +89,5 @@ run('node', [
 
   'apps/api/src/integration/artist-profile.integration.test.ts',
   'apps/api/src/integration/artist-roster.integration.test.ts',
+  'apps/api/src/integration/artist-brief.integration.test.ts',
 ]);
