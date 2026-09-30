@@ -73,13 +73,21 @@ PostgreSQL 14+ command-line tools are required: set `PG_BIN`, put `pg_ctl` on `P
 or use the default install location. Data lives in `.oiano/` and never leaves the
 machine.
 
+Each checkout and worktree runs its own cluster. The commands use a running server only
+when it reports this checkout's `.oiano/postgres` as its data directory, so none of them
+creates, migrates or drops databases on another checkout's cluster, or stops it. The
+cluster listens on 55432, or on another free port when a different server holds the one
+it wants. `.oiano/port` keeps the port it last started on, and `db:local:status` prints
+it. `OIANO_LOCAL_PG_PORT` chooses the port explicitly, and a command stops rather than
+use it while another server holds it.
+
 | Command | What it does |
 |---|---|
-| `npm run db:local:start`, `db:local:stop`, `db:local:status` | Run the local cluster on port 55432, creating it on first start |
-| `npm run db:local:fresh` | Create an empty database and print its URL |
+| `npm run db:local:start`, `db:local:stop`, `db:local:status` | Run this checkout's cluster, creating it on first start |
+| `npm run db:local:fresh` | Create an empty database, record its name in `.oiano/`, and print its URL |
 | `npm run test:integration:local` | Run the integration suite on a fresh database |
 | `npm run dev:local` | Migrate and seed `oiano_dev_test`, then run the API and web app on it |
-| `npm run db:local:prune` | Drop the databases `fresh` created |
+| `npm run db:local:prune` | Drop the databases this checkout's `fresh` recorded; others are listed and left |
 
 `dev:local` uses ports 4000 and 5173 when they are free and otherwise the next free
 ones, and always points the web app at its own API; `OIANO_LOCAL_API_PORT` and
