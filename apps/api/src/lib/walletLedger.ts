@@ -13,8 +13,10 @@ type TxClient = Prisma.TransactionClient;
  * stored balance and its own transaction history could disagree (AUD-017).
  *
  * amountUsd is signed: positive credits, negative debits. Assumes the
- * wallet row already exists — callers that might not have one yet (see
- * admin.routes.ts's manual-credit route) must create it first.
+ * wallet row already exists. The caller posts the same movement to the
+ * ledger in the same transaction (lib/financialLedger.ts): a wallet is
+ * spent at any studio, so a credit nobody posted is money OIANO pays out
+ * without anyone having paid it in.
  */
 export async function applyWalletDelta(
   tx: TxClient,
