@@ -485,9 +485,8 @@ test('bookings, access scope and Stripe webhooks hold their invariants', async (
   });
 
   await t.test('a studio admin reads their own studio\'s announcements', async () => {
+    // Staff get there past the artist-facing route mounted first, which the test above
+    // holds artists still reach.
     assert.deepEqual(await announcementsReadBy(adminAlpha), ['alpha']);
-    // Staff get there past the artist-facing route mounted first, which artists must still reach.
-    const creditRequest = await request('/admin/credit-request', { method: 'POST', headers: auth(alphaRegular) });
-    assert.equal(creditRequest.status, 200, 'an artist still reaches the artist-facing admin route');
   });
 });
