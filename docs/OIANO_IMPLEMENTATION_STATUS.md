@@ -437,6 +437,78 @@ called it; its only consumer was a platform test. The route and both constants
   JSON through `error.middleware.ts`.
 - **Not known.** Whether anything outside this repository still calls `GET /api/studio`.
 
+**Fixed 2026-09-15 — a contribution invitation belonged to its email address.** Found by a
+read-only architecture audit at `682d052` and reproduced before anything changed.
+
+- **The defect.** An invitation belonged to any account at the invited address, and signup
+  never proves an address belongs to whoever registers it. At `682d052`, on real Postgres, an
+  account registered at an invited address after the invitation saw it in its inbox, accepted
+  it, opened the project's workspace and messages, and became the rights holder when the lead
+  proposed a split naming that participant. An account registered at the address first was
+  bound to the invitation when it was created, and notified.
+- **The fix.** An invitation is claimed with a link, following `StudioStaffInvitation` and
+  `CreatorInvitation`: a random token of which only the SHA-256 is stored
+  (`contribution_invitations`), a 14-day expiry, and single use by a conditional claim
+  (`POST /api/contributions/claim`). The lead receives the link once, when adding a participant
+  with an email. Claiming binds the participant to the claimer, who then accepts, declines or
+  asks for a correction in the inbox as before. No email is matched anywhere: not when the
+  invitation is created, nor in the inbox, answering, the workspace or credits. The address
+  stays on the participant as a hint for the lead. While nobody has claimed an invitation the
+  lead can send a new link, which retires the old one; removing the participant retires theirs;
+  the lead cannot claim their own. The project page shows the link with a copy button and a
+  new-link action, and `/accept-contribution` claims it and opens the inbox.
+- **Migration `20260914120000_contribution_invitation_links`** adds the table and unbinds
+  unanswered invitations that the email match bound at creation; they wait for a link like new
+  ones. Answered invitations are left as they are: after the fact, an address match cannot be
+  told apart from the person invited. It has been applied only to local databases, and must be
+  applied before this code deploys, because inviting with an email fails without the table. The
+  schema redesign's plan to keep the email match until step 11 is marked superseded.
+- **Evidence.** The new integration test failed at `682d052` on both paths and passes now,
+  beside tests for claiming under any address, expiry, a guessed link, two claims at once, a
+  replaced link and a removed participant. The platform test claims with the link instead of
+  asserting the email binding. Integration suite 47 of 47 on a fresh database; `npm test` 89 API,
+  31 intelligence and 80 web tests; both typechecks; build; secret scan, with the new files
+  scanned before they are tracked. Eleven API defects were put back one at a time: each email
+  match, the claim without its conditional filters (both of two simultaneous claims won), no
+  expiry, self-claim, a replaced or removed participant's link staying claimable, and the raw
+  token stored. Each failed exactly the sub-tests that cover it, and every file was restored
+  byte-identical. Three web defects failed their render tests the same way. The migrations still
+  differ from `schema.prisma` in the same nine tables as gate 2, and in nothing more. On a
+  database at the previous migration holding participants in every state, the migration changed
+  only the unanswered invitation bound by email, and kept its address. In a browser, a link
+  opened while signed out survives the redirect to sign-in. **Not exercised:** claiming,
+  answering and the project page's link panel in a browser while signed in; render tests cover
+  the pages.
+- **Changed for users.** An account at the invited address is no longer notified: the lead sends
+  the link. Delivering it automatically needs verified email addresses, or OIANO sending the link
+  under a limit, since producer signup is open.
+- **Landed 2026-09-30, on a branch.** Left uncommitted in a worktree from 2026-09-15 and
+  carried onto `main` at `6ad78b1` unchanged apart from append-only merges; it sits beside the
+  credit-record fix, whose tests still pass. Integration 54 of 54 on a fresh database; API
+  unit 91, intelligence 31, web 80, both typechecks, the build, `prisma validate` and the
+  secret scan. With the contributions route and helper reverted to `main`, all eight
+  invitation tests fail. **The migration has not been applied to production; the branch
+  merges only after it is.**
+
+**Observed while fixing the invitation, not changed** (read in the code, not tested):
+
+- Signing in as anyone but an artist ignores `next` (`web/pages/EnterPage.tsx:78–82`), so a
+  creative professional who opens a link while signed out lands at home and must open it again.
+- A studio staff invitation is accepted with its token and also requires the accepting account's
+  email to equal the invited one (`routes/studio.routes.ts:199`). The check grants nothing, but
+  whoever registers an invited staff address first stops the invited person accepting.
+- The other email comparisons authenticate (login), deliver (password reset), refuse a
+  self-invitation, or search as staff and operators; none grants access.
+- Contributions already answered through an email match are unchanged. A read-only query lists
+  them for review; `registered_after_invite` marks the pattern the audit described:
+
+  ```sql
+  SELECT p.id, p.project_id, p.status, u.created_at > p.created_at AS registered_after_invite
+  FROM project_participants p JOIN users u ON u.id = p.participant_ref_id
+  WHERE p.status <> 'INVITED' AND lower(p.email) = lower(u.email)
+  ORDER BY p.created_at;
+  ```
+
 **Schema redesign:** designed for review in [schema redesign](OIANO_SCHEMA_REDESIGN.md),
 against the owner decisions of 2026-09-12. No migration is written; implementation
 waits for Session 5.

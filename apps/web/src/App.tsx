@@ -60,6 +60,7 @@ const LegalPage = lazy(() => import('./pages/LegalPage'));
 const StudioPoliciesPage = lazy(() => import('./pages/StudioPoliciesPage'));
 const StudioTeamPage = lazy(() => import('./pages/StudioTeamPage'));
 const AcceptStudioInvitePage = lazy(() => import('./pages/AcceptStudioInvitePage'));
+const AcceptContributionInvitePage = lazy(() => import('./pages/AcceptContributionInvitePage'));
 const SelectStudioPage = lazy(() => import('./pages/SelectStudioPage'));
 const CommunicationsPage = lazy(() => import('./pages/CommunicationsPage'));
 const ProfessionalOnboardingPage = lazy(() => import('./pages/ProfessionalOnboardingPage'));
@@ -156,6 +157,7 @@ function AnimatedRoutes() {
         <Route path="/admin/policies" element={<RequireAuth role="STUDIO_ADMIN"><StudioPoliciesPage /></RequireAuth>} />
         <Route path="/admin/team" element={<RequireAuth role="STUDIO_ADMIN"><StudioTeamPage /></RequireAuth>} />
         <Route path="/accept-studio-invite" element={<RequireAuth><AcceptStudioInvitePage /></RequireAuth>} />
+        <Route path="/accept-contribution" element={<RequireAuth><AcceptContributionInvitePage /></RequireAuth>} />
         <Route path="/select-studio" element={<RequireAuth><SelectStudioPage /></RequireAuth>} />
         <Route path="/maintenance"  element={<RequireAuth role="OIANO_ADMIN"><MaintenancePage /></RequireAuth>} />
         <Route path="/maintenance/signals" element={<RequireAuth role="OIANO_ADMIN"><MaintenanceSignalsPage /></RequireAuth>} />
