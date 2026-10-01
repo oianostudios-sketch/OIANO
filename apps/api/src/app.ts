@@ -46,6 +46,7 @@ import { networkMetricsRouter } from './routes/network-metrics.routes';
 import { networkPulseRouter } from './routes/network-pulse.routes';
 import { contributionsRouter } from './routes/contributions.routes';
 import { studioPolicyRouter } from './routes/studio-policy.routes';
+import { studioSetupRouter } from './routes/studio-setup.routes';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env'), override: process.env.NODE_ENV !== 'test' });
 
@@ -139,6 +140,7 @@ app.use('/api/passport/stats',           statsRouter);
 app.use('/api/studio/pulse',             pulseRouter);
 app.use('/api/studio',                   studioRouter);
 app.use('/api/studio-policies',          studioPolicyRouter);
+app.use('/api/studio-setup',             studioSetupRouter);
 app.use('/api/availability',             availabilityRouter);
 app.use('/api/bookings',                 bookingsRouter);
 app.use('/api/bookings/:id/messages',    messagesRouter);

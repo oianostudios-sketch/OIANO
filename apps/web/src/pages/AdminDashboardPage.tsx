@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { Filter, Megaphone, Zap,Activity, Calendar, ClipboardList, LogOut, Command, Plus, ArrowRight, ShieldCheck, Users } from 'lucide-react';
+import { Filter, Megaphone, Zap,Activity, Calendar, ClipboardList, LogOut, Command, Plus, ArrowRight, ShieldCheck, Users, DoorOpen } from 'lucide-react';
 import { useAuthStore } from '../store/auth.store';
 import { api } from '../lib/api';
 import { useToast } from '../components/Toast';
@@ -288,6 +288,7 @@ export default function AdminDashboardPage() {
           <Link to="/admin/team" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-studio-surface p-4 hover:border-white/[.12]"><Users size={16} className="text-violet-400"/><span><b className="block text-xs">Team access</b><small className="text-[9px] text-zinc-600">People & permissions</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
           <Link to="/runsheet" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-studio-surface p-4 hover:border-white/[.12]"><ClipboardList size={16} className="text-emerald-400"/><span><b className="block text-xs">Session records</b><small className="text-[9px] text-zinc-600">Execution history</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
           <Link to="/admin/policies" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-studio-surface p-4 hover:border-white/[.12]"><ShieldCheck size={16} className="text-dome"/><span><b className="block text-xs">Standards</b><small className="text-[9px] text-zinc-600">Rules & exceptions</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
+          <Link to="/admin/setup" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-studio-surface p-4 hover:border-white/[.12]"><DoorOpen size={16} className="text-dome"/><span><b className="block text-xs">Rooms & services</b><small className="text-[9px] text-zinc-600">What artists can book</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
           <button onClick={()=>setShowAnnounce(true)} className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-studio-surface p-4 text-left hover:border-white/[.12]"><Megaphone size={16} className="text-amber-400"/><span><b className="block text-xs">Broadcast</b><small className="text-[9px] text-zinc-600">Message artists</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></button>
         </section>
 
