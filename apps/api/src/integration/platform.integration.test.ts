@@ -927,11 +927,18 @@ test('auth, booking payment, and rights operate through real database transactio
   const artistPayoutAttempt = await request('/payouts/balance', { headers: { authorization: `Bearer ${artistToken}` } });
   assert.equal(artistPayoutAttempt.response.status, 403, 'only a studio operator may read a payout balance');
 
-  // Commercial terms are the studio's own business. GET /api/studio is public.
-  const publicStudio = await request('/studio');
-  assert.equal(publicStudio.response.status, 200);
-  assert.equal(publicStudio.body?.platform_fee_bps, undefined, 'the public studio endpoint must not publish commercial terms');
-  assert.equal(publicStudio.body?.stripe_account_id, undefined, 'the public studio endpoint must never publish a Connect account id');
+  // There is no default studio: GET /api/studio, which answered with one studio named in
+  // code, is retired (C30). Commercial terms are the studio's own business, so the public
+  // list of studios publishes neither the fee nor the Connect account.
+  const defaultStudio = await fetch(`${baseUrl}/studio`);
+  assert.equal(defaultStudio.status, 404, 'no route answers with a default studio');
+  const publicStudios = await request('/studio/options');
+  assert.equal(publicStudios.response.status, 200);
+  assert.ok(Array.isArray(publicStudios.body) && publicStudios.body.length > 0);
+  for (const listed of publicStudios.body) {
+    assert.equal(listed.platform_fee_bps, undefined, 'the public studio list must not publish commercial terms');
+    assert.equal(listed.stripe_account_id, undefined, 'the public studio list must never publish a Connect account id');
+  }
 
   const ownStudioView = await request('/studio/current', { headers: { authorization: `Bearer ${studioSignup.body.token}` } });
   assert.equal(ownStudioView.response.status, 200);

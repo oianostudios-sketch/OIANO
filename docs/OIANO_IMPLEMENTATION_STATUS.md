@@ -421,6 +421,22 @@ being the profile's user (`lib/artistProfileOwner.ts`); the profile response car
   typecheck, the build and the secret scan pass. **Not exercised:** the page in a browser;
   the wiring, one line, is typechecked, not render-tested.
 
+**Fixed 2026-09-30 — no default studio (C30).** `GET /api/studio` answered anyone with the
+one studio named in `DEFAULT_STUDIO_SLUG` (`packages/shared`), a single-studio assumption
+against AGENTS.md: identity is issued by OIANO, never by a studio. Nothing in the web app
+called it; its only consumer was a platform test. The route and both constants
+(`DEFAULT_STUDIO_SLUG`, `SINGLE_STUDIO_MODE`) are gone. Studios are listed by
+`/api/studio/options` and read by slug.
+
+- **Evidence.** The platform test now asserts `GET /api/studio` is a 404, and moves its
+  check that commercial terms stay private to `/studio/options`, the public list the app
+  uses. With the route restored, that assertion fails. Integration 46 of 46 on a fresh
+  database; API unit 90, intelligence 31, web 75, both typechecks, the build and the
+  secret scan pass.
+- **Observed, not changed.** An unknown API route answers with Express's HTML 404 page, not
+  JSON through `error.middleware.ts`.
+- **Not known.** Whether anything outside this repository still calls `GET /api/studio`.
+
 **Schema redesign:** designed for review in [schema redesign](OIANO_SCHEMA_REDESIGN.md),
 against the owner decisions of 2026-09-12. No migration is written; implementation
 waits for Session 5.

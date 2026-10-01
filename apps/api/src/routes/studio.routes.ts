@@ -2,7 +2,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
-import { DEFAULT_STUDIO_SLUG } from '@oiano/shared';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { rateLimit } from '../middleware/rateLimit.middleware';
 import { AppError } from '../lib/errors';
@@ -25,18 +24,9 @@ function presentStudio<T extends { hero_image_url?: string | null }>(studio: T) 
   return { ...safe, image_url: studio.hero_image_url ?? '' };
 }
 
-// GET /api/studio
-studioRouter.get('/', async (_req, res, next) => {
-  try {
-    const studio = await prisma.studio.findUnique({
-      where: { slug: DEFAULT_STUDIO_SLUG },
-      include: { rooms: true, engineers: true, services: true },
-    });
-    res.json(studio ? presentStudio(studio) : studio);
-  } catch (err) {
-    next(err);
-  }
-});
+// There is no default studio. GET /api/studio answered with one studio named in code, a
+// single-studio assumption against "identity is issued by OIANO, never by a studio"; nothing
+// in the web app called it. Studios are listed by /options and read by slug (C30).
 
 studioRouter.get('/options', async (_req, res, next) => {
   try {
