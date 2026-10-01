@@ -59,6 +59,7 @@ const ContributionWorkspacePage = lazy(() => import('./pages/ContributionWorkspa
 const LegalPage = lazy(() => import('./pages/LegalPage'));
 const StudioPoliciesPage = lazy(() => import('./pages/StudioPoliciesPage'));
 const StudioTeamPage = lazy(() => import('./pages/StudioTeamPage'));
+const StudioSetupPage = lazy(() => import('./pages/StudioSetupPage'));
 const AcceptStudioInvitePage = lazy(() => import('./pages/AcceptStudioInvitePage'));
 const AcceptContributionInvitePage = lazy(() => import('./pages/AcceptContributionInvitePage'));
 const SelectStudioPage = lazy(() => import('./pages/SelectStudioPage'));
@@ -156,6 +157,7 @@ function AnimatedRoutes() {
         <Route path="/facilities"   element={<RequireAuth roles={['STUDIO_ADMIN', 'ENGINEER']}><FacilitiesPage /></RequireAuth>} />
         <Route path="/admin/policies" element={<RequireAuth role="STUDIO_ADMIN"><StudioPoliciesPage /></RequireAuth>} />
         <Route path="/admin/team" element={<RequireAuth role="STUDIO_ADMIN"><StudioTeamPage /></RequireAuth>} />
+        <Route path="/admin/setup" element={<RequireAuth role="STUDIO_ADMIN"><StudioSetupPage /></RequireAuth>} />
         <Route path="/accept-studio-invite" element={<RequireAuth><AcceptStudioInvitePage /></RequireAuth>} />
         <Route path="/accept-contribution" element={<RequireAuth><AcceptContributionInvitePage /></RequireAuth>} />
         <Route path="/select-studio" element={<RequireAuth><SelectStudioPage /></RequireAuth>} />

@@ -92,4 +92,5 @@ run('node', [
   'apps/api/src/integration/artist-brief.integration.test.ts',
 
   'apps/api/src/integration/contribution-invitations.integration.test.ts',
+  'apps/api/src/integration/studio-setup.integration.test.ts',
 ]);

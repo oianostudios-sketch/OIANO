@@ -509,6 +509,45 @@ read-only architecture audit at `682d052` and reproduced before anything changed
   ORDER BY p.created_at;
   ```
 
+**Fixed 2026-10-01 — a studio can set up what it is booked for (C06).** A booking needs a
+room and a service, and no route created either: a studio that registered itself could
+not take its first booking without someone editing the database. Owner decision of
+2026-10-01: build it now, on today's `Room` and `ServiceOffering`, rather than wait for
+migration step 6, which moves these rows with every other.
+
+- **API, `/api/studio-setup`** (`routes/studio-setup.routes.ts`). Every member of the
+  studio's staff reads its rooms and services, whether it can be booked yet, and how many
+  bookings each has. Adding, editing and deleting follow the studio's standards authority:
+  `MANAGE_POLICIES`, which the owner and manager presets carry, or a STUDIO_ADMIN
+  membership with no explicit capabilities, which is how a self-registered owner is
+  created. Reception and engineers read only. Everything is scoped to the caller's studio
+  and audited, price changes with their old and new figure.
+- **Prices.** A service's price is what a booking is charged, per hour for an hourly
+  service and otherwise once; an optional upper figure is shown and never charged. A
+  booking stores its own total, so a new price applies to the next booking only. Prices
+  are checked to two decimal places and an upper figure below the price is refused; names
+  are unique within the studio.
+- **Nothing booked is deleted.** A room with bookings, equipment, maintenance history or
+  availability, and a service with bookings, stay on the record and can be edited. The
+  check runs first; the foreign keys still refuse a booking that lands in between, which
+  is answered the same way. There is no retire flag yet, because adding one needs a
+  migration; step 6 brings it.
+- **Web, `/admin/setup` ("Rooms & services")**, from the operator dashboard beside Team
+  and Standards and from the command palette. It says plainly when the studio cannot be
+  booked yet, and reads only for staff who cannot change it.
+- **Evidence.** `studio-setup.integration.test.ts`, seven tests, follows a studio from
+  self-registration to its first booking at its own price, a price change that leaves
+  that booking's total alone, refused deletes, validation, the permission rule for owner,
+  manager, reception, engineer and artist, and another studio's owner refused. Integration
+  104 of 104 on a fresh database; API unit 102, intelligence 31, web 85, both typechecks,
+  the build and the secret scan pass. Put back one at a time, each failed its intended
+  test and the file was restored byte-identical: anyone may manage, an edit not scoped to
+  the studio, duplicate names, an upper figure below the price, and deleting a booked
+  service with neither the check nor the foreign-key answer. Removing the check alone did
+  not fail: the foreign key refuses the delete and is answered as a 409, as designed.
+- **Not exercised.** The page in a browser: the preview launches the main checkout, which
+  does not have this branch. Engineers (people) are still created only by seed data (C05).
+
 **Schema redesign:** designed for review in [schema redesign](OIANO_SCHEMA_REDESIGN.md),
 against the owner decisions of 2026-09-12. No migration is written; implementation
 waits for Session 5.
