@@ -30,6 +30,7 @@ interface RunsheetBooking {
 
 interface RunsheetData {
   date: string;
+  timezone?: string;
   studio_name: string;
   generated_at: string;
   revenue: { expected: number; paid: number; outstanding: number };
@@ -108,32 +109,40 @@ export default function RunsheetPage() {
   const isAdmin = user?.role === 'STUDIO_ADMIN';
   const isEngineer = user?.role === 'ENGINEER';
 
-  const today = new Date().toISOString().split('T')[0];
-  const date  = params.get('date') ?? today;
+  // With no date named, the server answers for today at the studio, in the
+  // studio's zone (C29). The browser's own date, or the UTC date, can be a
+  // different day there, so the page no longer sends one.
+  const requestedDate = params.get('date') ?? undefined;
+  const query = requestedDate ? `?date=${requestedDate}` : '';
 
   // Engineers use their own endpoint (filtered to their sessions)
   const endpoint = isEngineer
-    ? `/engineers/runsheet?date=${date}`
-    : `/admin/runsheet?date=${date}`;
+    ? `/engineers/runsheet${query}`
+    : `/admin/runsheet${query}`;
 
   const { data, isLoading, isError } = useQuery<RunsheetData>({
-    queryKey: ['runsheet', date, user?.role],
+    queryKey: ['runsheet', requestedDate ?? 'studio-today', user?.role],
     queryFn: async () => (await api.get(endpoint)).data,
     enabled: isAdmin || isEngineer,
   });
+  const date = requestedDate ?? data?.date ?? '';
+  const tz = data?.timezone;
 
   const updateStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       api.patch(`/bookings/${id}/status`, { status }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['runsheet', date] });
+      qc.invalidateQueries({ queryKey: ['runsheet'] });
       qc.invalidateQueries({ queryKey: ['bookings'] });
     },
   });
 
+  // Calendar arithmetic on the date itself: a browser-local noon read back as
+  // UTC is the previous day east of UTC+12.
   function shift(days: number) {
-    const d = new Date(date + 'T12:00:00');
-    d.setDate(d.getDate() + days);
+    if (!date) return;
+    const d = new Date(date + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + days);
     setParams({ date: d.toISOString().split('T')[0] });
   }
 
@@ -211,13 +220,13 @@ export default function RunsheetPage() {
         }}>
           {/* Call Time */}
           <td style={{ padding: '10px 10px', fontFamily: "'JetBrains Mono', monospace", fontSize: 11, whiteSpace: 'nowrap', color: '#aaa' }}>
-            <div style={{ color: '#5A9BCB', fontWeight: 600 }}>{fmtTime(b.call_time ?? b.starts_at)}</div>
+            <div style={{ color: '#5A9BCB', fontWeight: 600 }}>{fmtTime(b.call_time ?? b.starts_at, tz)}</div>
             <div style={{ fontSize: 9, color: '#bbb', letterSpacing: '0.05em' }}>CALL</div>
           </td>
           {/* Time */}
           <td style={{ padding: '10px 6px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, whiteSpace: 'nowrap' }}>
-            <div style={{ fontWeight: 700 }}>{fmtTime(b.starts_at)}</div>
-            <div style={{ color: '#aaa', fontSize: 10 }}>–{fmtTime(b.ends_at)}</div>
+            <div style={{ fontWeight: 700 }}>{fmtTime(b.starts_at, tz)}</div>
+            <div style={{ color: '#aaa', fontSize: 10 }}>–{fmtTime(b.ends_at, tz)}</div>
           </td>
           <td style={{ padding: '10px 8px', fontSize: 11, color: '#aaa', fontFamily: "'JetBrains Mono', monospace", whiteSpace: 'nowrap' }}>{dur(b)}</td>
           <td style={{ padding: '10px 10px', fontWeight: 600, fontSize: 13, color: '#111' }}>
@@ -313,7 +322,7 @@ export default function RunsheetPage() {
           </div>
           <div className="rs-header-right" style={{ textAlign: 'right' }}>
             <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 15, color: '#111' }}>
-              {new Date(date + 'T12:00:00').toLocaleDateString('en-US', {
+              {date && new Date(date + 'T12:00:00').toLocaleDateString('en-US', {
                 weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
               })}
             </div>
@@ -361,13 +370,13 @@ export default function RunsheetPage() {
             <div style={{ flex: 1, padding: '10px 16px', borderRight: '1px solid #e5e5e5', background: '#fafafa' }}>
               <div style={{ fontSize: 9, color: '#bbb', fontFamily: 'monospace', letterSpacing: '0.1em', marginBottom: 3 }}>FIRST CALL</div>
               <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: '#5A9BCB' }}>
-                {data.bookings.length > 0 ? fmtTime(data.bookings[0].call_time ?? data.bookings[0].starts_at) : '—'}
+                {data.bookings.length > 0 ? fmtTime(data.bookings[0].call_time ?? data.bookings[0].starts_at, tz) : '—'}
               </div>
             </div>
             <div style={{ flex: 1, padding: '10px 16px', background: '#fafafa' }}>
               <div style={{ fontSize: 9, color: '#bbb', fontFamily: 'monospace', letterSpacing: '0.1em', marginBottom: 3 }}>WRAP</div>
               <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: '#111' }}>
-                {data.bookings.length > 0 ? fmtTime(data.bookings[data.bookings.length - 1].ends_at) : '—'}
+                {data.bookings.length > 0 ? fmtTime(data.bookings[data.bookings.length - 1].ends_at, tz) : '—'}
               </div>
             </div>
           </div>
@@ -477,7 +486,7 @@ export default function RunsheetPage() {
           }}
           onClose={() => {
             setCompletingBooking(null);
-            qc.invalidateQueries({ queryKey: ['runsheet', date] });
+            qc.invalidateQueries({ queryKey: ['runsheet'] });
             qc.invalidateQueries({ queryKey: ['bookings'] });
           }}
         />
