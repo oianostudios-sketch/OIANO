@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { prisma } from '../lib/prisma';
+import { keepIdentityInStep } from '../lib/identity/backfill';
 import { AppError } from '../lib/errors';
 import { publishBookingUpdate, publishStudioAnnouncement } from '../services/liveUpdates';
 import { attachStudioScope } from '../middleware/studioScope.middleware';
@@ -308,6 +309,7 @@ adminRouter.post('/walkin', async (req, res, next) => {
       include: { artist: true },
     });
     const artist = guestUser.artist!;
+    await keepIdentityInStep({ userIds: [guestUser.id] });
 
     const booking = await prisma.booking.create({
       data: {

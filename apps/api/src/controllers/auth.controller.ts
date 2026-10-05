@@ -8,6 +8,7 @@ import { generatePassportCode } from '../lib/passport';
 import { AppError } from '../lib/errors';
 import { emitActivityEvent } from '../lib/activityEvents';
 import { registerStudioWithOwner } from '../lib/studioOnboarding';
+import { keepIdentityInStep } from '../lib/identity/backfill';
 import { writeAdminAudit } from '../lib/adminAudit';
 import { encryptTotp, newTotpSecret, tryDecryptTotp, verifyTotp } from '../lib/totp';
 import { issuePasswordResetToken, verifyPasswordResetToken, passwordVersionMatches } from '../lib/passwordResetToken';
@@ -124,6 +125,7 @@ export async function signup(req: Request, res: Response, next: NextFunction) {
         studioName: data.studio_name,
         timezone: data.studio_timezone,
       });
+      await keepIdentityInStep({ userIds: [studioOwner.id] });
       const studioToken = signToken(studioOwner.id, studioOwner.role, studioOwner.auth_version);
       return res.status(201).json({ token: studioToken, user: sanitizeUser(studioOwner) });
     }
@@ -193,6 +195,7 @@ export async function signup(req: Request, res: Response, next: NextFunction) {
       );
     }
 
+    await keepIdentityInStep({ userIds: [user.id] });
     const token = signToken(user.id, user.role, user.auth_version);
     res.status(201).json({ token, user: sanitizeUser(user) });
   } catch (err) {
@@ -306,6 +309,7 @@ export async function enter(req: Request, res: Response, next: NextFunction) {
         },
       });
       created = true;
+      await keepIdentityInStep({ userIds: [user.id] });
 
       if (user.artist) {
         emitActivityEvent('profile.created', { artist_id: user.artist.id }).catch((e) =>

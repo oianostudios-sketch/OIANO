@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { prisma } from '../lib/prisma';
+import { keepIdentityInStep } from '../lib/identity/backfill';
 import { AppError } from '../lib/errors';
 import { emitActivityEvent } from '../lib/activityEvents';
 import { computeArtistTier } from '../lib/artistTier';
@@ -26,6 +27,7 @@ artistsRouter.patch('/me/status', requireRole('ARTIST'), async (req: any, res, n
 
     const { status } = StatusSchema.parse(req.body);
     const updated = await prisma.artist.update({ where: { id: artist.id }, data: { status } });
+    await keepIdentityInStep({ legacyIds: [artist.id] });
 
     await emitActivityEvent('status.changed', { artist_id: artist.id, status });
 
@@ -119,6 +121,7 @@ artistsRouter.delete('/:id', requireRole('STUDIO_ADMIN'), async (req: any, res, 
       prisma.user.delete({ where: { id: artist.user.id } }),
     ]);
 
+    await keepIdentityInStep({ legacyIds: [artist.id] });
     await writeAdminAudit(req.userId, 'artist.deleted', req, { artist_id: artist.id, artist_name: artist.name, email: artist.user.email });
 
     res.json({ success: true });

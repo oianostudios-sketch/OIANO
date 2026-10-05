@@ -94,4 +94,5 @@ run('node', [
   'apps/api/src/integration/contribution-invitations.integration.test.ts',
   'apps/api/src/integration/studio-setup.integration.test.ts',
   'apps/api/src/integration/identity-backfill.integration.test.ts',
+  'apps/api/src/integration/identity-dual-write.integration.test.ts',
 ]);

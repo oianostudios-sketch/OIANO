@@ -56,7 +56,7 @@ test('identity backfill: one person per login, one profile per legacy identity, 
       profiles: await prisma.creativeProfile.findMany({ orderBy: { id: 'asc' } }),
     });
     const before = await snapshot();
-    assert.deepEqual(await backfillIdentity(prisma), { personsCreated: 0, profilesCreated: 0 });
+    assert.ok(Object.values(await backfillIdentity(prisma)).every((n) => n === 0), 'nothing created, updated or removed');
     assert.deepEqual(await snapshot(), before);
   });
 
@@ -105,7 +105,8 @@ test('identity backfill: one person per login, one profile per legacy identity, 
     const parity = await identityParity(prisma);
     assert.ok(parity.mismatches.includes(`user ${late.id} has no person`));
     assert.ok(parity.mismatches.includes(`producer ${late.producer!.id} has no profile`));
-    assert.deepEqual(await backfillIdentity(prisma), { personsCreated: 1, profilesCreated: 1 });
+    const repaired = await backfillIdentity(prisma);
+    assert.deepEqual([repaired.personsCreated, repaired.profilesCreated, repaired.profilesUpdated], [1, 1, 0]);
     assert.deepEqual((await identityParity(prisma)).mismatches, []);
   });
 
