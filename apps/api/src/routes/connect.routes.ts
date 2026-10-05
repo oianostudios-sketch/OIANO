@@ -186,9 +186,11 @@ connectRouter.post('/:id/messages', requireAuth, async (req, res, next) => {
     });
 
     // Auto-accept on first reply if still PENDING
+    // (guarded on PENDING, so a reply racing an explicit decline never
+    // overwrites it)
     if (connection.status === 'PENDING' && myArtistId !== connection.initiator_id) {
-      await prisma.passportConnection.update({
-        where: { id: connection.id },
+      await prisma.passportConnection.updateMany({
+        where: { id: connection.id, status: 'PENDING' },
         data: { status: 'ACCEPTED' },
       });
     }
@@ -227,11 +229,17 @@ connectRouter.patch('/:id/status', requireAuth, async (req, res, next) => {
     });
 
     if (!connection) throw new AppError('Connection not found', 404);
+    // A request is answered once: accept and decline both move it out of
+    // PENDING, and the write is guarded on PENDING so two answers sent
+    // together (or an answer racing an auto-accepting reply) cannot both apply.
+    if (connection.status !== 'PENDING') throw new AppError('This request has already been answered', 409);
 
-    const updated = await prisma.passportConnection.update({
-      where: { id: req.params.id },
+    const claimed = await prisma.passportConnection.updateMany({
+      where: { id: connection.id, status: 'PENDING' },
       data: { status },
     });
+    if (claimed.count !== 1) throw new AppError('This request has already been answered', 409);
+    const updated = await prisma.passportConnection.findUniqueOrThrow({ where: { id: connection.id } });
 
     res.json(updated);
   } catch (
