@@ -106,9 +106,10 @@ async function deleteUnlessUsed(run: () => Promise<unknown>, inUse: string) {
 studioSetupRouter.get('/', async (req: any, res, next) => {
   try {
     const { studio, canManage } = await setupContext(req.userId);
-    const [rooms, services] = await Promise.all([
+    const [rooms, services, engineers] = await Promise.all([
       prisma.room.findMany({ where: { studio_id: studio.id }, select: roomSelect, orderBy: { name: 'asc' } }),
       prisma.serviceOffering.findMany({ where: { studio_id: studio.id }, select: serviceSelect, orderBy: { name: 'asc' } }),
+      prisma.engineer.findMany({ where: { studio_id: studio.id }, select: engineerSelect, orderBy: { name: 'asc' } }),
     ]);
     res.json({
       studio: { id: studio.id, name: studio.name, currency: 'USD' },
@@ -116,6 +117,7 @@ studioSetupRouter.get('/', async (req: any, res, next) => {
       bookable: rooms.length > 0 && services.length > 0,
       rooms: rooms.map(presentRoom),
       services: services.map(presentService),
+      engineers: engineers.map(presentEngineer),
     });
   } catch (error) { next(error); }
 });
@@ -208,6 +210,90 @@ studioSetupRouter.delete('/services/:id', async (req: any, res, next) => {
     if (service._count.bookings > 0) throw new AppError(inUse, 409);
     await deleteUnlessUsed(() => prisma.serviceOffering.delete({ where: { id: service.id } }), inUse);
     await writeAdminAudit(req.userId, 'studio.service.deleted', req, { studio_id: studio.id, service_id: service.id, name: service.name });
+    res.json({ success: true });
+  } catch (error) { next(error); }
+});
+
+// ── Engineers ───────────────────────────────────────────────────────────────
+// Owner decision 2026-10-05: a studio may schedule engineers who have no OIANO login.
+// Nobody can sign up as an engineer today, and an engineer invited as staff joins with an
+// artist or producer account that grants no engineer access (C01, C04), so until the
+// Identity migration a studio lists the people it schedules here. Each listed engineer is
+// a studio-held record, not an identity; the Identity migration turns it into an
+// unclaimed membership the person can claim.
+//
+// An engineer record linked to an account (user_id) belongs to that person: the studio
+// may set their rate and specialties here, but not their name or bio, and cannot delete it.
+const EngineerInput = z.object({
+  name: text(80).min(1),
+  specialties: z.array(text(40).min(1)).max(12).optional(),
+  hourly_rate_usd: money.nullable().optional(),
+  bio: text(500).nullable().optional(),
+}).strict();
+
+const engineerSelect = {
+  id: true, name: true, specialties: true, hourly_rate_usd: true, bio: true, user_id: true,
+  _count: { select: { bookings: true, preferred_bookings: true, availability: true } },
+} satisfies Prisma.EngineerSelect;
+
+function presentEngineer(engineer: Prisma.EngineerGetPayload<{ select: typeof engineerSelect }>) {
+  const { _count, hourly_rate_usd, user_id, ...rest } = engineer;
+  return {
+    ...rest,
+    hourly_rate_usd: hourly_rate_usd == null ? null : Number(hourly_rate_usd),
+    has_login: user_id !== null,
+    booking_count: _count.bookings + _count.preferred_bookings,
+  };
+}
+
+async function assertEngineerNameFree(studioId: string, name: string, exceptId?: string) {
+  const taken = await prisma.engineer.findFirst({
+    where: { studio_id: studioId, name: { equals: name, mode: 'insensitive' }, ...(exceptId ? { id: { not: exceptId } } : {}) },
+    select: { id: true },
+  });
+  if (taken) throw new AppError(`This studio already lists an engineer called ${name}`, 409);
+}
+
+studioSetupRouter.post('/engineers', async (req: any, res, next) => {
+  try {
+    const { studio } = await managerContext(req.userId);
+    const data = EngineerInput.parse(req.body);
+    await assertEngineerNameFree(studio.id, data.name);
+    const engineer = await prisma.engineer.create({
+      data: { ...data, specialties: data.specialties ?? [], studio_id: studio.id },
+      select: engineerSelect,
+    });
+    await writeAdminAudit(req.userId, 'studio.engineer.listed', req, { studio_id: studio.id, engineer_id: engineer.id, name: engineer.name });
+    res.status(201).json(presentEngineer(engineer));
+  } catch (error) { next(error); }
+});
+
+studioSetupRouter.patch('/engineers/:id', async (req: any, res, next) => {
+  try {
+    const { studio } = await managerContext(req.userId);
+    const data = EngineerInput.partial().parse(req.body);
+    const existing = await prisma.engineer.findFirst({ where: { id: req.params.id, studio_id: studio.id }, select: { id: true, user_id: true } });
+    if (!existing) throw new AppError('Engineer not found', 404);
+    if (existing.user_id && (data.name !== undefined || data.bio !== undefined)) {
+      throw new AppError('This engineer has an OIANO login, so their name and bio are theirs to change', 403);
+    }
+    if (data.name) await assertEngineerNameFree(studio.id, data.name, existing.id);
+    const engineer = await prisma.engineer.update({ where: { id: existing.id }, data, select: engineerSelect });
+    await writeAdminAudit(req.userId, 'studio.engineer.updated', req, { studio_id: studio.id, engineer_id: engineer.id, fields: Object.keys(data) });
+    res.json(presentEngineer(engineer));
+  } catch (error) { next(error); }
+});
+
+studioSetupRouter.delete('/engineers/:id', async (req: any, res, next) => {
+  try {
+    const { studio } = await managerContext(req.userId);
+    const engineer = await prisma.engineer.findFirst({ where: { id: req.params.id, studio_id: studio.id }, select: engineerSelect });
+    if (!engineer) throw new AppError('Engineer not found', 404);
+    if (engineer.user_id) throw new AppError(`${engineer.name} has an OIANO login, so the studio cannot remove their record`, 409);
+    const inUse = `${engineer.name} has been booked or requested, so they stay on the studio's record. Edit them instead.`;
+    if (Object.values(engineer._count).some((count) => count > 0)) throw new AppError(inUse, 409);
+    await deleteUnlessUsed(() => prisma.engineer.delete({ where: { id: engineer.id } }), inUse);
+    await writeAdminAudit(req.userId, 'studio.engineer.removed', req, { studio_id: studio.id, engineer_id: engineer.id, name: engineer.name });
     res.json({ success: true });
   } catch (error) { next(error); }
 });

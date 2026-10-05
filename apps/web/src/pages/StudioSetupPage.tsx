@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, DoorOpen, Pencil, Plus, Tag, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, DoorOpen, Pencil, Plus, Tag, Trash2, UserRound } from 'lucide-react';
 import { api } from '../lib/api';
 import { useToast } from '../components/Toast';
 
@@ -10,7 +10,8 @@ import { useToast } from '../components/Toast';
 
 type Room = { id: string; name: string; capacity: number | null; description: string | null; hourly_rate: number | null; amenities: string[]; booking_count: number };
 type Service = { id: string; name: string; category: string; description: string | null; unit: string; min_price_usd: number; max_price_usd: number; booking_count: number };
-type Setup = { studio: { id: string; name: string; currency: string }; can_manage: boolean; bookable: boolean; rooms: Room[]; services: Service[] };
+type Engineer = { id: string; name: string; specialties: string[]; hourly_rate_usd: number | null; bio: string | null; has_login: boolean; booking_count: number };
+type Setup = { studio: { id: string; name: string; currency: string }; can_manage: boolean; bookable: boolean; rooms: Room[]; services: Service[]; engineers: Engineer[] };
 
 const CATEGORIES = ['RECORDING', 'FULL_DAY', 'MIX_MASTER', 'COACHING', 'EVENT', 'MEMBERSHIP'];
 const UNITS: Record<string, string> = { hour: 'per hour', session: 'per session', track: 'per track', month: 'per month' };
@@ -22,10 +23,17 @@ const caption = 'block text-[8px] uppercase tracking-wider text-zinc-600';
 type RoomDraft = { name: string; capacity: string; description: string };
 type ServiceDraft = { name: string; category: string; unit: string; price: string; upper: string; description: string };
 const emptyRoom: RoomDraft = { name: '', capacity: '', description: '' };
+type EngineerDraft = { name: string; specialties: string; rate: string; bio: string };
+const emptyEngineer: EngineerDraft = { name: '', specialties: '', rate: '', bio: '' };
 const emptyService: ServiceDraft = { name: '', category: 'RECORDING', unit: 'hour', price: '', upper: '', description: '' };
 
 function roomBody(draft: RoomDraft) {
   return { name: draft.name.trim(), capacity: draft.capacity ? Number(draft.capacity) : null, description: draft.description.trim() || null };
+}
+// A linked engineer's name and bio are theirs, so the studio sends only what it may set.
+function engineerBody(draft: EngineerDraft, linked: boolean) {
+  const shared = { specialties: draft.specialties.split(',').map((part) => part.trim()).filter(Boolean), hourly_rate_usd: draft.rate === '' ? null : Number(draft.rate) };
+  return linked ? shared : { ...shared, name: draft.name.trim(), bio: draft.bio.trim() || null };
 }
 function serviceBody(draft: ServiceDraft) {
   return {
@@ -42,6 +50,9 @@ export default function StudioSetupPage() {
   const [roomEditing, setRoomEditing] = useState<string | null>(null);
   const [service, setService] = useState<ServiceDraft>(emptyService);
   const [serviceEditing, setServiceEditing] = useState<string | null>(null);
+  const [engineer, setEngineer] = useState<EngineerDraft>(emptyEngineer);
+  const [engineerEditing, setEngineerEditing] = useState<string | null>(null);
+  const [engineerLinked, setEngineerLinked] = useState(false);
 
   // The booking page reads rooms and services through the studio, so refresh both.
   const refresh = () => { for (const key of ['studio-setup', 'studio', 'studio-options']) qc.invalidateQueries({ queryKey: [key] }); };
@@ -66,6 +77,17 @@ export default function StudioSetupPage() {
     mutationFn: (id: string) => api.delete(`/studio-setup/services/${id}`),
     onSuccess: () => { toast.success('Service removed'); refresh(); },
     onError: (error: any) => { refresh(); failed('Service could not be removed')(error); },
+  });
+
+  const saveEngineer = useMutation({
+    mutationFn: () => engineerEditing ? api.patch(`/studio-setup/engineers/${engineerEditing}`, engineerBody(engineer, engineerLinked)) : api.post('/studio-setup/engineers', engineerBody(engineer, false)),
+    onSuccess: () => { toast.success(engineerEditing ? 'Engineer updated' : 'Engineer listed'); setEngineer(emptyEngineer); setEngineerEditing(null); setEngineerLinked(false); refresh(); },
+    onError: failed('Engineer could not be saved'),
+  });
+  const deleteEngineer = useMutation({
+    mutationFn: (id: string) => api.delete(`/studio-setup/engineers/${id}`),
+    onSuccess: () => { toast.success('Engineer removed'); refresh(); },
+    onError: (error: any) => { refresh(); failed('Engineer could not be removed')(error); },
   });
 
   const canManage = Boolean(data?.can_manage);
@@ -118,6 +140,25 @@ export default function StudioSetupPage() {
             {serviceEditing && <button type="button" onClick={() => { setServiceEditing(null); setService(emptyService); }} className="rounded-xl border border-white/[.08] px-4 py-2.5 text-xs text-zinc-400">Cancel</button>}</div>
         </form>}
       </article>
+    </section>
+
+    <section className="mt-5 rounded-2xl border border-white/[.07] bg-studio-surface p-5">
+      <div className="flex items-center gap-2"><UserRound size={15} className="text-dome"/><h2 className="text-sm">Engineers</h2><span className="ml-auto text-[10px] text-zinc-600">{data?.engineers.length ?? 0}</span></div>
+      <p className="mt-2 max-w-2xl text-[11px] leading-5 text-zinc-600">The people this studio schedules on sessions. Artists can ask for one when booking, and staff assign one to each session. An engineer listed here has no OIANO login yet; one marked "OIANO login" keeps their own name and bio.</p>
+      <div className="mt-5 grid gap-2 md:grid-cols-2">{isLoading ? <div className="h-20 animate-pulse rounded-xl bg-white/[.03]"/> : data?.engineers.length ? data.engineers.map((e) => <div key={e.id} className="flex items-center gap-3 rounded-xl border border-white/[.055] bg-black/20 p-4">
+        <div className="min-w-0 flex-1"><b className="block truncate text-xs">{e.name}{e.has_login && <span className="ml-2 rounded-full border border-emerald-500/20 px-1.5 py-0.5 text-[8px] font-normal text-emerald-400">OIANO login</span>}</b><p className="mt-1 truncate text-[10px] text-zinc-600">{e.specialties.length ? e.specialties.join(' · ') : 'No specialties listed'}{e.hourly_rate_usd != null ? ` · ${usd(e.hourly_rate_usd)}/hour` : ''}{e.booking_count ? ` · ${e.booking_count} booking${e.booking_count === 1 ? '' : 's'}` : ''}</p></div>
+        {canManage && <><button aria-label={`Edit ${e.name}`} onClick={() => { setEngineerEditing(e.id); setEngineerLinked(e.has_login); setEngineer({ name: e.name, specialties: e.specialties.join(', '), rate: e.hourly_rate_usd != null ? String(e.hourly_rate_usd) : '', bio: e.bio ?? '' }); }} className="rounded-lg p-2 text-zinc-600 hover:bg-white/[.05] hover:text-white"><Pencil size={13}/></button>
+        <button aria-label={`Remove ${e.name}`} disabled={e.has_login || e.booking_count > 0} title={e.has_login ? 'Engineers with an OIANO login keep their record' : e.booking_count > 0 ? 'Booked engineers stay on the studio\'s record; edit them instead' : undefined} onClick={() => confirm(`Remove ${e.name}?`) && deleteEngineer.mutate(e.id)} className="rounded-lg p-2 text-zinc-700 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-zinc-700"><Trash2 size={13}/></button></>}
+      </div>) : <p className="rounded-xl border border-dashed border-white/[.08] p-6 text-center text-[11px] text-zinc-600 md:col-span-2">No engineers listed yet. Sessions can still be booked and an engineer assigned later.</p>}</div>
+      {canManage && <form onSubmit={(ev) => { ev.preventDefault(); saveEngineer.mutate(); }} className="mt-5 border-t border-white/[.05] pt-5">
+        <p className="text-[10px] text-zinc-400">{engineerEditing ? 'Edit engineer' : 'List an engineer'}</p>
+        <div className="mt-3 grid gap-3 md:grid-cols-[1fr_1.4fr_8rem]"><label className={caption}>Name<input value={engineer.name} disabled={engineerLinked} onChange={(ev) => setEngineer({ ...engineer, name: ev.target.value })} maxLength={80} className={`${field} disabled:opacity-50`}/></label>
+          <label className={caption}>Specialties, comma separated<input value={engineer.specialties} onChange={(ev) => setEngineer({ ...engineer, specialties: ev.target.value })} placeholder="Recording, Mixing" className={field}/></label>
+          <label className={caption}>Rate per hour<input value={engineer.rate} onChange={(ev) => setEngineer({ ...engineer, rate: ev.target.value })} inputMode="decimal" className={`${field} font-mono`}/></label></div>
+        {!engineerLinked && <label className={`${caption} mt-3`}>Bio<input value={engineer.bio} onChange={(ev) => setEngineer({ ...engineer, bio: ev.target.value })} maxLength={500} className={field}/></label>}
+        <div className="mt-4 flex gap-2"><button disabled={!engineer.name.trim() || (engineer.rate !== '' && !(Number(engineer.rate) >= 0)) || saveEngineer.isPending} className="flex items-center gap-2 rounded-xl bg-dome px-4 py-2.5 text-xs font-semibold text-black disabled:opacity-40"><Plus size={13}/>{engineerEditing ? 'Save engineer' : 'List engineer'}</button>
+          {engineerEditing && <button type="button" onClick={() => { setEngineerEditing(null); setEngineerLinked(false); setEngineer(emptyEngineer); }} className="rounded-xl border border-white/[.08] px-4 py-2.5 text-xs text-zinc-400">Cancel</button>}</div>
+      </form>}
     </section>
   </div></main>;
 }
