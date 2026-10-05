@@ -1,8 +1,8 @@
+import { Prisma } from '@prisma/client';
 import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import { authenticate } from '../middleware/auth.middleware';
 import { computeArtistTiers } from '../lib/artistTier';
-import { byOverlapThenCompletedWork } from '../lib/discoveryRanking';
 
 export const discoverRouter = Router();
 discoverRouter.use(authenticate);
@@ -29,67 +29,62 @@ discoverRouter.get('/', async (req: any, res: Response, next: NextFunction) => {
     const myThemes: string[]  = myDNA.key_themes ?? [];
     const myRole: string      = myDNA.vocal_type ?? '';
 
-    // All other artists with a passport. Artist has no direct studio relation
-    // in the schema (Studio scoping only exists on Room/Booking/etc.) — in
-    // Artist identities are network-level records rather than studio-owned
-    // records, so discovery intentionally spans the OIANO network.
-    // so no studio filter is needed here.
+    // Rank every other artist with a passport, across the whole network, in the database.
+    // It used to score only the first 50 rows the database happened to return, in no order,
+    // so once the network passed 50 artists most of them could never be found, however well
+    // they matched (C39). The score is unchanged: shared genres count 3, shared themes 2,
+    // and a complementary vocal role 1. Ties go to completed sessions, work other people took
+    // part in, never to how much of a profile is filled in (C18); then the id, so the order is
+    // stable.
+    const genres = (path: string) => Prisma.sql`(SELECT count(*) FROM jsonb_array_elements_text(
+      CASE WHEN jsonb_typeof(p.creative_dna -> ${path}) = 'array' THEN p.creative_dna -> ${path} ELSE '[]'::jsonb END
+    ) AS item WHERE item = ANY(${path === 'genres' ? myGenres : myThemes}::text[]))`;
+    const ranked = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT a.id
+      FROM artists a
+      JOIN artist_passports p ON p.artist_id = a.id
+      WHERE a.id <> ${callerArtistId ?? ''}
+      ORDER BY
+        3 * ${genres('genres')} + 2 * ${genres('key_themes')}
+          + CASE WHEN ${myRole} <> '' AND COALESCE(p.creative_dna ->> 'vocal_type', '') NOT IN ('', ${myRole}) THEN 1 ELSE 0 END DESC,
+        (SELECT count(*) FROM bookings b WHERE b.artist_id = a.id AND b.status = 'COMPLETED') DESC,
+        a.id ASC
+      LIMIT 20
+    `;
+    const order = ranked.map((row) => row.id);
     const artists = await prisma.artist.findMany({
-      where: {
-        id:     { not: callerArtistId ?? '__none__' },
-        passport: { isNot: null },
-      },
+      where: { id: { in: order } },
       select: {
-        id:    true,
-        name:  true,
-        alias: true,
-        passport: {
-          select: {
-            bio:          true,
-            creative_dna: true,
-            profile_image_url: true,
-            profile_strength: true,
-          },
-        },
+        id: true, name: true, alias: true,
+        passport: { select: { bio: true, creative_dna: true, profile_image_url: true, profile_strength: true } },
       },
-      take: 50,
     });
+    const byId = new Map(artists.map((a) => [a.id, a]));
 
-    // Compute overlap score
-    const scored = artists.map((a) => {
+    const top = order.flatMap((id) => {
+      const a = byId.get(id);
+      if (!a) return [];
       const dna    = (a.passport?.creative_dna as any) ?? {};
-      const genres: string[] = dna.genres ?? [];
-      const themes: string[] = dna.key_themes ?? [];
-      const role: string     = dna.vocal_type ?? '';
-
-      const genreOverlap = genres.filter((g) => myGenres.includes(g)).length;
-      const themeOverlap = themes.filter((t) => myThemes.includes(t)).length;
-      const roleMatch    = role && myRole && role !== myRole ? 1 : 0; // complementary roles score higher
-
-      const score = genreOverlap * 3 + themeOverlap * 2 + roleMatch;
-      return {
+      const theirGenres: string[] = Array.isArray(dna.genres) ? dna.genres : [];
+      const theirThemes: string[] = Array.isArray(dna.key_themes) ? dna.key_themes : [];
+      const role: string = dna.vocal_type ?? '';
+      const shared_genres = theirGenres.filter((g) => myGenres.includes(g));
+      const shared_themes = theirThemes.filter((t) => myThemes.includes(t));
+      return [{
         id:     a.id,
         name:   a.name,
         alias:  a.alias,
         bio:    a.passport?.bio ?? null,
         avatar: a.passport?.profile_image_url ?? null,
+        // Still returned for the profile prompt; it ranks no one.
         profile_strength: a.passport?.profile_strength ?? 0,
         creative_dna: dna,
-        overlap_score: score,
-        shared_genres: genres.filter((g) => myGenres.includes(g)),
-        shared_themes: themes.filter((t) => myThemes.includes(t)),
-      };
+        overlap_score: shared_genres.length * 3 + shared_themes.length * 2 + (role && myRole && role !== myRole ? 1 : 0),
+        shared_genres,
+        shared_themes,
+      }];
     });
 
-    // Completeness is still returned, for the profile prompt, but ranks no one.
-    const completed = await prisma.booking.groupBy({
-      by: ['artist_id'],
-      where: { artist_id: { in: scored.map((a) => a.id) }, status: 'COMPLETED' },
-      _count: { _all: true },
-    });
-    const ranked = byOverlapThenCompletedWork(scored, new Map(completed.map((row) => [row.artist_id, row._count._all])));
-
-    const top = ranked.slice(0, 20);
     const tiers = await computeArtistTiers(top.map((a) => a.id));
     const withTier = top.map((a) => ({ ...a, tier: tiers[a.id] ?? null }));
 
