@@ -548,6 +548,35 @@ migration step 6, which moves these rows with every other.
 - **Not exercised.** The page in a browser: the preview launches the main checkout, which
   does not have this branch. Engineers (people) are still created only by seed data (C05).
 
+**Fixed 2026-10-05 — a studio can list the engineers it schedules (C05, in part).** A
+booking's engineer must be an `Engineer` record at its studio, and nothing outside the seed
+created one. Nobody can sign up as an engineer, and an engineer invited as staff joins with
+an artist or producer account, which grants no engineer access (C01, C04). Real engineer
+accounts need the Identity migration. Owner decision of 2026-10-05: a studio may schedule
+engineers who have no login, the open question in the build direction, answered yes.
+
+- **API.** `/api/studio-setup` lists engineers with rooms and services, and
+  `POST/PATCH/DELETE /engineers` add, edit and remove them, under the same rule: the
+  studio's standards authority, scoped to the caller's studio, audited. Names are unique
+  within the studio. An engineer on a booking, as assigned or as requested, stays on the
+  record.
+- **Engineers with a login.** A record linked to an account belongs to that person: the
+  studio may set their rate and specialties but not their name or bio, and cannot remove it.
+- **Web.** An Engineers section on Rooms & services. Listed engineers appear on the booking
+  page for artists to request and in assignment for staff, with no other change, because
+  both read the studio's engineers.
+- **Evidence.** Four integration tests in `studio-setup.integration.test.ts`: an engineer
+  listed and assigned to a real booking, then refused deletion; duplicate names; a linked
+  engineer's name and bio refused while rate and specialties are set; reception and another
+  studio refused. Integration 108 of 108 on a fresh database; API unit 102, intelligence 31,
+  web 85, both typechecks, the build and the secret scan pass. Put back one at a time, each
+  failed its intended test and the file was restored byte-identical: a linked name
+  editable, a linked record deletable, an edit not scoped to the studio, duplicate names.
+- **Not done.** The engineer as a person: signup, claiming a listed record, and engineer
+  screens for an account that is not ENGINEER by role all wait for the Identity migration,
+  which makes these records unclaimed memberships. `Engineer.user_id` is unique, so one
+  account can still hold an engineer record at one studio only. Not seen in a browser.
+
 **Schema redesign:** designed for review in [schema redesign](OIANO_SCHEMA_REDESIGN.md),
 against the owner decisions of 2026-09-12. No migration is written; implementation
 waits for Session 5.

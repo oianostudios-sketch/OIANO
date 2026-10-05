@@ -153,4 +153,59 @@ test('a self-registered studio sets up its rooms and services and takes its firs
     assert.equal((await send('DELETE', `/studio-setup/rooms/${roomId}`, token)).status, 404);
     assert.equal((await prisma.room.findUniqueOrThrow({ where: { id: roomId } })).name, 'Live Room');
   });
+
+  // Nobody can sign up as an engineer, and staff membership does not make an account an
+  // engineer, so a studio lists the people it schedules (owner decision 2026-10-05).
+  let engineerId = '';
+
+  await t.test('the owner lists an engineer, who can then be assigned to a session', async () => {
+    const listed = await send('POST', '/studio-setup/engineers', owner, { name: 'Ada Mensah', specialties: ['Recording', 'Mixing'], hourly_rate_usd: 25 });
+    assert.equal(listed.status, 201, JSON.stringify(listed.body));
+    assert.equal(listed.body.has_login, false);
+    engineerId = listed.body.id;
+    assert.ok((await send('GET', '/studio-setup', owner)).body.engineers.some((e: any) => e.id === engineerId));
+    assert.ok((await request(`/studio/${studio.id}`)).body.engineers.some((e: any) => e.id === engineerId), 'artists see the engineer when booking');
+
+    const assigned = await send('PATCH', `/bookings/${bookingId}/engineer`, owner, { engineer_id: engineerId });
+    assert.equal(assigned.status, 200, JSON.stringify(assigned.body));
+    assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: bookingId } })).engineer_id, engineerId);
+  });
+
+  await t.test('an engineer on a session stays on the record, and names stay unique', async () => {
+    assert.equal((await send('DELETE', `/studio-setup/engineers/${engineerId}`, owner)).status, 409);
+    assert.ok(await prisma.engineer.findUnique({ where: { id: engineerId } }));
+    assert.equal((await send('POST', '/studio-setup/engineers', owner, { name: 'ada mensah' })).status, 409);
+    const spare = await send('POST', '/studio-setup/engineers', owner, { name: 'Kofi Asante' });
+    assert.equal((await send('DELETE', `/studio-setup/engineers/${spare.body.id}`, owner)).status, 200);
+    assert.equal(await prisma.engineer.count({ where: { id: spare.body.id } }), 0);
+  });
+
+  await t.test('an engineer with an OIANO login keeps their own name and record', async () => {
+    const person = await prisma.user.create({ data: { email: email('linked-engineer'), role: 'ENGINEER' } });
+    const linked = await prisma.engineer.create({ data: { studio_id: studio.id, user_id: person.id, name: 'Linked Engineer', specialties: [] } });
+    assert.equal((await send('PATCH', `/studio-setup/engineers/${linked.id}`, owner, { name: 'Renamed' })).status, 403);
+    assert.equal((await send('PATCH', `/studio-setup/engineers/${linked.id}`, owner, { bio: 'Written by the studio' })).status, 403);
+    const rate = await send('PATCH', `/studio-setup/engineers/${linked.id}`, owner, { hourly_rate_usd: 40, specialties: ['Mastering'] });
+    assert.equal(rate.status, 200, 'the studio sets what it pays and what it books them for');
+    assert.equal((await send('DELETE', `/studio-setup/engineers/${linked.id}`, owner)).status, 409);
+    const stored = await prisma.engineer.findUniqueOrThrow({ where: { id: linked.id } });
+    assert.deepEqual([stored.name, stored.bio, Number(stored.hourly_rate_usd)], ['Linked Engineer', null, 40]);
+  });
+
+  await t.test('only the studio\'s managers list engineers, and only at their own studio', async () => {
+    const receptionUser = await prisma.user.create({ data: { email: email('reception-2'), role: 'STUDIO_ADMIN' } });
+    await prisma.studioStaff.create({ data: { user_id: receptionUser.id, studio_id: studio.id, role: 'STUDIO_ADMIN', position: 'RECEPTION', capabilities: ['MANAGE_BOOKINGS'] } });
+    const reception = tokenFor(receptionUser);
+    assert.equal((await send('POST', '/studio-setup/engineers', reception, { name: 'Reception Pick' })).status, 403);
+    assert.equal((await send('PATCH', `/studio-setup/engineers/${engineerId}`, reception, { hourly_rate_usd: 1 })).status, 403);
+
+    const other = await request('/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({ email: email('third-owner'), password: 'SetupPass123!', name: 'Third Owner', role: 'STUDIO_ADMIN', studio_name: `Third Rooms ${runId}`, studio_timezone: 'Europe/London' }),
+    });
+    assert.equal((await send('PATCH', `/studio-setup/engineers/${engineerId}`, other.body.token, { name: 'Poached' })).status, 404);
+    assert.equal((await send('DELETE', `/studio-setup/engineers/${engineerId}`, other.body.token)).status, 404);
+    const kept = await prisma.engineer.findUniqueOrThrow({ where: { id: engineerId } });
+    assert.deepEqual([kept.name, Number(kept.hourly_rate_usd)], ['Ada Mensah', 25]);
+  });
 });
