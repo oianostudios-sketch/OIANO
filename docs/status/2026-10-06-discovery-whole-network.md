@@ -21,3 +21,8 @@ matched; which 50 were seen was an accident of storage.
 - **Not exercised.** Query time on a large network: the score is computed for every artist
   on each request, which is fine at today's size and wants an index or a precomputed field
   long before it matters. Discover in a browser.
+- **Also fixed: a timing flake.** This change's first CI run failed in
+  `weave-invitations.integration.test.ts`, untouched here: its A08 fixture edits one booking
+  right after writing another and asserts the edit is later, and on a fast machine both
+  writes can share a millisecond. The edit is now stamped a minute later; the test passed
+  three runs in a row locally.
