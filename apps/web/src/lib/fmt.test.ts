@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fmtCurrency, fmtDateShort, fmtDuration, fmtTime } from './fmt';
+import { fmtCurrency, fmtDateShort, fmtDuration, fmtTime, studioDate, studioTimeToIso } from './fmt';
 
 // A studio in New York and an artist in Berlin must read the same session as
 // the same wall-clock time in the studio's zone, so the timezone argument is
@@ -45,6 +45,28 @@ describe('duration', () => {
 
   it('is independent of timezone — a duration is an elapsed span', () => {
     expect(fmtDuration('2026-03-15T18:00:00+02:00', '2026-03-15T20:00:00+02:00')).toBe('2h');
+  });
+});
+
+describe('studio wall-clock time', () => {
+  it('names the instant at the studio, not in the viewer zone (C29)', () => {
+    expect(studioTimeToIso('2026-10-06', '10:00', 'Pacific/Auckland')).toBe('2026-10-05T21:00:00.000Z');
+    expect(studioTimeToIso('2026-10-06', '10:00', 'America/Los_Angeles')).toBe('2026-10-06T17:00:00.000Z');
+    expect(studioTimeToIso('2026-10-06', '24:00', 'America/Los_Angeles')).toBe('2026-10-07T07:00:00.000Z');
+  });
+
+  it('follows the clocks on a day they change', () => {
+    // Los Angeles falls back at 02:00 on 1 November 2026.
+    expect(studioTimeToIso('2026-11-01', '00:00', 'America/Los_Angeles')).toBe('2026-11-01T07:00:00.000Z');
+    expect(studioTimeToIso('2026-11-01', '12:00', 'America/Los_Angeles')).toBe('2026-11-01T20:00:00.000Z');
+    // Auckland springs forward at 02:00 on 27 September 2026.
+    expect(studioTimeToIso('2026-09-27', '00:00', 'Pacific/Auckland')).toBe('2026-09-26T12:00:00.000Z');
+    expect(studioTimeToIso('2026-09-27', '12:00', 'Pacific/Auckland')).toBe('2026-09-26T23:00:00.000Z');
+  });
+
+  it("reads today's date at the studio", () => {
+    expect(studioDate(new Date('2026-10-05T20:00:00Z'), 'Pacific/Auckland')).toBe('2026-10-06');
+    expect(studioDate(new Date('2026-10-06T03:00:00Z'), 'America/Los_Angeles')).toBe('2026-10-05');
   });
 });
 

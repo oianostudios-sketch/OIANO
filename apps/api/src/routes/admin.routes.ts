@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
 import { publishBookingUpdate, publishStudioAnnouncement } from '../services/liveUpdates';
 import { attachStudioScope } from '../middleware/studioScope.middleware';
+import { studioDate, studioDateBounds } from '../lib/studioClock';
 export const adminRouter = Router();
 
 // Artist-facing routes, mounted before adminRouter, whose role check would refuse
@@ -159,18 +160,17 @@ const RunsheetQuery = z.object({
 adminRouter.get('/runsheet', async (req, res, next) => {
   try {
     const { date } = RunsheetQuery.parse(req.query);
-    const target = date ? new Date(date) : new Date();
-    const dayStart = new Date(target);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(target);
-    dayEnd.setHours(23, 59, 59, 999);
-
     const studio = (req as any).studio;
+
+    // The studio's own day, as on the engineer runsheet (C29).
+    const day = date ?? studioDate(new Date(), studio.timezone);
+    const { start: dayStart, end: dayEnd } = studioDateBounds(day, studio.timezone);
 
     const bookings = await prisma.booking.findMany({
       where: {
         studio_id: studio.id,
-        starts_at: { gte: dayStart, lte: dayEnd },
+        starts_at: { lt: dayEnd },
+        ends_at: { gt: dayStart },
         status: { notIn: ['CANCELLED', 'NO_SHOW'] },
       },
       include: {
@@ -231,7 +231,8 @@ adminRouter.get('/runsheet', async (req, res, next) => {
     const totalOutstanding = totalExpected - totalPaid;
 
     res.json({
-      date: dayStart.toISOString().split('T')[0],
+      date: day,
+      timezone: studio.timezone,
       studio_name: studio.name,
       generated_at: new Date().toISOString(),
       revenue: { expected: totalExpected, paid: totalPaid, outstanding: totalOutstanding },
