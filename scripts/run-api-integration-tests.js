@@ -74,24 +74,18 @@ run(process.execPath, [require.resolve('prisma/build/index.js'), 'migrate', 'dep
 // Integration files share one database, so they run one at a time. In parallel,
 // the Weave backfill test would sync other files' completed bookings while those
 // files are still asserting on them.
+//
+// Every *.integration.test.ts file in apps/api/src/integration runs, so a new test
+// file needs no edit here and two changes that add test files never conflict. The test
+// runner orders the files itself, by name; the list that used to be kept here never
+// decided the order.
+const integrationFiles = fs.readdirSync(path.resolve(__dirname, '..', 'apps/api/src/integration'))
+  .filter((file) => file.endsWith('.integration.test.ts'))
+  .sort()
+  .map((file) => path.join('apps/api/src/integration', file));
+
 run('node', [
   '-r', 'ts-node/register/transpile-only', '-r', 'tsconfig-paths/register',
   '--test', '--test-concurrency=1',
-  'apps/api/src/integration/platform.integration.test.ts',
-  'apps/api/src/integration/architecture.integration.test.ts',
-  'apps/api/src/integration/weave-invitations.integration.test.ts',
-  'apps/api/src/integration/bookings-payments.integration.test.ts',
-  'apps/api/src/integration/stabilization.integration.test.ts',
-  'apps/api/src/integration/money-integrity.integration.test.ts',
-  'apps/api/src/integration/rate-limits.integration.test.ts',
-  'apps/api/src/integration/credit-record.integration.test.ts',
-  'apps/api/src/integration/deliverable-review.integration.test.ts',
-
-  'apps/api/src/integration/artist-profile.integration.test.ts',
-  'apps/api/src/integration/artist-roster.integration.test.ts',
-  'apps/api/src/integration/artist-brief.integration.test.ts',
-
-  'apps/api/src/integration/contribution-invitations.integration.test.ts',
-  'apps/api/src/integration/studio-setup.integration.test.ts',
-  'apps/api/src/integration/engineer-schedule.integration.test.ts',
+  ...integrationFiles,
 ]);
