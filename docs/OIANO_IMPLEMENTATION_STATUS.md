@@ -1,7 +1,8 @@
 # OIANO — implementation status against the audits
 
-One place to check before reopening a finding. Add a row when work lands; do not
-delete rows, mark them.
+One place to check before reopening a finding. **Closed to new entries on 2026-10-06:**
+changes since then are recorded one file each in [`docs/status/`](status/README.md), so
+parallel changes never conflict here. Do not delete rows, mark them.
 
 Governing direction: [continuation audit](OIANO_MARKET_ADOPTION_CONTINUATION_AUDIT.md).
 Historical evidence: [environment audit](OIANO_ENVIRONMENT_AUDIT.md) (six findings
