@@ -124,11 +124,6 @@ export default function AdminDashboardPage() {
     queryKey: ['artists', artistSearch],
     queryFn: async () => { const r = (await api.get('/artists', { params: artistSearch ? { q: artistSearch } : {} })).data; return Array.isArray(r) ? r : (r?.data ?? []); },
   });
-  const deleteArtist = useMutation({
-    mutationFn: (id: string) => api.delete(`/artists/${id}`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['artists'] }); toast.success('Artist deleted'); },
-    onError: (error: any) => toast.error(error?.response?.data?.error ?? 'Could not delete artist'),
-  });
 
   const { data: studio } = useQuery({
     queryKey: ['studio'],
@@ -426,17 +421,6 @@ export default function AdminDashboardPage() {
                               <span className="text-zinc-700 mx-1">·</span>
                               <span className="text-dome/70">{a.passport?.profile_strength ?? 0}%</span>
                             </p>
-                          </div>
-                          <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                            <button
-                              onClick={() => {
-                                if (window.confirm(`Delete ${a.name}? This only works for accounts with zero booking/session/file history — anything else will be refused.`)) {
-                                  deleteArtist.mutate(a.id);
-                                }
-                              }}
-                              disabled={deleteArtist.isPending}
-                              className="text-[10px] bg-red-500/10 border border-red-500/20 text-red-400 px-2 py-0.5 rounded hover:bg-red-500/20 transition-colors disabled:opacity-50"
-                            >Delete</button>
                           </div>
                         </div>
                       </div>
