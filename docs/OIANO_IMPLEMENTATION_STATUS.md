@@ -616,8 +616,34 @@ route changes.
   freshly seeded database the script found 12 unresolved identities, created 9 persons and
   7 profiles, then reported parity, and a second run created nothing.
 - **Before merge.** Gate 2 passes; the migration is applied to production; the script is
-  run there and reports parity. Until writers move (the next slice), identities created
-  after a run are resolved by running it again.
+  run there and reports parity.
+- **Dual-write, 2026-10-05, same branch.** Reading Person and CreativeProfile is only safe
+  if they stay current, and the first version of the backfill only created missing rows, so
+  an artist's later edits would never have reached them. While the legacy rows remain the
+  truth, the canonical rows now mirror them: `mirrorIdentities()` creates what is missing,
+  updates mirrored fields that differ (the handle is kept once chosen), and removes a
+  profile whose legacy row is gone, with its unclaimed person. The backfill is that mirror
+  over everything, and still changes nothing on a second run. Fifteen writers call
+  `keepIdentityInStep()` after they save: the four signup paths, studio registration and
+  walk-in guests, a producer's setup, edits and avatar, an artist's profile, portfolio,
+  avatar and status, and a studio's engineer list. A failed mirror is logged and does not
+  fail the request; parity reports it and the next run repairs it. Parity now compares
+  every mirrored field and each person's name, not only that rows exist.
+- **Evidence, dual-write.** `identity-dual-write.integration.test.ts`, five tests, starts from
+  a database in step and drives the real routes, checking parity after each edit with no
+  backfill run in between: four kinds of signup, three artist edits, producer edits, an
+  engineer listed, renamed and removed, and a change made behind the routes reported and
+  repaired. Integration 124 of 124 on a fresh database; API unit 102, intelligence 31, web
+  85, both typechecks, the build and the secret scan pass. Put back one at a time, each
+  failed its intended test: no mirror after signup, after a profile edit, after a producer
+  edit or after an engineer is removed, and parity blind to field differences. The
+  profile-edit mutation first survived, because a later edit in the same test mirrored the
+  artist again; the test now checks parity after each edit.
+- **Observed, not changed.** Signup names an artist from the email address when no name is
+  given (`auth.controller.ts`), so that artist's Person carries it; the rule against
+  email-derived names holds only for what the backfill itself chooses. A studio admin can
+  never delete an artist: `DELETE /api/artists/:id` finds only artists who booked the
+  studio, then refuses any artist with a booking.
 
 **Schema redesign:** designed for review in [schema redesign](OIANO_SCHEMA_REDESIGN.md),
 against the owner decisions of 2026-09-12. No migration is written; implementation

@@ -58,8 +58,11 @@ test('routes that write an identity keep its person and profile in step', async 
     const login = await send('POST', '/auth/signup', null, { email: email('editor'), password, name: 'Kojo Edit', role: 'ARTIST' });
     const token = login.body.token as string;
     const artistId = login.body.user.artist.id as string;
+    // Each edit is checked on its own: a later edit mirrors the whole artist and would hide a missing one.
     assert.equal((await send('PATCH', '/passport/profile', token, { name: 'Kojo Edited', alias: 'KJ', bio: 'New bio' })).status, 200);
+    await clean('after a profile edit');
     assert.equal((await send('PATCH', '/passport/portfolio', token, { location: 'Takoradi', location_public: true })).status, 200);
+    await clean('after a location edit');
     assert.equal((await send('PATCH', '/artists/me/status', token, { status: 'UNAVAILABLE' })).status, 200);
     const profile = await prisma.creativeProfile.findUniqueOrThrow({ where: { id: artistId }, include: { person: true } });
     assert.deepEqual(
