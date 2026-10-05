@@ -93,4 +93,5 @@ run('node', [
 
   'apps/api/src/integration/contribution-invitations.integration.test.ts',
   'apps/api/src/integration/studio-setup.integration.test.ts',
+  'apps/api/src/integration/engineer-schedule.integration.test.ts',
 ]);

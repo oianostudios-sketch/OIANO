@@ -6,6 +6,7 @@ import { AppError } from '../../lib/errors';
 import { publishBookingUpdate } from '../../services/liveUpdates';
 import { resolveStaffStudio } from '../../middleware/studioScope.middleware';
 import { upsertSessionLog } from '../../lib/sessionLog';
+import { assertEngineerFree } from '../../lib/engineerSchedule';
 import { evaluateStudioPolicies, policiesAffectedByChanges, type PolicyContract } from '../../lib/studioPolicyEngine';
 
 const RescheduleSchema = z.object({
@@ -97,10 +98,18 @@ export async function rescheduleBooking(req: Request, res: Response, next: NextF
     // The room's exclusion constraint is what keeps a slot to one booking; the check
     // above only answers early. A booking written between the two, or one the check
     // misses, fails this update instead.
-    const updated = await prisma.booking.update({
-      where: { id: booking.id },
-      data: { starts_at: newStart, ends_at: newEnd },
-      include: { room: true, service: true },
+    // The session's engineer moves with it, so the new time must be free for them too. The
+    // engineer is read under the booking's lock, so an assignment cannot slip in between.
+    const updated = await prisma.$transaction(async (tx) => {
+      const [current] = await tx.$queryRaw<Array<{ engineer_id: string | null }>>`
+        SELECT engineer_id FROM bookings WHERE id = ${booking.id} FOR UPDATE
+      `;
+      if (current?.engineer_id) await assertEngineerFree(tx, { engineerId: current.engineer_id, startsAt: newStart, endsAt: newEnd, exceptBookingId: booking.id });
+      return tx.booking.update({
+        where: { id: booking.id },
+        data: { starts_at: newStart, ends_at: newEnd },
+        include: { room: true, service: true },
+      });
     }).catch((error) => {
       throw isRoomClash(error) ? new AppError('That time slot is not available', 409) : error;
     });
