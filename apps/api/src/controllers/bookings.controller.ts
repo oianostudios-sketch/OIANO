@@ -17,6 +17,7 @@ import { resolveStaffStudio } from '../middleware/studioScope.middleware';
 import { recordBookingCompleted } from '../lib/bookingCompletion';
 import { requireTransition, transitionBookingStatus } from '../lib/bookingTransitions';
 import { upsertSessionLog } from '../lib/sessionLog';
+import { assertEngineerFree } from '../lib/engineerSchedule';
 import { addDeliverableVersion, recordDeliverableReview } from '../lib/deliverableVersions';
 import { applyWalletDelta } from '../lib/walletLedger';
 import { recordBookingPayment } from '../lib/financialLedger';
@@ -60,10 +61,19 @@ export async function assignBookingEngineer(req: Request, res: Response, next: N
       const engineer = await prisma.engineer.findFirst({ where: { id: engineer_id, studio_id: studio.id } });
       if (!engineer) throw new AppError('Engineer not found at this studio', 404);
     }
-    const updated = await prisma.booking.update({
-      where: { id: booking.id },
-      data: { engineer_id },
-      include: { artist: true, room: true, engineer: true, service: true, payment: true },
+    // The booking row is locked before the engineer's, as on every path that places an
+    // engineer, so its time and status cannot change while the engineer is checked.
+    const updated = await prisma.$transaction(async (tx) => {
+      const [current] = await tx.$queryRaw<Array<{ starts_at: Date; ends_at: Date; status: string }>>`
+        SELECT starts_at, ends_at, status::text AS status FROM bookings WHERE id = ${booking.id} FOR UPDATE
+      `;
+      if (['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(current.status)) throw new AppError('Engineer assignment is closed for this booking', 409);
+      if (engineer_id) await assertEngineerFree(tx, { engineerId: engineer_id, startsAt: current.starts_at, endsAt: current.ends_at, exceptBookingId: booking.id });
+      return tx.booking.update({
+        where: { id: booking.id },
+        data: { engineer_id },
+        include: { artist: true, room: true, engineer: true, service: true, payment: true },
+      });
     });
     res.json(updated);
   } catch (error) { next(error); }

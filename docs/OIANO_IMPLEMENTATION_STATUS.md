@@ -577,6 +577,34 @@ engineers who have no login, the open question in the build direction, answered 
   which makes these records unclaimed memberships. `Engineer.user_id` is unique, so one
   account can still hold an engineer record at one studio only. Not seen in a browser.
 
+**Fixed 2026-10-06 — one engineer, one session at a time (C28).** The database keeps a room
+to one booking at a time with an exclusion constraint, and nothing did the same for the
+engineer. Since studios can list and assign engineers (2026-10-05), staff could put one
+engineer on two overlapping sessions, by assignment or by a reschedule that moved one
+session onto another of that engineer's.
+
+- **The rule** (`lib/engineerSchedule.ts`): an engineer may not be on a session that
+  overlaps another of their sessions that is not cancelled or a no-show. Two sessions
+  overlap when each starts before the other ends, so one inside another, or around it,
+  counts; back-to-back sessions do not. It runs inside the transaction that writes the
+  assignment or the new time, after locking the booking's row and then the engineer's, in
+  that order on both paths, so two requests that would clash take turns.
+- **Not a constraint yet.** A database exclusion constraint like the room one needs a
+  migration, which is applied by hand; this guard holds until one lands, and the constraint
+  would also cover writes made outside these two routes.
+- **Evidence.** `engineer-schedule.integration.test.ts`, five tests: overlap, a session
+  inside another and one around another refused; back-to-back allowed, and a session does
+  not clash with itself; a cancelled session frees its time; a reschedule onto a clash
+  refused and changing nothing, onto free time allowed; six assignments of one engineer at
+  once, in four rounds, place them on exactly one session. Integration 114 of 114 on a
+  fresh database; API unit 102, intelligence 31, web 85, both typechecks, the build and the
+  secret scan pass. Put back one at a time, each failed its intended test and the file was
+  restored byte-identical: the room check's narrower overlap test, cancelled sessions
+  holding time, no check on reschedule, and no lock.
+- **Observed, not changed.** The room conflict checks in booking creation and reschedule
+  use that narrower test and miss a new session that contains an existing one; the room
+  constraint still refuses it, answered as a 409.
+
 **Schema redesign:** designed for review in [schema redesign](OIANO_SCHEMA_REDESIGN.md),
 against the owner decisions of 2026-09-12. No migration is written; implementation
 waits for Session 5.
