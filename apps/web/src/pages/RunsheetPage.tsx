@@ -131,6 +131,20 @@ export default function RunsheetPage() {
     },
   });
 
+  // Cash taken at the desk. The server charges the booking's own total; nothing
+  // about the amount is sent from here.
+  const recordCash = useMutation({
+    mutationFn: (id: string) => api.post(`/admin/bookings/${id}/cash-payment`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['runsheet', date] });
+      qc.invalidateQueries({ queryKey: ['bookings'] });
+      qc.invalidateQueries({ queryKey: ['availability'] });
+    },
+    onError: (error: any) => {
+      window.alert(error?.response?.data?.error ?? error?.response?.data?.message ?? 'The cash payment could not be recorded.');
+    },
+  });
+
   function shift(days: number) {
     const d = new Date(date + 'T12:00:00');
     d.setDate(d.getDate() + days);
@@ -239,6 +253,18 @@ export default function RunsheetPage() {
           </td>
           <td style={{ padding: '10px 8px' }}>
             <Pill label={b.payment_status} color={PAY_COLOR[b.payment_status] ?? '#6b7280'} />
+            {isAdmin && b.payment_status === 'UNPAID' && b.status !== 'CANCELLED' && b.status !== 'NO_SHOW' && b.total_usd > 0 && (
+              <div style={{ marginTop: 2 }}>
+                <button className="no-print" disabled={recordCash.isPending}
+                  onClick={() => { if (window.confirm(`Record ${usd(b.total_usd)} received in cash from ${b.artist_name}?`)) recordCash.mutate(b.id); }}
+                  style={{
+                    display: 'inline-block', marginTop: 3, fontSize: 9, background: 'none',
+                    border: '1px solid #C9A84C44', borderRadius: 4, padding: '2px 6px', color: '#C9A84C',
+                    cursor: recordCash.isPending ? 'not-allowed' : 'pointer', opacity: recordCash.isPending ? 0.5 : 1,
+                    fontFamily: "'JetBrains Mono', monospace",
+                  }}>$ Record cash</button>
+              </div>
+            )}
           </td>
           <td style={{ padding: '10px 8px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, color: b.total_usd > 0 ? '#5A9BCB' : '#ccc', whiteSpace: 'nowrap' }}>
             {usd(b.total_usd)}
