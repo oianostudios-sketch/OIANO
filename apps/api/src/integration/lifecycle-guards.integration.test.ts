@@ -175,6 +175,44 @@ test('status lifecycles apply each answer once, even under concurrency', async (
     }
   });
 
+  await t.test('facility issue: a restored issue is closed to every change', async () => {
+    const other = await prisma.user.create({ data: { email: email('tech'), role: 'STUDIO_ADMIN' } });
+    const issue = await prisma.maintenanceIssue.create({
+      data: {
+        studio_id: studio.id, room_id: room.id, reported_by: admin.id, symptom: 'Dead channel', severity: 'MINOR',
+        status: 'RESTORED', assigned_to: admin.id, resolved_at: new Date(Date.now() - 60_000), verified_by: admin.id,
+      },
+    });
+    const before = await prisma.maintenanceIssue.findUniqueOrThrow({ where: { id: issue.id } });
+    const attempts = [
+      { status: 'ASSIGNED' }, { status: 'ASSIGNED', assigned_to: other.id }, { status: 'REPAIRING' },
+      { status: 'VERIFY' }, { status: 'RESTORED' }, { status: 'REPAIRING', notes: 'It came back' },
+    ];
+    for (const body of attempts) {
+      const refused = await advance(issue.id, body);
+      assert.equal(refused.status, 409, `${JSON.stringify(body)} out of RESTORED`);
+      assert.match(refused.body.error ?? refused.body.message ?? JSON.stringify(refused.body), /new issue/i);
+    }
+    assert.deepEqual(await prisma.maintenanceIssue.findUniqueOrThrow({ where: { id: issue.id } }), before, 'nothing changed');
+  });
+
+  await t.test('facility issue: open issues still skip, step back and reassign', async () => {
+    const other = await prisma.user.create({ data: { email: email('tech'), role: 'STUDIO_ADMIN' } });
+    const skipped = await facilityIssue();
+    assert.equal((await advance(skipped.id, { status: 'RESTORED' })).status, 200, 'REPORTED straight to RESTORED');
+
+    const stepped = await facilityIssue('VERIFY');
+    const back = await advance(stepped.id, { status: 'REPAIRING' });
+    assert.equal(back.status, 200, 'VERIFY back to REPAIRING');
+    assert.equal(back.body.status, 'REPAIRING');
+
+    const assigned = await facilityIssue();
+    assert.equal((await advance(assigned.id, { status: 'ASSIGNED' })).status, 200);
+    const reassigned = await advance(assigned.id, { status: 'ASSIGNED', assigned_to: other.id });
+    assert.equal(reassigned.status, 200, 'reassigning to someone else');
+    assert.equal(reassigned.body.assigned_to, other.id);
+  });
+
   // ─── Studio Circle consent ────────────────────────────────────────────────
   const circleMember = async (consent_status: 'ELIGIBLE' | 'REQUESTED' = 'ELIGIBLE') => {
     const artist = await artistUser('circle');
@@ -222,6 +260,29 @@ test('status lifecycles apply each answer once, even under concurrency', async (
     assert.equal((await answerCircle(member.id, artist, { action: 'decline' })).status, 200, 'a withdrawn membership can be kept private');
     assert.equal((await answerCircle(member.id, artist, { action: 'decline' })).status, 409, 'declining again');
     assert.equal((await prisma.studioCircleMember.findUniqueOrThrow({ where: { id: member.id } })).consent_status, 'DECLINED');
+  });
+
+  await t.test('Studio Circle: a studio may not ask again after the artist declined or withdrew', async () => {
+    const declined = await circleMember();
+    assert.equal((await answerCircle(declined.member.id, declined.artist, { action: 'decline' })).status, 200);
+
+    const withdrawn = await circleMember('REQUESTED');
+    assert.equal((await answerCircle(withdrawn.member.id, withdrawn.artist, ACCEPT)).status, 200);
+    assert.equal((await answerCircle(withdrawn.member.id, withdrawn.artist, { action: 'withdraw' })).status, 200);
+
+    for (const [label, { artist, member }] of [['DECLINED', declined], ['WITHDRAWN', withdrawn]] as const) {
+      const before = await prisma.studioCircleMember.findUniqueOrThrow({ where: { id: member.id } });
+      assert.equal(before.consent_status, label);
+      const asked = await invite(member.id);
+      assert.equal(asked.status, 409, `request after ${label}`);
+      assert.match(JSON.stringify(asked.body), /only the artist/i);
+      assert.equal(await invitations(artist.id), 0, `no invitation after ${label}`);
+      assert.deepEqual(await prisma.studioCircleMember.findUniqueOrThrow({ where: { id: member.id } }), before, `${label} unchanged`);
+
+      const joined = await answerCircle(member.id, artist, ACCEPT);
+      assert.equal(joined.status, 200, `the artist can still join after ${label}`);
+      assert.equal(joined.body.consent_status, 'ACCEPTED');
+    }
   });
 
   await t.test('Studio Circle: answers sent together produce one decision', async () => {

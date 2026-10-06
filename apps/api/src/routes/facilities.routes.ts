@@ -176,7 +176,12 @@ facilitiesRouter.patch('/issues/:id', attachStudioScope, requireRole('STUDIO_ADM
     const data = UpdateIssueSchema.parse(req.body);
     const existing = await prisma.maintenanceIssue.findFirst({ where: { id: req.params.id, studio_id: req.studioId } });
     if (!existing) throw new AppError('Issue not found', 404);
-    // Every move today's console allows stays allowed, except repeating the
+    // Owner decision 2026-10-06: RESTORED is terminal. A recurrence is a new
+    // issue, so the restored one keeps its resolution and verifier.
+    if (existing.status === 'RESTORED') {
+      throw new AppError('This issue is restored and closed. Report a recurrence as a new issue.', 409);
+    }
+    // Every other move the console allows stays allowed, except repeating the
     // state the issue is already in (only a reassignment to someone else is a
     // real change within ASSIGNED). The write is guarded on the status read,
     // so two staff advancing the same issue together cannot both apply — one

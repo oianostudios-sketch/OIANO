@@ -94,6 +94,11 @@ studioCircleRouter.post('/:id/request', requireRole('STUDIO_ADMIN'), attachStudi
     if (!member) throw new AppError('Circle member not found', 404);
     if (member.consent_status === 'ACCEPTED') return res.json(member);
     if (member.consent_status === 'REQUESTED') throw new AppError('Consent has already been requested', 409);
+    // Owner decision 2026-10-06: once the artist has declined or withdrawn, the
+    // studio may not ask again. Only the artist can reopen it, from their side.
+    if (member.consent_status === 'DECLINED' || member.consent_status === 'WITHDRAWN') {
+      throw new AppError('The artist chose to keep this private. Only the artist can join the Circle now.', 409);
+    }
     // Guard the write on the status just read: otherwise a request racing the
     // artist's own answer could overwrite it, and two requests sent together
     // would each notify the artist.
