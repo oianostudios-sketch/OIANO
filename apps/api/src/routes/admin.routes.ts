@@ -6,9 +6,10 @@ import { AppError } from '../lib/errors';
 import { publishBookingUpdate, publishStudioAnnouncement } from '../services/liveUpdates';
 import { attachStudioScope } from '../middleware/studioScope.middleware';
 import { Prisma } from '@prisma/client';
-import { recordBookingPayment, recordStudioCollectedCash } from '../lib/financialLedger';
+import { CASH_PLATFORM_FEE_BPS, recordBookingPayment, recordStudioCollectedCash } from '../lib/financialLedger';
 import { transitionBookingStatus } from '../lib/bookingTransitions';
 import { writeAdminAudit } from '../lib/adminAudit';
+import { studioDate, studioDateBounds } from '../lib/studioClock';
 export const adminRouter = Router();
 
 // Artist-facing routes, mounted before adminRouter, whose role check would refuse
@@ -163,18 +164,17 @@ const RunsheetQuery = z.object({
 adminRouter.get('/runsheet', async (req, res, next) => {
   try {
     const { date } = RunsheetQuery.parse(req.query);
-    const target = date ? new Date(date) : new Date();
-    const dayStart = new Date(target);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(target);
-    dayEnd.setHours(23, 59, 59, 999);
-
     const studio = (req as any).studio;
+
+    // The studio's own day, as on the engineer runsheet (C29).
+    const day = date ?? studioDate(new Date(), studio.timezone);
+    const { start: dayStart, end: dayEnd } = studioDateBounds(day, studio.timezone);
 
     const bookings = await prisma.booking.findMany({
       where: {
         studio_id: studio.id,
-        starts_at: { gte: dayStart, lte: dayEnd },
+        starts_at: { lt: dayEnd },
+        ends_at: { gt: dayStart },
         status: { notIn: ['CANCELLED', 'NO_SHOW'] },
       },
       include: {
@@ -235,7 +235,8 @@ adminRouter.get('/runsheet', async (req, res, next) => {
     const totalOutstanding = totalExpected - totalPaid;
 
     res.json({
-      date: dayStart.toISOString().split('T')[0],
+      date: day,
+      timezone: studio.timezone,
       studio_name: studio.name,
       generated_at: new Date().toISOString(),
       revenue: { expected: totalExpected, paid: totalPaid, outstanding: totalOutstanding },
@@ -344,10 +345,11 @@ adminRouter.post('/walkin', async (req, res, next) => {
 // ── POST /api/admin/bookings/:id/cash-payment — record cash taken at the desk ──
 // A walk-in pays cash, and until this route nothing could record it: PAID was
 // written only by the wallet, the Stripe webhook and payouts (C26). The amount is
-// the booking's stored total, never the caller's. The payment posts to the ledger
-// exactly as every booking payment does, and because the studio is holding the
-// cash, the cash it kept is set against what OIANO owes it (financialLedger.ts,
-// recordStudioCollectedCash), so a payout never pays it again.
+// the booking's stored total, never the caller's. The payment posts through the
+// booking-payment posting with no platform fee (owner decision, 2026-10-06), and
+// because the studio is holding the cash, the cash it kept is set against what
+// OIANO owes it (financialLedger.ts, recordStudioCollectedCash): the studio's
+// payable is unchanged and a payout never pays the cash again.
 //
 // Permission: the studio membership's MANAGE_BOOKINGS capability, or a
 // STUDIO_ADMIN membership with no capabilities at all (the legacy owner, as in
@@ -409,7 +411,7 @@ adminRouter.post('/bookings/:id/cash-payment', async (req, res, next) => {
         }
       }
 
-      const posted = await recordBookingPayment(tx, { paymentId, provider: 'cash', amountUsd, platformFeeBps: studio.platform_fee_bps, artistId: booking.artist_id, studioId: studio.id, bookingId: booking.id });
+      const posted = await recordBookingPayment(tx, { paymentId, provider: 'cash', amountUsd, platformFeeBps: CASH_PLATFORM_FEE_BPS, artistId: booking.artist_id, studioId: studio.id, bookingId: booking.id });
       await recordStudioCollectedCash(tx, { paymentId, amountUsd, studioId: studio.id, bookingId: booking.id });
 
       // Payment confirms a booking only while it is waiting to be confirmed (A03).

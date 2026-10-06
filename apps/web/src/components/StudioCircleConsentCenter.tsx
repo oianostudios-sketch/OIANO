@@ -86,7 +86,7 @@ export default function StudioCircleConsentCenter({ artistName, avatarUrl }: { a
         <div className="ccc-list">{memberships.map(member => {
           const draft = drafts[member.id] ?? { visibility: 'STAGE_NAME', showSessionCount: false, showProjects: false };
           const accepted = member.consent_status === 'ACCEPTED';
-          const canRespond = ['ELIGIBLE', 'REQUESTED', 'DECLINED', 'WITHDRAWN'].includes(member.consent_status);
+          const canRespond = ['ELIGIBLE', 'REQUESTED', 'WITHDRAWN'].includes(member.consent_status);
           return <article key={member.id} className="ccc-card">
             <div className="ccc-card-top"><span className="ccc-studio-icon"><Building2 size={18} /></span><div className="ccc-studio"><strong>{member.studio.name}</strong><span>{member.studio.address ?? 'Verified OIANO studio'} · {member.session_count} completed session{member.session_count === 1 ? '' : 's'}</span></div><span className={`ccc-status ${accepted ? 'accepted' : member.consent_status === 'REQUESTED' ? 'pending' : 'private'}`}>{accepted ? 'Visible' : member.consent_status === 'REQUESTED' ? 'Invitation' : 'Private'}</span></div>
             <div className="ccc-preview">

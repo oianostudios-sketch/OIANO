@@ -30,13 +30,18 @@ export async function recordBookingPayment(tx: Tx, input: { paymentId: string; p
   return postFinancialTransaction(tx, { source_type: 'BOOKING_PAYMENT', source_id: input.paymentId, description: `Booking ${input.bookingId} payment`, metadata: { booking_id: input.bookingId, provider: input.provider, platform_fee_bps: input.platformFeeBps }, lines });
 }
 
-// Cash a studio took at its own desk for a booking. The payment itself posts as
-// every booking payment does (recordBookingPayment), so the studio is owed its net
-// and OIANO its fee. But the studio, not OIANO, is holding the money, so OIANO must
-// not pay that net out again: the cash the studio kept is set against what it is
-// owed. Net effect on the payable is minus the platform fee, which the studio now
-// owes OIANO out of its next payout. Posted once per payment, in the same database
-// transaction as the payment.
+// OIANO takes no platform fee on cash a studio collects at its own desk (owner
+// decision, 2026-10-06). Card and wallet payments keep the studio's own rate.
+export const CASH_PLATFORM_FEE_BPS = 0;
+
+// Cash a studio took at its own desk for a booking. The payment itself posts
+// through recordBookingPayment, with CASH_PLATFORM_FEE_BPS as its fee, so the gross
+// is credited to the studio's payable and nothing to platform revenue. But the
+// studio, not OIANO, is holding the money, so OIANO must not pay it out again: the
+// cash the studio kept is set against what it is owed. The two postings net to
+// zero on both STUDIO_PAYABLE and CASH_CLEARING; the studio is owed nothing and
+// owes nothing for it. Posted once per payment, in the same database transaction
+// as the payment.
 export async function recordStudioCollectedCash(tx: Tx, input: { paymentId: string; amountUsd: number; studioId: string; bookingId: string }) {
   const gross = bookingAllocation(input.amountUsd, 0).gross;
   return postFinancialTransaction(tx, { source_type: 'STUDIO_COLLECTED_CASH', source_id: input.paymentId, description: `Booking ${input.bookingId} cash kept by studio`, metadata: { booking_id: input.bookingId, provider: 'cash' }, lines: [

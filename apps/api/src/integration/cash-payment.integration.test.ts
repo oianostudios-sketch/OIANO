@@ -51,8 +51,9 @@ test('a studio records a cash payment once, through the ledger', async (t) => {
   const database = new URL(process.env.DATABASE_URL!);
   assert.match(`${database.pathname}/${database.searchParams.get('schema') ?? ''}`, /(^|[/_-])test([/_-]|$)/i);
 
-  const [{ app }, { prisma }, payouts, { reconcileFinancialLedger }] = await Promise.all([
+  const [{ app }, { prisma }, payouts, { reconcileFinancialLedger }, { postFinancialTransaction }] = await Promise.all([
     import('../app'), import('../lib/prisma'), import('../lib/studioPayout'), import('../lib/financialReconciliation'),
+    import('../lib/financialLedger'),
   ]);
   const barrierUrl = new URL(process.env.DATABASE_URL!);
   barrierUrl.searchParams.set('connection_limit', '3');
@@ -149,9 +150,17 @@ test('a studio records a cash payment once, through the ledger', async (t) => {
   const sum = (entries: Array<{ account_code: string; direction: string; amount_usd: unknown }>, account: string, direction: string) =>
     Math.round(entries.filter((e) => e.account_code === account && e.direction === direction).reduce((s, e) => s + Number(e.amount_usd), 0) * 100) / 100;
 
-  await t.test('a walk-in paid in cash is recorded as paid, and the ledger balances with the studio holding the cash', async () => {
-    const at = await makeStudio('walk-in-paid');
+  await t.test('a walk-in paid in cash is recorded as paid, earns OIANO no fee, and leaves the studio\'s payable as it was', async () => {
+    const at = await makeStudio('walk-in-paid'); // a 10% studio: the fee applies to card and wallet, not cash
     const owner = await staffAt(at.studio.id, []); // a legacy owner: STUDIO_ADMIN with no capabilities
+    // Owed $40 from earlier card income, so a payout has something to pay and the
+    // cash can be seen not to change it.
+    await postFinancialTransaction(prisma, {
+      source_type: 'INTEGRATION_PAYABLE', source_id: unique(at.studio.id), description: 'Integration payable', lines: [
+        { account_code: 'CASH_CLEARING', direction: 'DEBIT', amount_usd: 40 },
+        { account_code: 'STUDIO_PAYABLE', direction: 'CREDIT', amount_usd: 40, owner_type: 'STUDIO', owner_id: at.studio.id },
+      ],
+    });
     const booking = await walkIn(at, owner, 2);
     assert.equal(Number(booking.total_usd), 100);
 
@@ -168,10 +177,11 @@ test('a studio records a cash payment once, through the ledger', async (t) => {
     assert.ok(payment.paid_at, 'with the time it was paid');
 
     const posted = transactions.find((tx) => tx.source_type === 'BOOKING_PAYMENT');
-    assert.ok(posted, 'the payment posts as every booking payment does');
+    assert.ok(posted, 'the payment posts through the booking-payment posting');
     assert.equal(sum(posted!.entries, 'CASH_CLEARING', 'DEBIT'), 100);
-    assert.equal(sum(posted!.entries, 'STUDIO_PAYABLE', 'CREDIT'), 90, 'the studio is credited its net');
-    assert.equal(sum(posted!.entries, 'PLATFORM_REVENUE', 'CREDIT'), 10, 'and OIANO its fee');
+    assert.equal(sum(posted!.entries, 'STUDIO_PAYABLE', 'CREDIT'), 100, 'the gross is the studio\'s');
+    assert.equal(posted!.entries.filter((e) => e.account_code === 'PLATFORM_REVENUE').length, 0, 'OIANO earns no fee on cash (owner decision, 2026-10-06)');
+    assert.equal((posted!.metadata as any).platform_fee_bps, 0);
     assert.ok(posted!.entries.filter((e) => e.account_code === 'STUDIO_PAYABLE').every((e) => e.owner_id === at.studio.id));
 
     const kept = transactions.find((tx) => tx.source_type === 'STUDIO_COLLECTED_CASH');
@@ -184,13 +194,17 @@ test('a studio records a cash payment once, through the ledger', async (t) => {
       const credit = tx.entries.filter((e) => e.direction === 'CREDIT').reduce((s, e) => s + Number(e.amount_usd), 0);
       assert.equal(Math.round(debit * 100), Math.round(credit * 100), `${tx.source_type} balances`);
     }
+    const all = transactions.flatMap((tx) => tx.entries);
+    for (const account of ['STUDIO_PAYABLE', 'CASH_CLEARING']) {
+      assert.equal(sum(all, account, 'DEBIT'), sum(all, account, 'CREDIT'), `the cash nets to zero on ${account}`);
+    }
     const reconciliation = await reconcileFinancialLedger();
     assert.ok(!reconciliation.missing_payment_entries.includes(payment.id), 'reconciliation finds the payment on the ledger');
     assert.ok(!reconciliation.unbalanced_transactions.some((tx) => transactions.some((own) => own.id === tx.id)), 'and finds nothing unbalanced in it');
 
-    assert.equal((await payouts.studioPayable(at.studio.id)).amountUsd, -10, 'the studio holds the cash and owes OIANO its fee');
-    await assert.rejects(payouts.reserveStudioPayout({ studioId: at.studio.id, requestedBy: 'integration' }), /Nothing is currently payable/,
-      'so a payout never pays the studio the cash it already has');
+    assert.equal((await payouts.studioPayable(at.studio.id)).amountUsd, 40, 'the studio is owed what it was before: it holds the cash, and owes nothing for it');
+    const { outstanding } = await payouts.reserveStudioPayout({ studioId: at.studio.id, requestedBy: 'integration' });
+    assert.equal(outstanding, 40, 'a payout pays the earlier income, never the cash the studio already has');
 
     assert.equal(audits.length, 1, 'the recording is audited');
     assert.equal(audits[0].actor_id, owner.id);
@@ -245,7 +259,7 @@ test('a studio records a cash payment once, through the ledger', async (t) => {
       assert.equal(transactions.filter((tx) => tx.source_type === 'BOOKING_PAYMENT').length, 1, 'one ledger posting of the payment');
       assert.equal(transactions.filter((tx) => tx.source_type === 'STUDIO_COLLECTED_CASH').length, 1, 'and one of the cash kept');
       assert.equal(audits.length, 1, 'one audit entry');
-      assert.equal((await payouts.studioPayable(at.studio.id)).amountUsd, -5, 'the payable moved once');
+      assert.equal((await payouts.studioPayable(at.studio.id)).amountUsd, 0, 'and the studio\'s payable nets to zero');
     });
   }
 

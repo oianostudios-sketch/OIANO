@@ -25,16 +25,30 @@ so, and the ledger never saw the money.
 - **Concurrency.** The booking row is locked `FOR UPDATE` before the payment is read. The
   claim of an existing row only matches `UNPAID` with no checkout reference, and
   `Payment.booking_id` is unique. Ledger posting is idempotent on the payment id.
-- **Ledger** (`apps/api/src/lib/financialLedger.ts`). The payment posts with the existing
-  `recordBookingPayment` (provider `cash`), in the same database transaction, so the studio
-  is credited its net and OIANO its fee exactly as for a card or wallet payment. That
-  alone would be untrue, though: the studio, not OIANO, holds the cash, and a payout would
-  then send the studio its net a second time out of OIANO's money. So a second posting,
-  the new `recordStudioCollectedCash`
-  (source `STUDIO_COLLECTED_CASH`, keyed on the payment id), debits `STUDIO_PAYABLE` and
-  credits `CASH_CLEARING` by the gross. The net effect is that `CASH_CLEARING` is
-  unchanged, `PLATFORM_REVENUE` gains the fee, and the studio's payable falls by the fee.
-  The studio owes OIANO its fee, which comes out of its next card or wallet payout.
+- **No platform fee on cash (owner decision, 2026-10-06).** OIANO takes no fee on cash a
+  studio collects for a walk-in. `CASH_PLATFORM_FEE_BPS = 0` in
+  `apps/api/src/lib/financialLedger.ts` is the fee the cash path posts with. Card and
+  wallet payments, and each studio's `platform_fee_bps`, are unchanged.
+- **Ledger** (`apps/api/src/lib/financialLedger.ts`). Both postings run in the same
+  database transaction as the payment:
+  - The payment posts with the existing `recordBookingPayment` (provider `cash`) at that
+    zero fee. With no fee, `bookingAllocation` gives the whole gross to the studio, and
+    `recordBookingPayment` writes no line for a zero amount, so no `PLATFORM_REVENUE` line
+    exists.
+  - That alone would be untrue: the studio, not OIANO, holds the cash, and a payout would
+    send it the gross a second time out of OIANO's money. So the new
+    `recordStudioCollectedCash` (source `STUDIO_COLLECTED_CASH`, keyed on the payment id)
+    debits `STUDIO_PAYABLE` and credits `CASH_CLEARING` by the gross.
+
+  For a $100 cash walk-in at a studio whose card rate is 10%:
+
+  | Transaction | Debit | Credit |
+  |---|---|---|
+  | `BOOKING_PAYMENT` | `CASH_CLEARING` 100 | `STUDIO_PAYABLE` 100 |
+  | `STUDIO_COLLECTED_CASH` | `STUDIO_PAYABLE` 100 | `CASH_CLEARING` 100 |
+
+  Each transaction balances. `STUDIO_PAYABLE` and `CASH_CLEARING` each net to zero: the
+  studio is owed nothing and owes nothing for the cash.
 - **Permission (a choice the owner can revisit).** Recording requires the studio
   membership's `MANAGE_BOOKINGS` capability, or a `STUDIO_ADMIN` membership with no
   capabilities at all (the legacy owner, the pattern in `studio-policy.routes.ts`). No
@@ -46,9 +60,10 @@ so, and the ledger never saw the money.
 all passing on a fresh local database. They cover the following:
 
 - A walk-in is recorded as paid. The payment is `cash`, `PAID`, for the booking total.
-  Both ledger transactions balance, reconciliation finds the payment on the ledger, and
-  the studio's payable is −10 on a $100 booking at 10%. A payout is refused, and the
-  audit entry is written.
+  On a $100 booking at a 10% studio, no `PLATFORM_REVENUE` line is posted. Both ledger
+  transactions balance, `STUDIO_PAYABLE` and `CASH_CLEARING` net to zero, and
+  reconciliation finds the payment on the ledger. A studio already owed $40 is still owed
+  $40, and a payout reserves exactly $40. The audit entry is written.
 - A pending booking is confirmed by the payment.
 - A second recording is refused with 409 and changes nothing.
 - Two concurrent recordings, forced through the money-integrity barrier, produce one 201
@@ -66,8 +81,10 @@ each time, and `cmp` confirmed it byte-identical. Each mutation failed its inten
 
 - Without the ledger posting, 5 subtests fail, including the walk-in balance test and both
   races.
-- Without the cash-kept posting, the walk-in test fails (payable +90, payout reserved), and
-  so do both races.
+- Without the cash-kept posting, the walk-in test fails (the cash would become payable),
+  and so do both races.
+- With the studio's own 10% fee on cash, the walk-in test fails (the studio is credited
+  90, not 100), and so do both races (payable −5, not 0).
 - Accepting a client amount fails the amount test.
 - Without the closed-booking refusal, the cancelled/no-show test fails.
 - Without the row lock and with an unconditional claim, the walk-in race fails with two
@@ -75,13 +92,13 @@ each time, and `cmp` confirmed it byte-identical. Each mutation failed its inten
 - Without the studio scope in the lookup, the other-studio test fails.
 - Without the permission check, the 403 test fails.
 
-Both typechecks pass. `npm test` passes: API unit 102/102, intelligence 31/31 and web
-85/85. `npm run test:integration:local` passes 125/125, which is 114 before plus the 11
-here. `npm run build` passes, and `npm run security:secrets` passes over 449 files.
+These results are after merging `origin/main` (#21–#23). Both typechecks pass. `npm test`
+passes: API unit 102/102, intelligence 31/31 and web 88/88.
+`npm run test:integration:local` passes 148/148, including the 11 here. `npm run build`
+passes, and `npm run security:secrets` passes over 461 files.
 
 **Not exercised.** The runsheet button was typechecked but not driven in a browser. Live
-updates after a pending booking is confirmed are not asserted. A cash payment on a studio
-whose `platform_fee_bps` is 0 posts only the gross pair, and no test covers it.
+updates after a pending booking is confirmed are not asserted.
 
 **Observed, not changed.**
 
@@ -89,9 +106,5 @@ whose `platform_fee_bps` is 0 posts only the gross pair, and no test covers it.
   one can claim. This is the Identity half of C26.
 - A cash payment has no refund path. The refund handling is Stripe's webhook, matched by
   `payment_intent_id`, which a cash payment never has.
-- Charging OIANO's platform fee on cash taken at the desk is a commercial position. It
-  follows from posting cash like every other booking payment, and the owner may decide
-  otherwise. A studio whose payable goes negative this way cannot be paid out until card
-  or wallet income covers the fee: `reserveStudioPayout` refuses at zero or below.
 - The walk-in route's own conflict check misses a booking that encloses the new one. It
   checks only the edges, as the reschedule route once did.

@@ -145,8 +145,10 @@ test('invitations expire, and the Weave backfill is exact and idempotent', async
     const late = await artist('a08');
     const older = await book(late.artist!.id, 'COMPLETED', 20);
     const newer = await book(late.artist!.id, 'COMPLETED', 10);
-    // updated_at says when a booking was last edited, not when the work happened.
-    await prisma.booking.update({ where: { id: older.id }, data: { notes: 'Edited long after the session' } });
+    // updated_at says when a booking was last edited, not when the work happened. The edit
+    // is stamped a minute after the newer booking was written: done back to back, both
+    // writes can land in the same millisecond on a fast machine, and the fixture would not hold.
+    await prisma.booking.update({ where: { id: older.id }, data: { notes: 'Edited long after the session', updated_at: new Date(newer.updated_at.getTime() + 60_000) } });
     const edited = await prisma.booking.findUniqueOrThrow({ where: { id: older.id } });
     assert.ok(edited.updated_at > newer.updated_at, 'the fixture holds: the older booking was edited most recently');
 
