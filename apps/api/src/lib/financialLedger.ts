@@ -30,6 +30,26 @@ export async function recordBookingPayment(tx: Tx, input: { paymentId: string; p
   return postFinancialTransaction(tx, { source_type: 'BOOKING_PAYMENT', source_id: input.paymentId, description: `Booking ${input.bookingId} payment`, metadata: { booking_id: input.bookingId, provider: input.provider, platform_fee_bps: input.platformFeeBps }, lines });
 }
 
+// OIANO takes no platform fee on cash a studio collects at its own desk (owner
+// decision, 2026-10-06). Card and wallet payments keep the studio's own rate.
+export const CASH_PLATFORM_FEE_BPS = 0;
+
+// Cash a studio took at its own desk for a booking. The payment itself posts
+// through recordBookingPayment, with CASH_PLATFORM_FEE_BPS as its fee, so the gross
+// is credited to the studio's payable and nothing to platform revenue. But the
+// studio, not OIANO, is holding the money, so OIANO must not pay it out again: the
+// cash the studio kept is set against what it is owed. The two postings net to
+// zero on both STUDIO_PAYABLE and CASH_CLEARING; the studio is owed nothing and
+// owes nothing for it. Posted once per payment, in the same database transaction
+// as the payment.
+export async function recordStudioCollectedCash(tx: Tx, input: { paymentId: string; amountUsd: number; studioId: string; bookingId: string }) {
+  const gross = bookingAllocation(input.amountUsd, 0).gross;
+  return postFinancialTransaction(tx, { source_type: 'STUDIO_COLLECTED_CASH', source_id: input.paymentId, description: `Booking ${input.bookingId} cash kept by studio`, metadata: { booking_id: input.bookingId, provider: 'cash' }, lines: [
+    { account_code: 'STUDIO_PAYABLE', direction: 'DEBIT', amount_usd: gross, owner_type: 'STUDIO', owner_id: input.studioId },
+    { account_code: 'CASH_CLEARING', direction: 'CREDIT', amount_usd: gross },
+  ] });
+}
+
 export async function recordWalletTopUp(tx: Tx, input: { topUpId: string; walletId: string; amountUsd: number }) {
   return postFinancialTransaction(tx, { source_type: 'WALLET_TOPUP', source_id: input.topUpId, description: 'Wallet top-up', lines: [
     { account_code: 'CASH_CLEARING', direction: 'DEBIT', amount_usd: input.amountUsd },
