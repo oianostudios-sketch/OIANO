@@ -1144,6 +1144,7 @@ export default function PulseDashboard() {
                             </button>
                           )}
                           {member.consent_status === 'REQUESTED' && <em>Consent requested</em>}
+                          {(member.consent_status === 'DECLINED' || member.consent_status === 'WITHDRAWN') && <em>Kept private by the artist</em>}
                           {accepted && <em className="accepted">Visible by consent</em>}
                         </article>
                       );
