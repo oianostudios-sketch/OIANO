@@ -19,7 +19,7 @@ import { paymentsRouter } from './routes/payments.routes';
 import { payoutsRouter } from './routes/payouts.routes';
 import { contextRouter } from './routes/context.routes';
 import { invitationsRouter } from './routes/invitations.routes';
-import { adminRouter, creditRequestRouter } from './routes/admin.routes';
+import { adminRouter, artistAdminRouter } from './routes/admin.routes';
 import { artistsRouter } from './routes/artists.routes';
 import { webhooksRouter } from './routes/webhooks.routes';
 import { studioClockRouter } from './routes/studio-clock.routes';
@@ -46,6 +46,7 @@ import { networkMetricsRouter } from './routes/network-metrics.routes';
 import { networkPulseRouter } from './routes/network-pulse.routes';
 import { contributionsRouter } from './routes/contributions.routes';
 import { studioPolicyRouter } from './routes/studio-policy.routes';
+import { studioSetupRouter } from './routes/studio-setup.routes';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env'), override: process.env.NODE_ENV !== 'test' });
 
@@ -53,6 +54,11 @@ validateEnv();
 initSentry();
 
 const app = express();
+// Behind a proxy the socket address is the proxy's own, so Express is told how
+// many hops to trust and `req.ip` becomes the address the proxy reports rather
+// than a header the caller wrote. One hop matches today's deployment
+// (render.yaml); TRUST_PROXY_HOPS changes it if another proxy is put in front.
+app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS ?? 1));
 const developmentOrigins = process.env.NODE_ENV === 'production' ? [] : [
   'http://localhost:3000', 'http://localhost:3001',
   'http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175',
@@ -89,7 +95,13 @@ app.use(cors({
 // a burst of concurrent traffic (a live event, a scripted retry storm)
 // shouldn't be able to take the whole process down through an endpoint
 // nobody thought to protect individually.
-app.use(rateLimit({ max: 300, windowMs: 60_000, message: 'Too many requests — please slow down.' }));
+//
+// Counted per caller rather than per address (lib/rateLimitKey.ts). Everyone in
+// one studio, office or venue reaches the API from a single public address, and
+// counting them as one caller is how a full room locks itself out. Anonymous
+// callers still share their address, so this ceiling is sized for a room of
+// them rather than for one person.
+app.use(rateLimit({ max: 600, windowMs: 60_000, message: 'Too many requests — please slow down.' }));
 
 // Static uploads — local disk fallback for dev (R2 replaces this in production)
 // When R2_ACCOUNT_ID is set, files are served directly from R2's public URL
@@ -128,6 +140,7 @@ app.use('/api/passport/stats',           statsRouter);
 app.use('/api/studio/pulse',             pulseRouter);
 app.use('/api/studio',                   studioRouter);
 app.use('/api/studio-policies',          studioPolicyRouter);
+app.use('/api/studio-setup',             studioSetupRouter);
 app.use('/api/availability',             availabilityRouter);
 app.use('/api/bookings',                 bookingsRouter);
 app.use('/api/bookings/:id/messages',    messagesRouter);
@@ -137,7 +150,7 @@ app.use('/api/payments',                 paymentsRouter);
 app.use('/api/payouts',                  payoutsRouter);
 app.use('/api/context',                  contextRouter);
 app.use('/api/invitations',              invitationsRouter);
-app.use('/api/admin',                    creditRequestRouter);
+app.use('/api/admin',                    artistAdminRouter);
 app.use('/api/admin',                    adminRouter);
 app.use('/api/artists/discover',         discoverRouter);  // must be before /:id catch-all
 // filesRouter must be mounted before artistsRouter: artistsRouter.use(authenticate)

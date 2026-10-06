@@ -47,13 +47,29 @@ function startOfLocalDay(year: number, month: number, day: number, timeZone: str
   return new Date(asUtc - zoneOffset(guess, timeZone));
 }
 
+/**
+ * When a named calendar day (YYYY-MM-DD) starts and ends in the studio's zone.
+ * A booking belongs to the day when it overlaps [start, end), so a session
+ * running across midnight belongs to both days it touches.
+ */
+export function studioDateBounds(date: string, timeZone: string): { start: Date; end: Date } {
+  const [year, month, day] = date.split('-').map(Number);
+  return {
+    start: startOfLocalDay(year, month, day, timeZone),
+    end: startOfLocalDay(year, month, day + 1, timeZone),
+  };
+}
+
+/** The studio's calendar date at a moment, as YYYY-MM-DD. */
+export function studioDate(moment: Date, timeZone: string): string {
+  const local = zonedParts(moment, timeZone);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${String(local.year).padStart(4, '0')}-${pad(local.month)}-${pad(local.day)}`;
+}
+
 /** When the studio's current day starts and ends, as instants. */
 export function studioDayBounds(now: Date, timeZone: string): { start: Date; end: Date } {
-  const today = zonedParts(now, timeZone);
-  return {
-    start: startOfLocalDay(today.year, today.month, today.day, timeZone),
-    end: startOfLocalDay(today.year, today.month, today.day + 1, timeZone),
-  };
+  return studioDateBounds(studioDate(now, timeZone), timeZone);
 }
 
 /** Minutes past the studio's midnight at a moment. */

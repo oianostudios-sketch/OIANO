@@ -12,6 +12,7 @@ import { getAudioUpload } from '../lib/audioUpload';
 import { generatePassportCode } from '../lib/passport';
 import { auditSuccessfulMutation } from '../lib/adminAudit';
 import { ownershipSharesAreValid } from '../lib/resourceAuthorization';
+import { contributionInvitationUrl, newContributionInvitation } from '../lib/contributionInvitation';
 import { createNotification } from './notifications.routes';
 
 export const producerRouter = Router();
@@ -212,9 +213,11 @@ producerRouter.post('/projects/:id/participants', requireRole('PRODUCER'), async
     });
     if (duplicate) throw new AppError('This participant already has that role', 409);
 
-    const matchedUser = data.email
-      ? await db.user.findFirst({ where: { email: { equals: data.email, mode: 'insensitive' } }, select: { id: true } })
-      : null;
+    // The invitation is claimed with a link the lead passes on, never matched to
+    // an account by email: signup does not prove an address belongs to the person
+    // who registered it, so whoever registered an invited address could otherwise
+    // join the project.
+    const invitation = data.email ? newContributionInvitation() : null;
     const participant = await db.projectParticipant.create({
       data: {
         project_id: project.id,
@@ -222,20 +225,43 @@ producerRouter.post('/projects/:id/participants', requireRole('PRODUCER'), async
         email: data.email || null,
         role: data.role,
         added_by: req.userId,
-        status: data.email ? 'INVITED' : 'ACTIVE',
-        participant_ref_id: matchedUser?.id ?? null,
-        participant_type: data.email ? 'INVITED' : 'EXTERNAL',
+        status: invitation ? 'INVITED' : 'ACTIVE',
+        participant_type: invitation ? 'INVITED' : 'EXTERNAL',
+        invitations: invitation
+          ? { create: { token_hash: invitation.token_hash, invited_by: req.userId, expires_at: invitation.expires_at } }
+          : undefined,
       },
     });
-    if (participant.participant_ref_id) await createNotification({
-      user_id: participant.participant_ref_id,
-      type: 'CONTRIBUTION_INVITATION', category: 'PROJECT', priority: 'HIGH',
-      title: `Contribution invitation · ${project.title}`,
-      body: `You were invited as ${data.role.toLowerCase().replace(/_/g, ' ')}. Review the role before joining the project.`,
-      payload: { project_id: project.id, participant_id: participant.id },
-      action_url: '/contributions',
+    // The link is returned once. Only its hash is kept, so it cannot be recovered
+    // later; the lead sends a new one instead.
+    res.status(201).json(invitation
+      ? { ...participant, invite_url: contributionInvitationUrl(invitation.token), invite_expires_at: invitation.expires_at }
+      : participant);
+  } catch (err) { next(err); }
+});
+
+// A new link for an invitation nobody has claimed, because the first was lost,
+// went to the wrong person or expired. Any earlier link stops working.
+producerRouter.post('/projects/:id/participants/:participantId/invitation', requireRole('PRODUCER'), async (req: any, res, next) => {
+  try {
+    const producer = await db.producer.findUnique({ where: { user_id: req.userId } });
+    if (!producer) throw new AppError('Producer not found', 404);
+    const participant = await db.projectParticipant.findFirst({
+      where: { id: req.params.participantId, project_id: req.params.id, project: { producer_id: producer.id, is_active: true } },
     });
-    res.status(201).json(participant);
+    if (!participant) throw new AppError('Project participant not found', 404);
+    if (participant.status !== 'INVITED' || participant.participant_ref_id) {
+      throw new AppError('Only an invitation nobody has claimed can be sent again', 409);
+    }
+
+    const invitation = newContributionInvitation();
+    await db.$transaction([
+      db.contributionInvitation.updateMany({ where: { participant_id: participant.id, status: 'PENDING' }, data: { status: 'REVOKED' } }),
+      db.contributionInvitation.create({
+        data: { participant_id: participant.id, token_hash: invitation.token_hash, invited_by: req.userId, expires_at: invitation.expires_at },
+      }),
+    ]);
+    res.status(201).json({ invite_url: contributionInvitationUrl(invitation.token), invite_expires_at: invitation.expires_at });
   } catch (err) { next(err); }
 });
 
@@ -247,7 +273,11 @@ producerRouter.delete('/projects/:id/participants/:participantId', requireRole('
       where: { id: req.params.participantId, project_id: req.params.id, project: { producer_id: producer.id } },
     });
     if (!participant) throw new AppError('Project participant not found', 404);
-    await db.projectParticipant.update({ where: { id: participant.id }, data: { status: 'REMOVED' } });
+    await db.$transaction([
+      db.projectParticipant.update({ where: { id: participant.id }, data: { status: 'REMOVED' } }),
+      // A removed participant's link must not stay claimable.
+      db.contributionInvitation.updateMany({ where: { participant_id: participant.id, status: 'PENDING' }, data: { status: 'REVOKED' } }),
+    ]);
     res.json({ success: true });
   } catch (err) { next(err); }
 });
@@ -290,7 +320,15 @@ producerRouter.delete('/projects/:id/credits/:creditId', requireRole('PRODUCER')
     if (!producer) throw new AppError('Producer not found', 404);
     const credit = await db.projectCredit.findFirst({ where: { id: req.params.creditId, project_id: req.params.id, project: { producer_id: producer.id } } });
     if (!credit) throw new AppError('Project credit not found', 404);
-    await db.projectCredit.delete({ where: { id: credit.id } });
+    // A confirmed credit is the contributor's record, not the lead's draft, so the
+    // lead may withdraw only a credit nobody has confirmed. The delete is guarded
+    // on that status, not just the id, so a confirmation landing after the read
+    // above still wins.
+    const withdrawn = await db.projectCredit.deleteMany({ where: { id: credit.id, status: { not: 'CONFIRMED' } } });
+    if (withdrawn.count !== 1) {
+      if (!await db.projectCredit.findUnique({ where: { id: credit.id }, select: { id: true } })) throw new AppError('Project credit not found', 404);
+      throw new AppError('A confirmed credit belongs to the contributor’s record and cannot be removed', 409);
+    }
     res.json({ success: true });
   } catch (err) { next(err); }
 });

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { liveSession, minutesIntoStudioDay, studioDayBounds } from './studioClock';
+import { liveSession, minutesIntoStudioDay, studioDate, studioDateBounds, studioDayBounds } from './studioClock';
 
 const at = (iso: string) => new Date(iso);
 
@@ -27,6 +27,25 @@ test('the day the clocks go forward starts at midnight standard time, even far e
   const day = studioDayBounds(at('2026-09-27T06:00:00Z'), 'Pacific/Auckland');
   assert.equal(day.start.toISOString(), '2026-09-26T12:00:00.000Z');
   assert.equal(day.end.toISOString(), '2026-09-27T11:00:00.000Z', 'a 23-hour day');
+});
+
+test('a named date is that calendar day in the studio zone, not in UTC (C29)', () => {
+  const auckland = studioDateBounds('2026-10-06', 'Pacific/Auckland');
+  assert.equal(auckland.start.toISOString(), '2026-10-05T11:00:00.000Z');
+  assert.equal(auckland.end.toISOString(), '2026-10-06T11:00:00.000Z');
+
+  const losAngeles = studioDateBounds('2026-11-01', 'America/Los_Angeles');
+  assert.equal(losAngeles.start.toISOString(), '2026-11-01T07:00:00.000Z');
+  assert.equal(losAngeles.end.toISOString(), '2026-11-02T08:00:00.000Z', 'the clocks go back: a 25-hour day');
+
+  const monthEnd = studioDateBounds('2026-12-31', 'Pacific/Auckland');
+  assert.equal(monthEnd.end.toISOString(), '2026-12-31T11:00:00.000Z', 'the next day rolls into the new year');
+});
+
+test("the studio's date can differ from the UTC date", () => {
+  assert.equal(studioDate(at('2026-10-05T20:00:00Z'), 'Pacific/Auckland'), '2026-10-06');
+  assert.equal(studioDate(at('2026-10-06T03:00:00Z'), 'America/Los_Angeles'), '2026-10-05');
+  assert.equal(studioDate(at('2026-10-06T03:00:00Z'), 'UTC'), '2026-10-06');
 });
 
 test('clock positions are in studio time', () => {

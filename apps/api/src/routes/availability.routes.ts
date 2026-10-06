@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
+import { studioDateBounds } from '../lib/studioClock';
 
 const AvailabilityQuery = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD'),
@@ -14,7 +15,7 @@ const AvailabilityQuery = z.object({
 
 export const availabilityRouter = Router();
 
-// GET /api/availability?date=YYYY-MM-DD&room_id=<uuid>
+// GET /api/availability?date=YYYY-MM-DD&studio_id=<id>[&room_id=<id>]
 availabilityRouter.get('/', async (req, res, next) => {
   try {
     const { date, room_id, studio_id } = AvailabilityQuery.parse(req.query);
@@ -27,23 +28,27 @@ availabilityRouter.get('/', async (req, res, next) => {
       if (!room) throw new AppError('Room does not belong to this studio', 400);
     }
 
-    // Use explicit UTC midnight so the window is timezone-independent.
-    // The studio timezone (studio.timezone) can be used for display on the
-    // frontend; the DB stores all datetimes as UTC.
-    const dayStart = new Date(`${date}T00:00:00Z`);
-    const dayEnd   = new Date(`${date}T23:59:59Z`);
+    // The date is a day at the studio, in the studio's own zone (C29). It used
+    // to be the UTC day, which for a studio far from UTC is mostly another day,
+    // and it counted only sessions starting that day, so one carried over from
+    // the night before was offered again. A session belongs to the day when it
+    // overlaps it. This reads bookings only: AvailabilitySlot (blackouts and
+    // opening exceptions) has no reader or writer yet; that is migration step 6.
+    const { start: dayStart, end: dayEnd } = studioDateBounds(date, studio.timezone);
 
     const bookings = await prisma.booking.findMany({
       where: {
         studio_id: studio.id,
         ...roomFilter,
         status: { notIn: ['CANCELLED', 'NO_SHOW'] },
-        starts_at: { gte: dayStart, lte: dayEnd },
+        starts_at: { lt: dayEnd },
+        ends_at: { gt: dayStart },
       },
       select: { starts_at: true, ends_at: true, room_id: true, engineer_id: true },
+      orderBy: { starts_at: 'asc' },
     });
 
-    res.json({ date, bookings });
+    res.json({ date, timezone: studio.timezone, bookings });
   } catch (err) {
     next(err);
   }

@@ -176,9 +176,24 @@ facilitiesRouter.patch('/issues/:id', attachStudioScope, requireRole('STUDIO_ADM
     const data = UpdateIssueSchema.parse(req.body);
     const existing = await prisma.maintenanceIssue.findFirst({ where: { id: req.params.id, studio_id: req.studioId } });
     if (!existing) throw new AppError('Issue not found', 404);
+    // Owner decision 2026-10-06: RESTORED is terminal. A recurrence is a new
+    // issue, so the restored one keeps its resolution and verifier.
+    if (existing.status === 'RESTORED') {
+      throw new AppError('This issue is restored and closed. Report a recurrence as a new issue.', 409);
+    }
+    // Every other move the console allows stays allowed, except repeating the
+    // state the issue is already in (only a reassignment to someone else is a
+    // real change within ASSIGNED). The write is guarded on the status read,
+    // so two staff advancing the same issue together cannot both apply — one
+    // wins and the other is told the issue moved.
+    const reassigning = data.status === 'ASSIGNED' && existing.status === 'ASSIGNED'
+      && Boolean(data.assigned_to) && data.assigned_to !== existing.assigned_to;
+    if (data.status === existing.status && !reassigning) {
+      throw new AppError(`This issue is already ${existing.status.toLowerCase()}`, 409);
+    }
 
-    const issue = await prisma.maintenanceIssue.update({
-      where: { id: existing.id },
+    const claimed = await prisma.maintenanceIssue.updateMany({
+      where: { id: existing.id, status: existing.status, assigned_to: existing.assigned_to },
       data: {
         status: data.status,
         assigned_to: data.status === 'ASSIGNED' ? (data.assigned_to ?? req.userId) : existing.assigned_to,
@@ -187,6 +202,8 @@ facilitiesRouter.patch('/issues/:id', attachStudioScope, requireRole('STUDIO_ADM
         verified_by: data.status === 'RESTORED' ? req.userId : existing.verified_by,
       },
     });
+    if (claimed.count !== 1) throw new AppError('This issue was updated by someone else. Refresh and try again.', 409);
+    const issue = await prisma.maintenanceIssue.findUniqueOrThrow({ where: { id: existing.id } });
 
     const staff = await prisma.studioStaff.findMany({ where: { studio_id: req.studioId }, select: { user_id: true } });
     staff.forEach((member) => broadcastToUser(member.user_id, { type: 'facility_issue_updated', issueId: issue.id, status: issue.status }));

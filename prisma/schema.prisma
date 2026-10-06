@@ -465,8 +465,8 @@ model ArtistPassport {
   ai_summary              String? // cached AI brief
   ai_summary_updated_at   DateTime? // for cache invalidation
   ai_summary_edited       Boolean        @default(false) // true if artist manually edited
-  ai_summary_public       Boolean        @default(true) // false = hidden from engineers
-  profile_views           Int            @default(0) // incremented on non-owner views
+  ai_summary_public       Boolean        @default(true) // false = only the artist reads it
+  profile_views           Int            @default(0) // PassportView rows, set by GET /api/passport/public/:code
   location                String?
   // PLACE GIVES CONTEXT, IT ISN'T IDENTITY BY DEFAULT — location has always
   // been silently public on the passport response below; this makes that a
@@ -1049,18 +1049,42 @@ model ProjectParticipant {
   project_id         String
   project            Project  @relation(fields: [project_id], references: [id], onDelete: Cascade)
   display_name       String
-  email              String?
+  email              String? // where the lead says the invitation went: a hint, never a credential
   role               String
   participant_type   String   @default("EXTERNAL")
-  participant_ref_id String?
+  participant_ref_id String? // set by claiming the invitation's link, never by matching an email
   status             String   @default("ACTIVE")
   added_by           String
   created_at         DateTime @default(now())
   updated_at         DateTime @updatedAt
+  invitations        ContributionInvitation[]
 
   @@index([project_id])
   @@index([participant_ref_id])
   @@map("project_participants")
+}
+
+// The link behind a contribution invitation. A participant used to belong to any
+// account at the invited email address, and signup never proves an address
+// belongs to whoever registers it, so anyone who registered an invited address
+// could join the project, read its workspace and messages, and be named in its
+// rights. Follows StudioStaffInvitation and CreatorInvitation: a random token,
+// only its SHA-256 stored, an expiry, and single use by a conditional claim.
+// Claiming binds the participant to the claimer, who then accepts or declines.
+model ContributionInvitation {
+  id             String             @id @default(uuid())
+  participant_id String
+  participant    ProjectParticipant @relation(fields: [participant_id], references: [id], onDelete: Cascade)
+  token_hash     String             @unique
+  status         String             @default("PENDING") // PENDING | CLAIMED | REVOKED
+  invited_by     String
+  claimed_by     String?
+  expires_at     DateTime
+  claimed_at     DateTime?
+  created_at     DateTime           @default(now())
+
+  @@index([participant_id, status])
+  @@map("contribution_invitations")
 }
 
 // ─── Studio Announcements ─────────────────────────────────────────────────────

@@ -40,7 +40,7 @@ interface Project {
   created_at: string;
   artist: { id: string; name: string; alias: string | null; avatar_url: string | null } | null;
   bookings: Booking[];
-  participants: Array<{ id: string; display_name: string; email: string | null; role: string; status: string }>;
+  participants: Array<{ id: string; display_name: string; email: string | null; role: string; status: string; participant_ref_id: string | null }>;
   credits: Array<{ id: string; credited_name: string; role: string; scope: string | null; status: string }>;
   promotional_consents: Array<{ id: string; subject: string; purpose: string; channels: string[]; assets: string[]; status: string; expires_at: string | null }>;
   rights_agreements: Array<{ id: string; agreement_type: string; title: string; status: string; response_note: string | null; shares: Array<{ id: string; holder_name: string; percentage: number | string }> }>;
@@ -123,25 +123,42 @@ export default function ProjectDetailPage() {
     onError: (e: any) => toast.error(e?.response?.data?.error ?? 'Failed to link session'),
   });
 
+  // An invitation's link is shown once, when it is made: only its hash is kept.
+  const [inviteLink, setInviteLink] = useState<{ participantId: string; name: string; url: string } | null>(null);
   const addParticipant = useMutation({
     mutationFn: () => api.post(`/producer/projects/${id}/participants`, {
       display_name: participantName,
       email: participantEmail,
       role: participantRole,
     }),
-    onSuccess: () => {
+    onSuccess: ({ data }) => {
       qc.invalidateQueries({ queryKey: ['producer-projects'] });
       setParticipantName('');
       setParticipantEmail('');
       setTeamOpen(false);
-      toast.success(participantEmail ? 'Contribution invitation sent' : 'External participant recorded');
+      if (data.invite_url) setInviteLink({ participantId: data.id, name: data.display_name, url: data.invite_url });
+      toast.success(data.invite_url ? 'Invitation link ready to send' : 'External participant recorded');
     },
     onError: (error: any) => toast.error(error?.response?.data?.error ?? 'Failed to add participant'),
   });
+  const sendNewLink = useMutation({
+    mutationFn: (participant: { id: string; display_name: string }) => api.post(`/producer/projects/${id}/participants/${participant.id}/invitation`, {}),
+    onSuccess: ({ data }, participant) => {
+      setInviteLink({ participantId: participant.id, name: participant.display_name, url: data.invite_url });
+      toast.success('New link ready. The previous link no longer works');
+    },
+    onError: (error: any) => toast.error(error?.response?.data?.error ?? 'Could not make a new link'),
+  });
+  const copyInviteLink = (url: string) => {
+    const failed = () => toast.error('Copy the link from the box');
+    if (!navigator.clipboard) { failed(); return; }
+    navigator.clipboard.writeText(url).then(() => toast.success('Link copied'), failed);
+  };
   const removeParticipant = useMutation({
     mutationFn: (participantId: string) => api.delete(`/producer/projects/${id}/participants/${participantId}`),
-    onSuccess: () => {
+    onSuccess: (_, participantId) => {
       qc.invalidateQueries({ queryKey: ['producer-projects'] });
+      setInviteLink(link => link?.participantId === participantId ? null : link);
       toast.success('Participant removed');
     },
     onError: () => toast.error('Failed to remove participant'),
@@ -154,6 +171,8 @@ export default function ProjectDetailPage() {
   const removeCredit = useMutation({
     mutationFn: (creditId: string) => api.delete(`/producer/projects/${id}/credits/${creditId}`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['producer-projects'] }); toast.success('Credit removed'); },
+    // A credit confirmed since this page loaded is refused; refreshing shows it confirmed.
+    onError: (error: any) => { qc.invalidateQueries({ queryKey: ['producer-projects'] }); toast.error(error?.response?.data?.error ?? 'Failed to remove credit'); },
   });
   const requestPromotion = useMutation({
     mutationFn: () => api.post(`/producer/projects/${id}/promotional-consents`, { subject: project?.title ?? 'Project promotion', purpose: promoPurpose, channels: [promoChannel], assets: ['NAME', 'IMAGE', 'PROJECT_TITLE'] }),
@@ -289,11 +308,23 @@ export default function ProjectDetailPage() {
           {teamOpen && (
             <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.4fr 1fr auto', gap: 8, padding: 12, marginBottom: 10, border: '1px solid rgba(201,168,76,.2)', borderRadius: 10, background: 'rgba(201,168,76,.035)' }}>
               <input value={participantName} onChange={event => setParticipantName(event.target.value)} placeholder="Name" maxLength={120} style={{ background: '#101010', border: '1px solid #242424', borderRadius: 7, padding: '9px 10px', color: '#eee', fontSize: 12 }} />
-              <input value={participantEmail} onChange={event => setParticipantEmail(event.target.value)} placeholder="OIANO account email" type="email" required style={{ background: '#101010', border: '1px solid #242424', borderRadius: 7, padding: '9px 10px', color: '#eee', fontSize: 12 }} />
+              <input value={participantEmail} onChange={event => setParticipantEmail(event.target.value)} placeholder="Their email, for your records" type="email" required style={{ background: '#101010', border: '1px solid #242424', borderRadius: 7, padding: '9px 10px', color: '#eee', fontSize: 12 }} />
               <select value={participantRole} onChange={event => setParticipantRole(event.target.value as any)} style={{ background: '#101010', border: '1px solid #242424', borderRadius: 7, padding: '9px 10px', color: '#eee', fontSize: 12 }}>
                 {PARTICIPANT_ROLES.map(role => <option key={role} value={role}>{roleLabel(role)}</option>)}
               </select>
               <button onClick={() => addParticipant.mutate()} disabled={!participantName.trim() || !participantEmail.trim() || addParticipant.isPending} style={{ border: 0, borderRadius: 7, padding: '0 14px', background: '#C9A84C', color: '#090909', fontWeight: 700, cursor: 'pointer', opacity: participantName.trim() && participantEmail.trim() ? 1 : .45 }}>Invite</button>
+            </div>
+          )}
+
+          {inviteLink && (
+            <div role="status" style={{ padding: 12, marginBottom: 10, border: '1px solid rgba(201,168,76,.35)', borderRadius: 10, background: 'rgba(201,168,76,.05)' }}>
+              <p style={{ margin: 0, color: '#ddd', fontSize: 12 }}>Send this link to {inviteLink.name}. It is shown only now.</p>
+              <p style={{ margin: '4px 0 8px', color: '#777', fontSize: 10, lineHeight: 1.5 }}>Whoever opens it can claim the invitation, once, within 14 days, so send it only to them. An account at their email address is not enough to join.</p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input readOnly value={inviteLink.url} aria-label={`Invitation link for ${inviteLink.name}`} onFocus={event => event.currentTarget.select()} style={{ flex: 1, minWidth: 0, background: '#101010', border: '1px solid #242424', borderRadius: 7, padding: '8px 10px', color: '#eee', fontSize: 11, fontFamily: 'var(--font-mono)' }} />
+                <button onClick={() => copyInviteLink(inviteLink.url)} style={{ border: 0, borderRadius: 7, padding: '0 12px', background: '#C9A84C', color: '#090909', fontWeight: 700, cursor: 'pointer', fontSize: 12 }}>Copy</button>
+                <button onClick={() => setInviteLink(null)} aria-label="Dismiss invitation link" style={{ color: '#666', background: 'none', border: 0, cursor: 'pointer', fontSize: 16 }}>×</button>
+              </div>
             </div>
           )}
 
@@ -304,8 +335,8 @@ export default function ProjectDetailPage() {
             {project.artist && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 9, border: '1px solid #1e1e1e', background: '#121212' }}><span style={{ color: '#ddd', fontSize: 13 }}>{project.artist.alias ?? project.artist.name}</span><span style={{ color: '#777', fontSize: 11 }}>Primary Artist</span></div>}
             {(project.participants ?? []).map(participant => (
               <div key={participant.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 9, border: '1px solid #1e1e1e', background: '#121212' }}>
-                <div><span style={{ color: '#ddd', fontSize: 13 }}>{participant.display_name}</span>{participant.email && <span style={{ color: '#555', fontSize: 10, marginLeft: 8 }}>{participant.email}</span>}</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><span style={{ color: participant.status === 'ACTIVE' ? '#72B794' : participant.status === 'DECLINED' ? '#D94A4A' : '#C9A84C', fontSize: 9, textTransform: 'uppercase' }}>{participant.status.replaceAll('_',' ')}</span><span style={{ color: '#C9A84C', fontSize: 11 }}>{roleLabel(participant.role)}</span><button onClick={() => removeParticipant.mutate(participant.id)} aria-label={`Remove ${participant.display_name}`} style={{ color: '#666', background: 'none', border: 0, cursor: 'pointer', fontSize: 16 }}>×</button></div>
+                <div><span style={{ color: '#ddd', fontSize: 13 }}>{participant.display_name}</span>{participant.email && <span title="Where the invitation was sent. It does not decide who can claim it." style={{ color: '#555', fontSize: 10, marginLeft: 8 }}>{participant.email}</span>}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><span style={{ color: participant.status === 'ACTIVE' ? '#72B794' : participant.status === 'DECLINED' ? '#D94A4A' : '#C9A84C', fontSize: 9, textTransform: 'uppercase' }}>{participant.status === 'INVITED' ? (participant.participant_ref_id ? 'Awaiting answer' : 'Link not claimed') : participant.status.replaceAll('_',' ')}</span>{participant.status === 'INVITED' && !participant.participant_ref_id && <button onClick={() => sendNewLink.mutate(participant)} disabled={sendNewLink.isPending} title="Makes a new link. Any earlier link stops working." style={{ color: '#C9A84C', background: 'none', border: '1px solid rgba(201,168,76,.25)', borderRadius: 6, cursor: 'pointer', fontSize: 10, padding: '2px 7px' }}>New link</button>}<span style={{ color: '#C9A84C', fontSize: 11 }}>{roleLabel(participant.role)}</span><button onClick={() => removeParticipant.mutate(participant.id)} aria-label={`Remove ${participant.display_name}`} style={{ color: '#666', background: 'none', border: 0, cursor: 'pointer', fontSize: 16 }}>×</button></div>
               </div>
             ))}
           </div>
@@ -314,7 +345,7 @@ export default function ProjectDetailPage() {
         <div style={{ marginBottom: '2rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}><div><p style={{ margin: 0, fontSize: 11, color: '#666', textTransform: 'uppercase', letterSpacing: '.08em' }}>Credit sheet ({project.credits?.length ?? 0})</p><p style={{ margin: '4px 0 0', fontSize: 10, color: '#444' }}>Contribution records only · ownership is handled separately</p></div><button onClick={() => setCreditsOpen(open => !open)} style={{ fontSize: 12, color: '#C9A84C', background: 'none', border: 0, cursor: 'pointer' }}>{creditsOpen ? 'Cancel' : '+ Add credit'}</button></div>
           {creditsOpen && <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1.5fr auto', gap: 8, marginBottom: 10, padding: 12, border: '1px solid rgba(201,168,76,.2)', borderRadius: 10 }}><input value={creditName} onChange={event => setCreditName(event.target.value)} placeholder="Credited name" style={{ background: '#101010', border: '1px solid #242424', borderRadius: 7, padding: 9, color: '#eee', fontSize: 12 }}/><select value={creditRole} onChange={event => setCreditRole(event.target.value as any)} style={{ background: '#101010', border: '1px solid #242424', borderRadius: 7, padding: 9, color: '#eee', fontSize: 12 }}>{CREDIT_ROLES.map(role => <option key={role} value={role}>{roleLabel(role)}</option>)}</select><input value={creditScope} onChange={event => setCreditScope(event.target.value)} placeholder="Scope, track or contribution" style={{ background: '#101010', border: '1px solid #242424', borderRadius: 7, padding: 9, color: '#eee', fontSize: 12 }}/><button onClick={() => addCredit.mutate()} disabled={!creditName.trim() || addCredit.isPending} style={{ border: 0, borderRadius: 7, background: '#C9A84C', color: '#090909', padding: '0 14px', fontWeight: 700, opacity: creditName.trim() ? 1 : .4 }}>Add</button></div>}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{(project.credits ?? []).map(credit => <div key={credit.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.4fr auto auto', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid #1e1e1e', borderRadius: 9, background: '#121212' }}><strong style={{ fontSize: 12, color: '#ddd' }}>{credit.credited_name}</strong><span style={{ fontSize: 10, color: '#C9A84C' }}>{roleLabel(credit.role)}</span><span style={{ fontSize: 10, color: '#666' }}>{credit.scope || 'Whole project'}</span><span title={credit.status === 'DRAFT' ? 'Awaiting the credited contributor’s response' : undefined} style={{ color: credit.status === 'CONFIRMED' ? '#72B794' : credit.status === 'DISPUTED' ? '#D94A4A' : '#888', fontSize: 9, textTransform: 'uppercase' }}>{credit.status === 'DRAFT' ? 'Awaiting contributor' : credit.status}</span><button onClick={() => removeCredit.mutate(credit.id)} aria-label={`Remove ${credit.credited_name} credit`} style={{ background: 'none', border: 0, color: '#555', cursor: 'pointer', fontSize: 16 }}>×</button></div>)}{!project.credits?.length && <div style={{ padding: 18, border: '1px dashed #222', borderRadius: 9, color: '#444', fontSize: 12, textAlign: 'center' }}>No structured credits recorded yet.</div>}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{(project.credits ?? []).map(credit => <div key={credit.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.4fr auto auto', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid #1e1e1e', borderRadius: 9, background: '#121212' }}><strong style={{ fontSize: 12, color: '#ddd' }}>{credit.credited_name}</strong><span style={{ fontSize: 10, color: '#C9A84C' }}>{roleLabel(credit.role)}</span><span style={{ fontSize: 10, color: '#666' }}>{credit.scope || 'Whole project'}</span><span title={credit.status === 'DRAFT' ? 'Awaiting the credited contributor’s response' : undefined} style={{ color: credit.status === 'CONFIRMED' ? '#72B794' : credit.status === 'DISPUTED' ? '#D94A4A' : '#888', fontSize: 9, textTransform: 'uppercase' }}>{credit.status === 'DRAFT' ? 'Awaiting contributor' : credit.status}</span>{credit.status === 'CONFIRMED' ? <span title="Confirmed by the contributor, so it stays on their record" style={{ width: 16 }}/> : <button onClick={() => removeCredit.mutate(credit.id)} aria-label={`Remove ${credit.credited_name} credit`} style={{ background: 'none', border: 0, color: '#555', cursor: 'pointer', fontSize: 16 }}>×</button>}</div>)}{!project.credits?.length && <div style={{ padding: 18, border: '1px dashed #222', borderRadius: 9, color: '#444', fontSize: 12, textAlign: 'center' }}>No structured credits recorded yet.</div>}</div>
         </div>
 
         <div style={{ marginBottom: '2rem' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}><div><p style={{ margin: 0, color: '#666', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.08em' }}>Promotional permissions</p><p style={{ margin: '4px 0 0', color: '#444', fontSize: 10 }}>Artist consent is required before promotional use.</p></div>{project.artist && <button onClick={() => setPromoOpen(open => !open)} style={{ background: 'none', border: 0, color: '#C9A84C', cursor: 'pointer', fontSize: 12 }}>{promoOpen ? 'Cancel' : '+ Request permission'}</button>}</div>{promoOpen && <div style={{ display: 'grid', gridTemplateColumns: '1.5fr .8fr auto', gap: 8, padding: 12, border: '1px solid rgba(201,168,76,.2)', borderRadius: 10, marginBottom: 10 }}><input value={promoPurpose} onChange={event => setPromoPurpose(event.target.value)} placeholder="Purpose — e.g. announce release week" style={{ background: '#101010', border: '1px solid #242424', borderRadius: 7, padding: 9, color: '#eee', fontSize: 12 }}/><select value={promoChannel} onChange={event => setPromoChannel(event.target.value)} style={{ background: '#101010', border: '1px solid #242424', borderRadius: 7, color: '#eee', padding: 9, fontSize: 12 }}>{['INSTAGRAM','TIKTOK','YOUTUBE','WEBSITE','PRESS','PAID_ADS','EMAIL'].map(channel => <option key={channel}>{roleLabel(channel)}</option>)}</select><button onClick={() => requestPromotion.mutate()} disabled={!promoPurpose.trim()} style={{ border: 0, borderRadius: 7, background: '#C9A84C', color: '#090909', padding: '0 14px', fontWeight: 700, opacity: promoPurpose.trim() ? 1 : .4 }}>Send</button></div>}<div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{project.promotional_consents?.map(consent => <div key={consent.id} style={{ padding: '10px 12px', border: '1px solid #1e1e1e', borderRadius: 9, background: '#121212', display: 'flex', justifyContent: 'space-between', gap: 12 }}><div><strong style={{ color: '#ddd', fontSize: 12 }}>{consent.subject}</strong><p style={{ margin: '3px 0 0', color: '#666', fontSize: 10 }}>{consent.purpose} · {consent.channels.map(roleLabel).join(', ')}</p></div><span style={{ color: consent.status === 'APPROVED' ? '#1D9E75' : consent.status === 'DECLINED' || consent.status === 'WITHDRAWN' ? '#D94A4A' : '#C9A84C', fontSize: 10 }}>{consent.status}</span></div>)}{!project.promotional_consents?.length && <div style={{ border: '1px dashed #222', borderRadius: 9, padding: 16, color: '#444', textAlign: 'center', fontSize: 11 }}>No promotional permission requested.</div>}</div></div>

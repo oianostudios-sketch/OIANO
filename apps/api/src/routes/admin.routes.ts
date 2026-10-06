@@ -5,44 +5,26 @@ import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
 import { publishBookingUpdate, publishStudioAnnouncement } from '../services/liveUpdates';
 import { attachStudioScope } from '../middleware/studioScope.middleware';
-import { applyWalletDelta } from '../lib/walletLedger';
-
+import { Prisma } from '@prisma/client';
+import { CASH_PLATFORM_FEE_BPS, recordBookingPayment, recordStudioCollectedCash } from '../lib/financialLedger';
+import { transitionBookingStatus } from '../lib/bookingTransitions';
+import { writeAdminAudit } from '../lib/adminAudit';
+import { studioDate, studioDateBounds } from '../lib/studioClock';
 export const adminRouter = Router();
 
-// POST /api/admin/credit-request — artist-facing; no admin role required
-// Must be declared BEFORE the adminRouter.use(authenticate, requireRole) middleware
-const creditRequestRouter = Router();
-creditRequestRouter.use(authenticate);
-creditRequestRouter.post('/credit-request', async (req, res, next) => {
-  try {
-    const userId = (req as any).userId;
-    const artist = await prisma.artist.findUnique({ where: { user_id: userId } });
-    if (!artist) throw new AppError('Artist not found', 404);
-
-    let wallet = await prisma.wallet.findUnique({ where: { artist_id: artist.id } });
-    if (!wallet) {
-      wallet = await prisma.wallet.create({ data: { artist_id: artist.id, balance_usd: 0 } });
-    }
-
-    await prisma.walletTransaction.create({
-      data: {
-        wallet_id: wallet.id,
-        amount_usd: 0,
-        type: 'credit_request',
-        description: `${artist.name} requested studio credit`,
-      },
-    });
-
-    res.json({ success: true, message: 'Credit request sent to studio admin' });
-  } catch (err) { next(err); }
-});
+// Artist-facing routes, mounted before adminRouter, whose role check would refuse
+// artists. Studios no longer put money in wallets, or take requests for it: a
+// studio's credit reached no ledger and was spent at any studio, so OIANO came to
+// owe another studio money nobody paid in. Only a paid top-up funds a wallet.
+const artistAdminRouter = Router();
+artistAdminRouter.use(authenticate);
 
 // Artist-facing read endpoint. Posting announcements remains admin-only.
 // An artist reads only a studio they have booked with, the same artists who hear
 // announcements live (services/liveUpdates.ts): the studio_id they name, or else
 // the studio of their latest booking. Staff go on to adminRouter's own route,
 // which this one, mounted first, used to answer with "Artist not found".
-creditRequestRouter.get('/announcements', async (req, res, next) => {
+artistAdminRouter.get('/announcements', async (req, res, next) => {
   try {
     if ((req as any).userRole !== 'ARTIST') return next();
     const db = prisma;
@@ -66,7 +48,7 @@ creditRequestRouter.get('/announcements', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-export { creditRequestRouter };
+export { artistAdminRouter };
 
 adminRouter.use(authenticate, requireRole('STUDIO_ADMIN'), attachStudioScope);
 
@@ -173,37 +155,6 @@ adminRouter.get('/analytics', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/admin/wallet/credit — add funds to an artist's wallet
-const WalletCreditSchema = z.object({
-  artist_id: z.string().uuid(),
-  amount_usd: z.number().positive().max(10000),
-  description: z.string().optional(),
-});
-
-adminRouter.post('/wallet/credit', async (req, res, next) => {
-  try {
-    const { artist_id, amount_usd, description } = WalletCreditSchema.parse(req.body);
-
-    const studioId = (req as any).studioId as string;
-    const artist = await prisma.artist.findFirst({
-      where: { id: artist_id, bookings: { some: { studio_id: studioId } } },
-    });
-    if (!artist) throw new AppError('Artist not found', 404);
-
-    const newBalance = await prisma.$transaction(async (tx) => {
-      const wallet = await tx.wallet.upsert({
-        where: { artist_id },
-        update: {},
-        create: { artist_id, balance_usd: 0 },
-      });
-      await applyWalletDelta(tx, wallet.id, amount_usd, 'credit', description ?? `Admin credit — $${amount_usd}`);
-      return tx.wallet.findUniqueOrThrow({ where: { id: wallet.id } });
-    });
-
-    res.json({ success: true, artist_id, new_balance_usd: newBalance.balance_usd });
-  } catch (err) { next(err); }
-});
-
 // GET /api/admin/runsheet?date=YYYY-MM-DD — printable daily runsheet
 // Also accessible to ENGINEER (they see all sessions, used as their daily schedule)
 const RunsheetQuery = z.object({
@@ -213,18 +164,17 @@ const RunsheetQuery = z.object({
 adminRouter.get('/runsheet', async (req, res, next) => {
   try {
     const { date } = RunsheetQuery.parse(req.query);
-    const target = date ? new Date(date) : new Date();
-    const dayStart = new Date(target);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(target);
-    dayEnd.setHours(23, 59, 59, 999);
-
     const studio = (req as any).studio;
+
+    // The studio's own day, as on the engineer runsheet (C29).
+    const day = date ?? studioDate(new Date(), studio.timezone);
+    const { start: dayStart, end: dayEnd } = studioDateBounds(day, studio.timezone);
 
     const bookings = await prisma.booking.findMany({
       where: {
         studio_id: studio.id,
-        starts_at: { gte: dayStart, lte: dayEnd },
+        starts_at: { lt: dayEnd },
+        ends_at: { gt: dayStart },
         status: { notIn: ['CANCELLED', 'NO_SHOW'] },
       },
       include: {
@@ -285,7 +235,8 @@ adminRouter.get('/runsheet', async (req, res, next) => {
     const totalOutstanding = totalExpected - totalPaid;
 
     res.json({
-      date: dayStart.toISOString().split('T')[0],
+      date: day,
+      timezone: studio.timezone,
       studio_name: studio.name,
       generated_at: new Date().toISOString(),
       revenue: { expected: totalExpected, paid: totalPaid, outstanding: totalOutstanding },
@@ -391,36 +342,92 @@ adminRouter.post('/walkin', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ── GET /api/admin/credit-requests — pending credit requests ─────────────────
-adminRouter.get('/credit-requests', async (req, res, next) => {
+// ── POST /api/admin/bookings/:id/cash-payment — record cash taken at the desk ──
+// A walk-in pays cash, and until this route nothing could record it: PAID was
+// written only by the wallet, the Stripe webhook and payouts (C26). The amount is
+// the booking's stored total, never the caller's. The payment posts through the
+// booking-payment posting with no platform fee (owner decision, 2026-10-06), and
+// because the studio is holding the cash, the cash it kept is set against what
+// OIANO owes it (financialLedger.ts, recordStudioCollectedCash): the studio's
+// payable is unchanged and a payout never pays the cash again.
+//
+// Permission: the studio membership's MANAGE_BOOKINGS capability, or a
+// STUDIO_ADMIN membership with no capabilities at all (the legacy owner, as in
+// studio-policy.routes.ts). VIEW_FINANCE reads money; it does not record it.
+const CashPaymentSchema = z.object({}).strict();
+const PAYABLE_IN_CASH = new Set(['UNPAID']);
+
+adminRouter.post('/bookings/:id/cash-payment', async (req, res, next) => {
   try {
-    const db = prisma;
-    // credit_request transactions with amount 0 — join wallet → artist
-    const requests = await db.walletTransaction.findMany({
-      where: {
-        type: 'credit_request',
-        wallet: { artist: { bookings: { some: { studio_id: (req as any).studioId } } } },
-      },
-      orderBy: { created_at: 'desc' },
-      take: 50,
-      include: {
-        wallet: {
-          include: {
-            artist: { select: { id: true, name: true, alias: true } },
-          },
-        },
-      },
+    // Nothing the caller sends decides the payment; an amount is refused, not ignored.
+    CashPaymentSchema.parse(req.body ?? {});
+    const userId = (req as any).userId as string;
+    const studio = (req as any).studio;
+
+    const membership = await prisma.studioStaff.findUnique({ where: { user_id_studio_id: { user_id: userId, studio_id: studio.id } } });
+    const mayRecord = !!membership && (membership.capabilities.includes('MANAGE_BOOKINGS')
+      || (membership.capabilities.length === 0 && membership.role === 'STUDIO_ADMIN'));
+    if (!mayRecord) throw new AppError('Booking management permission required', 403);
+
+    const result = await prisma.$transaction(async (tx) => {
+      // The booking row is locked first, so two recordings of the same payment take
+      // turns and the second sees the first one's PAID. Payment.booking_id is also
+      // unique, so two payment rows for one booking cannot exist either way.
+      const [locked] = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM bookings WHERE id = ${req.params.id} AND studio_id = ${studio.id} FOR UPDATE`;
+      if (!locked) throw new AppError('Booking not found', 404);
+      const booking = await tx.booking.findUniqueOrThrow({ where: { id: locked.id }, include: { payment: true } });
+
+      if (booking.status === 'CANCELLED' || booking.status === 'NO_SHOW') {
+        throw new AppError(`This booking is ${booking.status === 'CANCELLED' ? 'cancelled' : 'marked no-show'}; no payment can be recorded for it`, 409);
+      }
+      const existing = booking.payment;
+      if (existing && existing.status === 'PAID') throw new AppError('This booking is already paid', 409);
+      // A payment that was ever sent to a checkout may still be paid there, and one
+      // that was refunded has its own history; neither becomes a cash payment.
+      if (existing && (!PAYABLE_IN_CASH.has(existing.status) || existing.provider_ref || existing.payment_intent_id)) {
+        throw new AppError('This booking has a payment in another state; it cannot be recorded as cash', 409);
+      }
+      const amountUsd = Number(booking.total_usd);
+      if (!Number.isFinite(amountUsd) || amountUsd <= 0) throw new AppError('This booking has no amount to pay', 409);
+
+      const paidAt = new Date();
+      let paymentId: string;
+      if (existing) {
+        const claimed = await tx.payment.updateMany({
+          where: { id: existing.id, status: 'UNPAID', provider_ref: null, payment_intent_id: null },
+          data: { provider: 'cash', amount_usd: booking.total_usd, status: 'PAID', paid_at: paidAt },
+        });
+        if (claimed.count !== 1) throw new AppError('This booking\'s payment changed while it was being recorded. Refresh and try again.', 409);
+        paymentId = existing.id;
+      } else {
+        try {
+          paymentId = (await tx.payment.create({
+            data: { booking_id: booking.id, provider: 'cash', amount_usd: booking.total_usd, status: 'PAID', paid_at: paidAt },
+          })).id;
+        } catch (err) {
+          if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') throw new AppError('This booking is already paid', 409);
+          throw err;
+        }
+      }
+
+      const posted = await recordBookingPayment(tx, { paymentId, provider: 'cash', amountUsd, platformFeeBps: CASH_PLATFORM_FEE_BPS, artistId: booking.artist_id, studioId: studio.id, bookingId: booking.id });
+      await recordStudioCollectedCash(tx, { paymentId, amountUsd, studioId: studio.id, bookingId: booking.id });
+
+      // Payment confirms a booking only while it is waiting to be confirmed (A03).
+      const confirmation = await transitionBookingStatus(tx, { bookingId: booking.id, to: 'CONFIRMED', studioId: studio.id, onlyFrom: ['PENDING'] });
+      const payment = await tx.payment.findUniqueOrThrow({ where: { id: paymentId } });
+      const after = await tx.booking.findUniqueOrThrow({ where: { id: booking.id }, select: { status: true } });
+      return { payment, bookingStatus: after.status, confirmedNow: confirmation.outcome === 'APPLIED', ledgerTransactionId: posted.id };
     });
 
-    const shaped = requests.map((r: any) => ({
-      id: r.id,
-      artist_id: r.wallet?.artist?.id,
-      artist_name: r.wallet?.artist?.alias ?? r.wallet?.artist?.name ?? 'Unknown',
-      requested_at: r.created_at,
-      description: r.description,
-    }));
+    await writeAdminAudit(userId, 'booking.payment.cash_recorded', req, {
+      studio_id: studio.id, booking_id: req.params.id, payment_id: result.payment.id,
+      amount_usd: Number(result.payment.amount_usd), ledger_transaction_id: result.ledgerTransactionId,
+    }).catch((error) => console.error('[audit] cash payment write failed:', error?.message));
+    if (result.confirmedNow) await publishBookingUpdate(req.params.id, result.bookingStatus);
 
-    res.json(shaped);
+    res.status(201).json({ payment: result.payment, booking_status: result.bookingStatus });
   } catch (err) { next(err); }
 });
 

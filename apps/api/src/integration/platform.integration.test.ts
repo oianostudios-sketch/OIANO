@@ -293,11 +293,18 @@ test('auth, booking payment, and rights operate through real database transactio
   });
   assert.equal(invitation.response.status, 201);
   assert.equal(invitation.body.status, 'INVITED');
-  assert.equal(invitation.body.participant_ref_id, artistUserIdFromToken(artistToken));
+  // Holding an account at the invited address binds nothing; the link does.
+  assert.equal(invitation.body.participant_ref_id, null);
+  const claimedContribution = await request('/contributions/claim', {
+    method: 'POST',
+    headers: { authorization: `Bearer ${artistToken}` },
+    body: JSON.stringify({ token: new URL(invitation.body.invite_url).searchParams.get('token') }),
+  });
+  assert.equal(claimedContribution.response.status, 200);
 
   const contributionInbox = await request('/contributions/inbox', { headers: { authorization: `Bearer ${artistToken}` } });
   assert.equal(contributionInbox.response.status, 200);
-  assert.ok(contributionInbox.body.some((item: any) => item.id === invitation.body.id && item.status === 'INVITED'));
+  assert.ok(contributionInbox.body.some((item: any) => item.id === invitation.body.id && item.status === 'INVITED' && item.participant_ref_id === artistUserIdFromToken(artistToken)));
   const acceptedContribution = await request(`/contributions/${invitation.body.id}/respond`, {
     method: 'PATCH',
     headers: { authorization: `Bearer ${artistToken}` },
@@ -900,8 +907,8 @@ test('auth, booking payment, and rights operate through real database transactio
   assert.equal(payoutDebits, payoutCredits, 'a payout transaction must balance');
   assert.equal(payoutDebits, payableBefore);
 
-  // The guard that matters: a second request finds nothing left, because the
-  // reservation already moved the ledger — not because of a lock or a status flag.
+  // A later request finds nothing left, because the reservation already moved the
+  // ledger. Requests at the same moment are held in money-integrity.integration.test.ts.
   await assert.rejects(
     () => reserveStudioPayout({ studioId: registeredStudio.id, requestedBy: ownerUser.id }),
     /Nothing is currently payable/,
@@ -927,11 +934,18 @@ test('auth, booking payment, and rights operate through real database transactio
   const artistPayoutAttempt = await request('/payouts/balance', { headers: { authorization: `Bearer ${artistToken}` } });
   assert.equal(artistPayoutAttempt.response.status, 403, 'only a studio operator may read a payout balance');
 
-  // Commercial terms are the studio's own business. GET /api/studio is public.
-  const publicStudio = await request('/studio');
-  assert.equal(publicStudio.response.status, 200);
-  assert.equal(publicStudio.body?.platform_fee_bps, undefined, 'the public studio endpoint must not publish commercial terms');
-  assert.equal(publicStudio.body?.stripe_account_id, undefined, 'the public studio endpoint must never publish a Connect account id');
+  // There is no default studio: GET /api/studio, which answered with one studio named in
+  // code, is retired (C30). Commercial terms are the studio's own business, so the public
+  // list of studios publishes neither the fee nor the Connect account.
+  const defaultStudio = await fetch(`${baseUrl}/studio`);
+  assert.equal(defaultStudio.status, 404, 'no route answers with a default studio');
+  const publicStudios = await request('/studio/options');
+  assert.equal(publicStudios.response.status, 200);
+  assert.ok(Array.isArray(publicStudios.body) && publicStudios.body.length > 0);
+  for (const listed of publicStudios.body) {
+    assert.equal(listed.platform_fee_bps, undefined, 'the public studio list must not publish commercial terms');
+    assert.equal(listed.stripe_account_id, undefined, 'the public studio list must never publish a Connect account id');
+  }
 
   const ownStudioView = await request('/studio/current', { headers: { authorization: `Bearer ${studioSignup.body.token}` } });
   assert.equal(ownStudioView.response.status, 200);

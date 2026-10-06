@@ -62,6 +62,10 @@ with their migration steps; do not put those names on today's screens.
 | Build | `npm run build` |
 | Secrets | `npm run security:secrets` |
 
+A fresh worktree needs `npm ci` first. The integration runner builds `packages/shared`
+when its `dist` is missing, and `npm run build` builds it as its own first step, but the
+typechecks do not: run `npm run build --workspace=packages/shared` before them.
+
 A green run is not proof a test works. For any load-bearing assertion, put the defect
 back, watch the test fail, then restore the file. CI (GitHub Actions) runs on pushes to
 `main` and on pull requests; its failures are re-emitted as annotations, which the
@@ -73,13 +77,21 @@ PostgreSQL 14+ command-line tools are required: set `PG_BIN`, put `pg_ctl` on `P
 or use the default install location. Data lives in `.oiano/` and never leaves the
 machine.
 
+Each checkout and worktree runs its own cluster. The commands use a running server only
+when it reports this checkout's `.oiano/postgres` as its data directory, so none of them
+creates, migrates or drops databases on another checkout's cluster, or stops it. The
+cluster listens on 55432, or on another free port when a different server holds the one
+it wants. `.oiano/port` keeps the port it last started on, and `db:local:status` prints
+it. `OIANO_LOCAL_PG_PORT` chooses the port explicitly, and a command stops rather than
+use it while another server holds it.
+
 | Command | What it does |
 |---|---|
-| `npm run db:local:start`, `db:local:stop`, `db:local:status` | Run the local cluster on port 55432, creating it on first start |
-| `npm run db:local:fresh` | Create an empty database and print its URL |
+| `npm run db:local:start`, `db:local:stop`, `db:local:status` | Run this checkout's cluster, creating it on first start |
+| `npm run db:local:fresh` | Create an empty database, record its name in `.oiano/`, and print its URL |
 | `npm run test:integration:local` | Run the integration suite on a fresh database |
 | `npm run dev:local` | Migrate and seed `oiano_dev_test`, then run the API and web app on it |
-| `npm run db:local:prune` | Drop the databases `fresh` created |
+| `npm run db:local:prune` | Drop the databases this checkout's `fresh` recorded; others are listed and left |
 
 `dev:local` uses ports 4000 and 5173 when they are free and otherwise the next free
 ones, and always points the web app at its own API; `OIANO_LOCAL_API_PORT` and
@@ -93,7 +105,7 @@ the platform. For a browser preview, start `oiano-local` from `.claude/launch.js
 
 - Monorepo: `apps/api` (Express, Prisma 5.22, PostgreSQL, Zod), `apps/web` (React 18,
   Vite, Tailwind, React Query, Zustand) and `packages/shared`.
-- 58 Prisma models and 20 tracked migrations; 36 API route modules; 50 web pages.
+- 59 Prisma models and 21 tracked migrations; 37 API route modules; 52 web pages.
 - Roles: `ARTIST`, `PRODUCER`, `STUDIO_ADMIN`, `ENGINEER`, `OIANO_ADMIN`.
 - Multi-studio: `StudioStaff` holds one row per user and studio, and
   `User.active_studio_id` selects the studio a staff request is scoped to.
@@ -117,5 +129,8 @@ the platform. For a browser preview, start `oiano-local` from `.claude/launch.js
 
 ## Recording work
 
-Record what landed, with its evidence, in `docs/OIANO_IMPLEMENTATION_STATUS.md`. Add
-entries; do not delete earlier ones, mark them.
+Record what landed, with its evidence, in a new file under [`docs/status/`](docs/status/README.md),
+one file per change, so changes made in parallel never edit the same file. Records up to
+2026-10-06 are in `docs/OIANO_IMPLEMENTATION_STATUS.md`, which is no longer appended to.
+Never delete a record; a later one supersedes it and says so. A new integration test file
+runs automatically; there is no list to add it to.

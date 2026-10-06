@@ -33,6 +33,7 @@ function useNavItems(navigate: ReturnType<typeof useNavigate>, role?: string): P
     items.push({ id: 'run',     icon: '◳',  label: 'Runsheet',          group: 'QUICK ACTIONS',            action: () => navigate('/runsheet') });
     items.push({ id: 'policies', icon: '◆', label: 'Studio standards & exceptions', group: 'QUICK ACTIONS', action: () => navigate('/admin/policies') });
     items.push({ id: 'studio-team', icon: '♙', label: 'Studio team & permissions', group: 'QUICK ACTIONS', action: () => navigate('/admin/team') });
+    items.push({ id: 'studio-setup', icon: '▣', label: 'Rooms & services', group: 'QUICK ACTIONS', action: () => navigate('/admin/setup') });
   }
   if (role === 'STUDIO_ADMIN' || role === 'ENGINEER') {
     items.push({ id: 'facilities', icon: '⚑', label: 'Facilities', sublabel: 'Room & equipment readiness', group: 'QUICK ACTIONS', action: () => navigate('/facilities') });

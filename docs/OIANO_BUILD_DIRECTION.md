@@ -69,7 +69,7 @@ MAKE, SKY or ME before then presents a mechanism that does not exist yet.
 
 | Decision | Needed by |
 |---|---|
-| Can a studio keep scheduling engineers who have no login? (proposed: yes, as unclaimed memberships) | Step 4 |
+| Can a studio keep scheduling engineers who have no login? **Decided 2026-10-05: yes.** Studios list them today (`/api/studio-setup/engineers`); step 4 makes them unclaimed memberships | Step 4 |
 | Should an engineer see every booking at their studio, including unassigned ones? (today: yes) | Step 4 |
 | Should a backfilled project make its artist a lead? (proposed: no) | Step 6 |
 | Is evidence from a booking completed and then reversed before A02 retracted? | Step 19 |
