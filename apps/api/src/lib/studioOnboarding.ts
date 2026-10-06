@@ -79,8 +79,11 @@ export async function registerStudioWithOwner(input: RegisterStudioInput) {
       // A studio joining the network is a fact worth recording, and until the
       // event subject was widened beyond Artist there was nowhere to record it.
       // Emitted after the transaction commits: the studio exists by then, and a
-      // logging failure must never roll back a registration.
-      emitActivityEvent('studio.registered', {
+      // logging failure must never roll back a registration. Awaited, with the
+      // failure caught, so the registration answers only once the event is
+      // written: unawaited, a client that read the event straight away could find
+      // none, which failed CI intermittently.
+      await emitActivityEvent('studio.registered', {
         subject: { type: 'STUDIO', id: created.studio.id },
         actorId: created.user.id,
         studio_name: created.studio.name,
