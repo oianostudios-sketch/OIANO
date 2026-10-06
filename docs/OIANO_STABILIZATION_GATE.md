@@ -143,3 +143,44 @@ Then run this gate again.
 - The notes observed but not changed while fixing A01 and A08 stand.
 - The earlier disposable Postgres cluster lost a system file under `template1`
   (`base/1/4171`), so it can no longer create databases. This gate ran on a new cluster.
+
+## Gate 2 fix — branch `claude/gate-2-schema-declarations`
+
+`schema.prisma` now declares what the tracked migrations build. No migration was written and no
+database changed.
+
+- `financial_transactions.id`, `financial_ledger_entries.id` and `transaction_id`, and
+  `session_completion_requests.id` are declared `@db.Uuid`.
+- The six ids the migrations generate in the database are `@default(dbgenerated(...))`, so those
+  rows now get their id from the database instead of from Prisma, as the migrations intended.
+  `session_completion_requests` keeps a Prisma-generated id, because its migration sets no default.
+- `updated_at` on `communication_threads` and `rights_decisions` is `@default(now()) @updatedAt`.
+- `studio_staff` declares `@@index([studio_id, position])`.
+
+**Verified on a new local cluster.**
+- The gate's drift check exits 0, "No difference detected".
+- So does the form CI now runs: deploy the migrations to a fresh database, then compare that
+  database with the schema.
+- With the client regenerated from the new schema:
+  - both typechecks pass;
+  - security 80 of 80, intelligence 31 of 31 and web 60 of 60;
+  - integration 30 of 30 on a freshly migrated database;
+  - the secret scan passes.
+- `StudioStaffInvitation` is the only changed model no test creates. A smoke check on a fresh
+  database created one and got a UUID id back from the database. It also posted a ledger
+  transaction with two entries and found it again by its UUID id.
+
+**CI.** The integration job gains "Tracked migrations build exactly schema.prisma". It fails the
+build on any difference and shows the difference as an annotation.
+
+**Before merging, the owner's step.** Merging deploys a client that treats these columns as UUIDs
+and leaves six ids to the database. That is right only if production was built by the same
+migrations. From this branch, run this read-only comparison against production, using its direct
+(not pooled) connection string:
+
+```
+npx prisma migrate diff --from-url "<production database URL>" --to-schema-datamodel prisma/schema.prisma --exit-code
+```
+
+Exit 0 means production matches this schema and the branch can merge. Any difference means stop
+and reconcile before merging. After merging, run this gate again.
