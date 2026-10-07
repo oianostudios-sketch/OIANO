@@ -60,6 +60,12 @@ export async function syncConnectionFromBooking(bookingId: string): Promise<void
   // run the independent Node upserts in parallel instead of one after
   // another, and raise the transaction's own timeout explicitly rather than
   // trust the default headroom.
+  //
+  // Starting the transaction has its own limit, maxWait, 2s by default, and it
+  // includes opening a pooled connection. Several syncs at once each need one,
+  // and on a slow network or a busy host opening them took longer than 2s: the
+  // sync threw P2028 and, since completion only logs a failed sync, the booking
+  // went uncounted. The limit matches the booking transaction's.
   await prisma.$transaction(async (tx) => {
     await Promise.all([
       ensureNodeExists('ARTIST', booking.artist_id, tx),
@@ -113,7 +119,7 @@ export async function syncConnectionFromBooking(bookingId: string): Promise<void
       && stored.first_activity_at.getTime() === derived.first_activity_at.getTime()
       && stored.last_activity_at.getTime() === derived.last_activity_at.getTime();
     if (!unchanged) await tx.weaveConnection.update({ where: { id: connection.id }, data: derived });
-  }, { timeout: 15_000 });
+  }, { maxWait: 10_000, timeout: 15_000 });
 }
 
 // ── Read-only lookups — the "basic Node lookup/service" this V1 calls for.
