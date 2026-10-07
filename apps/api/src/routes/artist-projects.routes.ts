@@ -29,6 +29,7 @@ artistProjectsRouter.get('/', async (req: any, res, next) => {
         rights_agreements: { include: { shares: { orderBy: { percentage: 'desc' } }, decisions: { orderBy: { created_at: 'asc' } } }, orderBy: { created_at: 'desc' } },
         bookings: {
           include: {
+            studio: { select: { id: true, name: true, timezone: true } },
             room: { select: { name: true } },
             service: { select: { name: true } },
             engineer: { select: { id: true, name: true, avatar_url: true } },

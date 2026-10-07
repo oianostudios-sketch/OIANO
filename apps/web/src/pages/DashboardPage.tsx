@@ -10,7 +10,7 @@ import { useStudioState } from '../context/StudioState';
 import SessionStats from '../components/SessionStats';
 import OianoBrand from '../components/OianoBrand';
 import ArtistStatusToggle from '../components/ArtistStatusToggle';
-import { fmtTime as _fmtTime, fmtDateShort as _fmtDateShort } from '../lib/fmt';
+import { fmtStudioRange, fmtStudioTime, fmtDateShort as _fmtDateShort } from '../lib/fmt';
 import { FolderKanban, Compass, Handshake, Pencil, Wallet } from 'lucide-react';
 import ArtistAvatar from '../components/ArtistAvatar';
 import { STATUS_HEX } from '../lib/bookingStatus';
@@ -32,8 +32,9 @@ function fmtDate() {
   return new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 }
 
-const fmtTime = (iso: string) => _fmtTime(iso);
-const fmtDateShort = (iso: string) => _fmtDateShort(iso);
+// Session times read in the studio's zone, labelled when the viewer is elsewhere.
+const fmtTime = (iso: string, tz?: string) => fmtStudioTime(iso, tz);
+const fmtDateShort = (iso: string, tz?: string) => _fmtDateShort(iso, tz);
 
 function minsUntil(iso: string) {
   const ms = new Date(iso).getTime() - Date.now();
@@ -124,7 +125,7 @@ export function SessionCountdown({ session }: { session: any }) {
           {session.service?.name ?? 'Studio session'}
         </p>
         <p style={{ fontSize: 11, color: '#555', fontFamily: 'monospace' }}>
-          {fmtTime(session.starts_at)} – {fmtTime(session.ends_at)} · {session.room?.name ?? 'Room TBA'}
+          {fmtStudioRange(session.starts_at, session.ends_at, session.studio?.timezone)} · {session.room?.name ?? 'Room TBA'}
         </p>
         {/* Progress bar */}
         <div className="meter" style={{ marginTop: 12 }}>
@@ -132,7 +133,7 @@ export function SessionCountdown({ session }: { session: any }) {
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 9, color: '#3a3a3a', fontFamily: 'monospace' }}>
           <span>Now</span>
-          <span>{fmtTime(session.starts_at)}</span>
+          <span>{fmtTime(session.starts_at, session.studio?.timezone)}</span>
         </div>
       </div>
     </div>
@@ -174,7 +175,7 @@ function StudioBar() {
   const studioMessage = isLive
     ? { label: `Studio live · ${(activeSession as any)?.artist?.name ?? 'Session in progress'}`, color: '#E8823A', href: (activeSession as any)?.id ? `/bookings/${(activeSession as any).id}` : '/calendar' }
     : next
-      ? { label: `Next session ${minsUntil(next.starts_at)} · ${fmtTime(next.starts_at)}`, color: '#6aa9d2', href: (next as any).id ? `/bookings/${(next as any).id}` : '/calendar' }
+      ? { label: `Next session ${minsUntil(next.starts_at)} · ${fmtTime(next.starts_at, next.studio?.timezone)}`, color: '#6aa9d2', href: (next as any).id ? `/bookings/${(next as any).id}` : '/calendar' }
       : { label: 'Studio ready', color: '#4fa98a', href: '/calendar' };
   const messages = [studioMessage, ...tickerNotifications.filter((notification: any) => !notification.read_at).slice(0, 4).map((notification: any) => ({ label: notification.title, color: '#d3b35c', href: notification.payload?.booking_id ? `/bookings/${notification.payload.booking_id}` : '/communications?view=priority' }))];
   const current = messages[messageIndex % messages.length] ?? studioMessage;
@@ -323,7 +324,7 @@ export default function DashboardPage() {
     .filter((project: any) => project.is_active && project.phase !== 'DELIVERED');
   const nextProject = activeProjects[0] ?? null;
   const primaryAction = nextSession
-    ? { to: `/bookings/${nextSession.id}`, eyebrow: 'Upcoming session', label: 'Prepare for your session', detail: `${fmtDateShort(nextSession.starts_at)} at ${fmtTime(nextSession.starts_at)}`, cta: 'Prepare for session' }
+    ? { to: `/bookings/${nextSession.id}`, eyebrow: 'Upcoming session', label: 'Prepare for your session', detail: `${fmtDateShort(nextSession.starts_at, nextSession.studio?.timezone)} at ${fmtTime(nextSession.starts_at, nextSession.studio?.timezone)}`, cta: 'Prepare for session' }
     : activeProjectCount > 0
       ? { to: '/projects', eyebrow: 'Keep the momentum', label: 'Review your active work', detail: `${activeProjectCount} project${activeProjectCount === 1 ? '' : 's'} currently moving`, cta: 'Review project' }
       : { to: '/contributions', eyebrow: 'Make something together', label: 'Find your place in the work', detail: 'Review project invitations and the contributions you can make', cta: 'Open contributions' };
@@ -493,8 +494,8 @@ export default function DashboardPage() {
 
             <Link className="db-signal-card" to={nextSession ? `/bookings/${nextSession.id}` : '/book'} style={{ minHeight: 180, display: 'flex', flexDirection: 'column', padding: 17, borderRadius: 16, textDecoration: 'none', background: 'linear-gradient(145deg, rgba(18,21,24,.94), rgba(10,12,14,.92))', border: '1px solid rgba(255,255,255,.075)' }}>
               <span style={{ fontSize: 9, color: '#596168', fontFamily: 'monospace', letterSpacing: '0.12em' }}>NEXT SESSION</span>
-              <strong style={{ marginTop: 'auto', color: nextSession ? '#f1efe9' : '#8a8a86', fontFamily: "'Playfair Display', serif", fontWeight: 500, fontSize: 21 }}>{nextSession ? fmtDateShort(nextSession.starts_at) : 'Not booked'}</strong>
-              <span style={{ marginTop: 5, color: '#6aa9d2', fontFamily: 'monospace', fontSize: 10 }}>{nextSession ? `${fmtTime(nextSession.starts_at)} · ${nextSession.room?.name ?? 'Room TBA'}` : 'Find a studio time →'}</span>
+              <strong style={{ marginTop: 'auto', color: nextSession ? '#f1efe9' : '#8a8a86', fontFamily: "'Playfair Display', serif", fontWeight: 500, fontSize: 21 }}>{nextSession ? fmtDateShort(nextSession.starts_at, nextSession.studio?.timezone) : 'Not booked'}</strong>
+              <span style={{ marginTop: 5, color: '#6aa9d2', fontFamily: 'monospace', fontSize: 10 }}>{nextSession ? `${fmtTime(nextSession.starts_at, nextSession.studio?.timezone)} · ${nextSession.room?.name ?? 'Room TBA'}` : 'Find a studio time →'}</span>
             </Link>
 
             <Link className="db-signal-card" to="/projects" style={{ minHeight: 180, display: 'flex', flexDirection: 'column', padding: 17, borderRadius: 16, textDecoration: 'none', background: 'linear-gradient(145deg, rgba(18,21,24,.94), rgba(10,12,14,.92))', border: '1px solid rgba(255,255,255,.075)' }}>
@@ -755,8 +756,8 @@ export default function DashboardPage() {
                     } as React.CSSProperties}>
                       {/* Date column */}
                       <div style={{ width: 44, flexShrink: 0, textAlign: 'right' }}>
-                        <p style={{ fontSize: 11, color: '#5A9BCB', fontFamily: 'monospace' }}>{fmtDateShort(b.starts_at)}</p>
-                        <p style={{ fontSize: 10, color: '#3a3a3a', fontFamily: 'monospace' }}>{fmtTime(b.starts_at)}</p>
+                        <p style={{ fontSize: 11, color: '#5A9BCB', fontFamily: 'monospace' }}>{fmtDateShort(b.starts_at, b.studio?.timezone)}</p>
+                        <p style={{ fontSize: 10, color: '#3a3a3a', fontFamily: 'monospace' }}>{fmtTime(b.starts_at, b.studio?.timezone)}</p>
                       </div>
 
                       {/* Status dot */}

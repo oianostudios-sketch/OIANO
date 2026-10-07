@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Calendar, CreditCard, UploadCloud, Download } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
-import { fmtTime, fmtDateLong, fmtDuration } from '../lib/fmt';
+import { fmtStudioRange, fmtDateLong, fmtDuration, studioClock, studioDate, studioTimeToIso, studioZoneLabel } from '../lib/fmt';
 import MessageThread from '../components/MessageThread';
 import ArtistReviewForm from '../components/ArtistReviewForm';
 import SessionCompletionModal from '../components/SessionCompletionModal';
@@ -108,7 +108,8 @@ export default function BookingDetailPage() {
   const reschedule = useMutation({
     mutationFn: () => {
       // A reschedule keeps the booked length, so the new end follows the new start.
-      const startsAt = new Date(`${rescheduleDate}T${rescheduleStart}`);
+      // The date and time typed are the studio's wall clock, not the viewer's.
+      const startsAt = new Date(studioTimeToIso(rescheduleDate, rescheduleStart, booking?.studio?.timezone));
       const ends_at  = new Date(startsAt.getTime() + rescheduleLengthMs).toISOString();
       return api.patch(`/bookings/${id}/reschedule`, { starts_at: startsAt.toISOString(), ends_at });
     },
@@ -398,8 +399,8 @@ export default function BookingDetailPage() {
           <p className="label-mono mb-5 flex items-center gap-2"><Calendar size={12} strokeWidth={2} /> Session details</p>
           <div className="space-y-4">
             {[
-              { label: 'Date',     value: fmtDateLong(booking.starts_at) },
-              { label: 'Time',     value: `${fmtTime(booking.starts_at)} → ${fmtTime(booking.ends_at)} (${fmtDuration(booking.starts_at, booking.ends_at)})` },
+              { label: 'Date',     value: fmtDateLong(booking.starts_at, booking.studio?.timezone) },
+              { label: 'Time',     value: `${fmtStudioRange(booking.starts_at, booking.ends_at, booking.studio?.timezone, ' → ')} (${fmtDuration(booking.starts_at, booking.ends_at)})` },
               { label: 'Room',     value: booking.room?.name ?? '—' },
               { label: 'Service',  value: booking.service?.name ?? '—' },
               { label: 'Engineer', value: booking.engineer?.name ?? 'Assigned by studio' },
@@ -610,8 +611,8 @@ export default function BookingDetailPage() {
               onClick={() => {
                 const s = new Date(booking.starts_at);
                 const e = new Date(booking.ends_at);
-                setRescheduleDate(s.toISOString().slice(0,10));
-                setRescheduleStart(s.toTimeString().slice(0,5));
+                setRescheduleDate(studioDate(s, booking.studio?.timezone));
+                setRescheduleStart(studioClock(s, booking.studio?.timezone));
                 setRescheduleLengthMs(e.getTime() - s.getTime());
                 setRescheduleOpen(true);
               }}
@@ -703,14 +704,14 @@ export default function BookingDetailPage() {
                 <input
                   type="date"
                   value={rescheduleDate}
-                  min={new Date().toISOString().slice(0,10)}
+                  min={studioDate(new Date(), booking.studio?.timezone)}
                   onChange={e => setRescheduleDate(e.target.value)}
                   className="w-full bg-studio-bg border border-studio-border text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-dome"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label-mono text-zinc-500 block mb-1.5">Start time</label>
+                  <label className="label-mono text-zinc-500 block mb-1.5">Start time{studioZoneLabel(booking.starts_at, booking.studio?.timezone) && ` (${studioZoneLabel(booking.starts_at, booking.studio?.timezone)})`}</label>
                   <input
                     type="time"
                     value={rescheduleStart}

@@ -1,4 +1,5 @@
 import { SessionPhase, SessionStatus } from './useClockData';
+import { studioMinutes } from '../../lib/fmt';
 
 export const CX = 160;
 export const CY = 160;
@@ -61,19 +62,20 @@ export function arc(startAngle: number, endAngle: number, radius: number): strin
   return `M${start.x.toFixed(2)},${start.y.toFixed(2)} A${radius},${radius},0,${large},1,${finish.x.toFixed(2)},${finish.y.toFixed(2)}`;
 }
 
-export function isoAngle(iso: string): number {
-  const date = new Date(iso);
-  return ((date.getHours() * 60 + date.getMinutes()) / 1440) * 360;
+// The dial is the studio's day: angles and times are read in the studio's zone
+// (tz), as the server's outer ring already is, and fall back to the browser's
+// only when no zone is known.
+export function isoAngle(iso: string, tz?: string): number {
+  return (studioMinutes(new Date(iso), tz) / 1440) * 360;
 }
 
-export function nowAngle(): number {
-  const date = new Date();
-  return ((date.getHours() * 60 + date.getMinutes()) / 1440) * 360;
+export function nowAngle(tz?: string): number {
+  return (studioMinutes(new Date(), tz) / 1440) * 360;
 }
 
-export function fmtTime(iso?: string | null) {
+export function fmtTime(iso?: string | null, tz?: string) {
   if (!iso) return '--:--';
-  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: tz });
 }
 
 export function fmtMs(milliseconds: number): string {
@@ -106,11 +108,11 @@ const HOUR_PERSONAS: Array<{ min: number; max: number } & Personality> = [
   { min: 23, max: 24, label: 'LATE NIGHT', sub: 'Where classics are made' },
 ];
 
-export function getPersonality(status: SessionStatus): Personality {
+export function getPersonality(status: SessionStatus, tz?: string): Personality {
   if (status === 'overtime') return { label: 'RUNNING DEEP', sub: 'Overtime — keep going' };
   if (status === 'ending_soon') return { label: 'WRAPPING UP', sub: 'Closing this chapter' };
   if (status === 'active') return { label: 'IN SESSION', sub: 'Booth is live' };
-  const hour = new Date().getHours();
+  const hour = Math.floor(studioMinutes(new Date(), tz) / 60);
   return HOUR_PERSONAS.find(persona => hour >= persona.min && hour < persona.max) ?? HOUR_PERSONAS[5];
 }
 

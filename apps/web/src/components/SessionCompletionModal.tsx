@@ -4,7 +4,7 @@ import { CheckCircle2, Plus, X } from 'lucide-react';
 import { api } from '../lib/api';
 import { useToast } from './Toast';
 import Modal from './Modal';
-import { fmtDateLong, fmtTime } from '../lib/fmt';
+import { fmtDateLong, fmtStudioRange } from '../lib/fmt';
 
 const CREDIT_ROLES = [
   'FEATURED_ARTIST', 'PRODUCER', 'ENGINEER', 'SONGWRITER', 'COMPOSER',
@@ -27,6 +27,7 @@ interface SessionCompletionModalProps {
     room?: { name?: string } | null;
     engineer?: { name?: string } | null;
     service?: { name?: string } | null;
+    studio?: { timezone?: string } | null;
     project?: {
       producer?: { id: string; name: string; alias?: string | null } | null;
       participants?: Array<{ id: string; display_name: string; participant_ref_id?: string | null }>;
@@ -146,7 +147,7 @@ export default function SessionCompletionModal({ booking, onClose }: SessionComp
         {booking.artist?.name ?? 'Artist'} · {booking.service?.name ?? 'Session'} · {booking.room?.name ?? 'Room'}
         {booking.engineer?.name ? ` · ${booking.engineer.name}` : ''}
         <br />
-        {fmtDateLong(booking.starts_at)}, {fmtTime(booking.starts_at)}–{fmtTime(booking.ends_at)}
+        {fmtDateLong(booking.starts_at, booking.studio?.timezone)}, {fmtStudioRange(booking.starts_at, booking.ends_at, booking.studio?.timezone, '–')}
       </p>
 
       <div className="space-y-5 max-h-[60vh] overflow-y-auto pr-1">
