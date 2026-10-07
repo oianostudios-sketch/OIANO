@@ -79,6 +79,8 @@ maintenanceRouter.get('/summary', async (_req, res, next) => {
       prisma.payment.count({ where: { status: 'PROCESSING' } }),
     ]);
 
+    // Network-wide, across every studio's zone, so these days are deliberately UTC
+    // days; a studio's own metrics count its own days (lib/studioClock.ts).
     const activity = Array.from({ length: 7 }, (_, index) => {
       const date = new Date(now.getTime() - (6 - index) * 86_400_000).toISOString().slice(0, 10);
       return { date, creators: 0, bookings: 0 };
