@@ -17,9 +17,11 @@ interface RoomArcsProps {
   activeSessionId?: string;
   hoveredId: string | null;
   onHover: (id: string | null, booking: any | null) => void;
+  /** The studio's zone; arcs sit on the studio's day. */
+  tz?: string;
 }
 
-export default function RoomArcs({ bookings, rooms, activeSessionId, hoveredId, onHover }: RoomArcsProps) {
+export default function RoomArcs({ bookings, rooms, activeSessionId, hoveredId, onHover, tz }: RoomArcsProps) {
   const roomNames = rooms.slice(0, ROOM_R.length).map(room => room.name);
   const roomKey = roomNames.join('|');
   const byRoom = useMemo(() => {
@@ -51,8 +53,8 @@ export default function RoomArcs({ bookings, rooms, activeSessionId, hoveredId, 
             <circle cx={CX} cy={CY} r={radius} fill="none" stroke={color} strokeWidth={8} strokeOpacity={0.04} />
 
             {sessions.map(booking => {
-              const startAngle = isoAngle(booking.starts_at);
-              const endAngle = isoAngle(booking.ends_at);
+              const startAngle = isoAngle(booking.starts_at, tz);
+              const endAngle = isoAngle(booking.ends_at, tz);
               const alpha = STATUS_ALPHA[booking.status] ?? 0.5;
               const isActive = booking.id === activeSessionId;
               const isHovered = booking.id === hoveredId;

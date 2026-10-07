@@ -124,7 +124,9 @@ export default function SmartClock({
   const color        = STATUS_COLOR[status];
   const todayBookings = studioState.todaySessions;
   const isLive       = !!session;
-  const persona      = getPersonality(status);
+  // The studio's zone: the dial, its marks and its times are the studio's day.
+  const tz: string | undefined = data?.timezone ?? todayBookings.find((b: any) => b.studio?.timezone)?.studio?.timezone;
+  const persona      = getPersonality(status, tz);
 
   // Waveform animation (250ms steps when live)
   useEffect(() => {
@@ -187,6 +189,7 @@ export default function SmartClock({
             activeSessionId={session?.id}
             hoveredId={hoveredId}
             onHover={handleHover}
+            tz={tz}
           />
           </g>
 
@@ -209,9 +212,9 @@ export default function SmartClock({
 
           {/* Mode faces */}
           <g style={{ opacity: 1, transition: 'opacity 0.2s ease' }}>
-            {mode === 'studio' && <StudioFace data={data} todayBookings={todayBookings} hoveredBooking={hoveredBk} />}
+            {mode === 'studio' && <StudioFace data={data} todayBookings={todayBookings} hoveredBooking={hoveredBk} tz={tz} />}
             {mode === 'focus'  && <FocusFace  data={data} todayBookings={todayBookings} />}
-            {mode === 'day'    && <DayFace    todayBookings={todayBookings} rooms={studioState.roomStatus} />}
+            {mode === 'day'    && <DayFace    todayBookings={todayBookings} rooms={studioState.roomStatus} tz={tz} />}
             {mode === 'pulse'  && <PulseFace  utilizationPct={utilizationPct} weekSessions={weekSessions} todayBookings={todayBookings} />}
           </g>
 

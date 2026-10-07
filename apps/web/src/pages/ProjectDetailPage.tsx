@@ -13,7 +13,7 @@ import { ProducerNav } from '../components/ProducerNav';
 import { useToast } from '../components/Toast';
 import MessageThread from '../components/MessageThread';
 import ProjectActionPanel from '../components/ProjectActionPanel';
-import { fmtDate, fmtDuration, fmtCurrency } from '../lib/fmt';
+import { fmtDate, fmtDuration, fmtCurrency, studioZoneLabel } from '../lib/fmt';
 import { BookingStatus, STATUS_HEX } from '../lib/bookingStatus';
 
 type Phase = 'PRE_PRODUCTION' | 'TRACKING' | 'EDITING' | 'MIXING' | 'MASTERING' | 'DELIVERED';
@@ -26,6 +26,13 @@ interface Booking {
   total_usd: number | string;
   room: { name: string } | null;
   service: { name: string } | null;
+  studio?: { timezone?: string } | null;
+}
+
+// A session's date and time at its studio, labelled when the viewer is elsewhere.
+function sessionWhen(b: Booking) {
+  const label = studioZoneLabel(b.starts_at, b.studio?.timezone);
+  return label ? `${fmtDate(b.starts_at, b.studio?.timezone)} ${label}` : fmtDate(b.starts_at, b.studio?.timezone);
 }
 
 interface Project {
@@ -402,7 +409,7 @@ export default function ProjectDetailPage() {
                     padding: '0.6rem 0.75rem', background: 'var(--surface, #141414)', borderRadius: 8,
                   }}>
                     <div style={{ fontSize: '0.8rem', color: '#ccc' }}>
-                      {fmtDate(b.starts_at)} · {b.service?.name ?? 'Session'} · {b.room?.name ?? 'Room TBA'}
+                      {sessionWhen(b)} · {b.service?.name ?? 'Session'} · {b.room?.name ?? 'Room TBA'}
                     </div>
                     <button
                       onClick={() => linkSession.mutate(b.id)}
@@ -441,7 +448,7 @@ export default function ProjectDetailPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
                   <span className={`signal-dot${b.status === 'IN_PROGRESS' ? ' signal-pulse' : ''}`} style={{ '--signal': STATUS_HEX[b.status as BookingStatus] ?? '#555' } as React.CSSProperties} />
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: '0.85rem', color: '#eee', fontWeight: 500 }}>{fmtDate(b.starts_at)}</div>
+                    <div style={{ fontSize: '0.85rem', color: '#eee', fontWeight: 500 }}>{sessionWhen(b)}</div>
                     <div style={{ fontSize: '0.72rem', color: '#666' }}>
                       {b.service?.name ?? 'Session'} · {b.room?.name ?? 'Room TBA'} · {fmtDuration(b.starts_at, b.ends_at)}
                     </div>

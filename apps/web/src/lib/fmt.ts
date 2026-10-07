@@ -89,6 +89,70 @@ export function studioDate(moment: Date, tz?: string): string {
   return `${local.year}-${String(local.month).padStart(2, '0')}-${String(local.day).padStart(2, '0')}`;
 }
 
+/** The wall-clock time (HH:MM, 24-hour) at a moment in the studio's zone, or the browser's. */
+export function studioClock(moment: Date, tz?: string): string {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  if (!tz) return `${pad(moment.getHours())}:${pad(moment.getMinutes())}`;
+  const local = zonedParts(moment, tz);
+  return `${pad(local.hour)}:${pad(local.minute)}`;
+}
+
+/**
+ * A Date whose local fields (getHours, getDate, ...) read the studio's wall clock
+ * at that moment. For grids that lay sessions out with local-date arithmetic:
+ * the result names a different instant, so it is for layout only, never for
+ * sending back to the API.
+ */
+export function studioWallClock(moment: Date, tz?: string): Date {
+  if (!tz) return new Date(moment.getTime());
+  const local = zonedParts(moment, tz);
+  return new Date(local.year, local.month - 1, local.day, local.hour, local.minute, local.second);
+}
+
+/** Minutes since midnight at the studio, for placing a session on the studio's day. */
+export function studioMinutes(moment: Date, tz?: string): number {
+  if (!tz) return moment.getHours() * 60 + moment.getMinutes();
+  const local = zonedParts(moment, tz);
+  return local.hour * 60 + local.minute;
+}
+
+/** The zone's short name at that instant ("EST", "GMT+1"). */
+export function zoneName(iso: string, tz: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'short' }).formatToParts(new Date(iso));
+  return parts.find((part) => part.type === 'timeZoneName')?.value ?? tz;
+}
+
+function viewerZone(): string | undefined {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined; } catch { return undefined; }
+}
+
+/**
+ * The studio zone's short name, but only for a viewer whose own clock reads
+ * differently at that instant: an artist booking from elsewhere needs to know
+ * whose 2 PM it is, someone in the studio's zone does not. '' without a zone.
+ */
+export function studioZoneLabel(iso: string, tz?: string, viewerTz: string | undefined = viewerZone()): string {
+  if (!tz) return '';
+  if (viewerTz) {
+    const moment = new Date(iso);
+    if (zoneOffset(moment, tz) === zoneOffset(moment, viewerTz)) return '';
+  }
+  return zoneName(iso, tz);
+}
+
+/** A studio-anchored time, labelled with the studio's zone when the viewer is elsewhere. */
+export function fmtStudioTime(iso: string, tz?: string, viewerTz: string | undefined = viewerZone()): string {
+  const label = studioZoneLabel(iso, tz, viewerTz);
+  return label ? `${fmtTime(iso, tz)} ${label}` : fmtTime(iso, tz);
+}
+
+/** A session's span at the studio ("02:00 PM – 05:30 PM EST"), labelled once at the end. */
+export function fmtStudioRange(startIso: string, endIso: string, tz?: string, separator = ' – ', viewerTz: string | undefined = viewerZone()): string {
+  const label = studioZoneLabel(startIso, tz, viewerTz);
+  const span = `${fmtTime(startIso, tz)}${separator}${fmtTime(endIso, tz)}`;
+  return label ? `${span} ${label}` : span;
+}
+
 export function fmtCurrency(amount: number | string, currency = 'USD', locale = 'en-US'): string {
   return new Intl.NumberFormat(locale, {
     style: 'currency',

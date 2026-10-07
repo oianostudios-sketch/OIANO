@@ -14,6 +14,7 @@ import { Activity, LayoutDashboard, Calendar, ClipboardList, DollarSign, Gauge, 
 import { useToast } from '../components/Toast';
 import ArtistAvatar, { initials } from '../components/ArtistAvatar';
 import { BookingStatus, STATUS_HEX } from '../lib/bookingStatus';
+import { studioDate, studioMinutes } from '../lib/fmt';
 import PulseDial from '../components/pulse/PulseDial';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -81,9 +82,13 @@ function fmtTime(iso?: string, timeZone?: string) {
 function fmtCurrency(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 }
-function isToday(iso?: string) {
+// Sessions sit on the studio's day and clock (tz), not the viewer's.
+function isToday(iso?: string, tz?: string) {
   if (!iso) return false;
-  return new Date(iso).toDateString() === new Date().toDateString();
+  return studioDate(new Date(iso), tz) === studioDate(new Date(), tz);
+}
+function studioHours(moment: Date, tz?: string) {
+  return studioMinutes(moment, tz) / 60;
 }
 function collection<T>(v: unknown): T[] {
   if (Array.isArray(v)) return v as T[];
@@ -174,12 +179,12 @@ function SessionProgress({ session }: { session: Session }) {
 
 // ── Today timeline strip ──────────────────────────────────────────────────────
 
-function TimelineStrip({ sessions }: { sessions: Session[] }) {
+function TimelineStrip({ sessions, tz }: { sessions: Session[]; tz?: string }) {
   const START_H = 8, END_H = 22, TOTAL = END_H - START_H;
   const nowPct = useMemo(() => {
     const now = new Date();
-    return ((now.getHours() + now.getMinutes() / 60) - START_H) / TOTAL * 100;
-  }, []);
+    return (studioHours(now, tz) - START_H) / TOTAL * 100;
+  }, [tz]);
   if (!sessions.length) return null;
   return (
     <div className="tl-wrap">
@@ -188,13 +193,13 @@ function TimelineStrip({ sessions }: { sessions: Session[] }) {
           <div className="tl-now" style={{ left: `${nowPct}%` }} />
         )}
         {sessions.map(s => {
-          const sh = new Date(s.starts_at!).getHours() + new Date(s.starts_at!).getMinutes() / 60;
-          const eh = new Date(s.ends_at!).getHours()   + new Date(s.ends_at!).getMinutes()   / 60;
+          const sh = studioHours(new Date(s.starts_at!), tz);
+          const eh = studioHours(new Date(s.ends_at!), tz);
           const left  = Math.max(0, (sh - START_H) / TOTAL * 100);
           const width = Math.min(100 - left, (eh - sh) / TOTAL * 100);
           return (
             <div key={s.id} className="tl-block"
-              title={`${sessionArtist(s)} · ${fmtTime(s.starts_at)}–${fmtTime(s.ends_at)}`}
+              title={`${sessionArtist(s)} · ${fmtTime(s.starts_at, tz)}–${fmtTime(s.ends_at, tz)}`}
               style={{ left: `${left}%`, width: `${Math.max(width, 1)}%`, background: STATUS_HEX[s.status as BookingStatus] ?? '#2a2a2a' }}
             />
           );
@@ -283,10 +288,10 @@ function resolveHubState(todaySessions: Session[], utilizationPct: number, studi
 const OPERATING_DAY_START = 8;
 const OPERATING_DAY_END = 22;
 
-function RoomStateTimeline({ sessions, roomName }: { sessions: Session[]; roomName: string }) {
+function RoomStateTimeline({ sessions, roomName, tz }: { sessions: Session[]; roomName: string; tz?: string }) {
   const dayMinutes = (OPERATING_DAY_END - OPERATING_DAY_START) * 60;
   const now = new Date();
-  const nowMinutes = now.getHours() * 60 + now.getMinutes() - OPERATING_DAY_START * 60;
+  const nowMinutes = studioMinutes(now, tz) - OPERATING_DAY_START * 60;
   const nowPct = Math.max(0, Math.min(100, (nowMinutes / dayMinutes) * 100));
   const valid = sessions.filter(session =>
     session.starts_at && session.ends_at && !['CANCELLED', 'NO_SHOW'].includes(session.status ?? '')
@@ -298,8 +303,8 @@ function RoomStateTimeline({ sessions, roomName }: { sessions: Session[]; roomNa
         {valid.map(session => {
           const start = new Date(session.starts_at!);
           const end = new Date(session.ends_at!);
-          const startMinutes = start.getHours() * 60 + start.getMinutes() - OPERATING_DAY_START * 60;
-          const endMinutes = end.getHours() * 60 + end.getMinutes() - OPERATING_DAY_START * 60;
+          const startMinutes = studioMinutes(start, tz) - OPERATING_DAY_START * 60;
+          const endMinutes = studioMinutes(end, tz) - OPERATING_DAY_START * 60;
           const left = Math.max(0, Math.min(100, (startMinutes / dayMinutes) * 100));
           const right = Math.max(0, Math.min(100, (endMinutes / dayMinutes) * 100));
           const isActive = start <= now && now < end;
@@ -309,7 +314,7 @@ function RoomStateTimeline({ sessions, roomName }: { sessions: Session[]; roomNa
               key={session.id}
               className={`rst-block${isActive ? ' active' : isComplete ? ' complete' : ' upcoming'}`}
               style={{ left: `${left}%`, width: `${Math.max(1.5, right - left)}%` }}
-              title={`${fmtTime(session.starts_at)}–${fmtTime(session.ends_at)} · ${sessionArtist(session)}`}
+              title={`${fmtTime(session.starts_at, tz)}–${fmtTime(session.ends_at, tz)} · ${sessionArtist(session)}`}
             />
           );
         })}
@@ -320,7 +325,7 @@ function RoomStateTimeline({ sessions, roomName }: { sessions: Session[]; roomNa
   );
 }
 
-function DynamicRoomCard({ room, sessions }: { room: { id: string; name: string }; sessions: Session[] }) {
+function DynamicRoomCard({ room, sessions, tz }: { room: { id: string; name: string }; sessions: Session[]; tz?: string }) {
   const now = Date.now();
   const roomSessions = sessions.filter(session => session.room?.id === room.id);
   const active = roomSessions.find(session => session.starts_at && session.ends_at && new Date(session.starts_at).getTime() <= now && now < new Date(session.ends_at).getTime());
@@ -334,9 +339,9 @@ function DynamicRoomCard({ room, sessions }: { room: { id: string; name: string 
     <div className={`rcm${active ? ' rcm-live' : ''}`} style={{ borderLeftColor: accent }}>
       <div className="rcm-header"><span className="rcm-name">{room.name}</span><span className="rcm-pill" style={{ color: accent, background: `${accent}10`, border: `1px solid ${accent}30` }}>{active ? '● LIVE' : 'READY'}</span></div>
       <RoomWave color={accent} active={!!active}/>
-      <RoomStateTimeline sessions={roomSessions} roomName={room.name} />
+      <RoomStateTimeline sessions={roomSessions} roomName={room.name} tz={tz} />
       <p className="rcm-artist">{active ? sessionArtist(active) : next ? `Next · ${sessionArtist(next)}` : 'Available'}</p>
-      <p className="rcm-sub">{active ? `${fmtTime(active.starts_at)}–${fmtTime(active.ends_at)}` : next ? fmtTime(next.starts_at) : 'No session queued'}</p>
+      <p className="rcm-sub">{active ? `${fmtTime(active.starts_at, tz)}–${fmtTime(active.ends_at, tz)}` : next ? fmtTime(next.starts_at, tz) : 'No session queued'}</p>
       {active?.engineer?.name && (
         <p className="rcm-engineer">Engineer: {active.engineer.name}</p>
       )}
@@ -349,8 +354,8 @@ function DynamicRoomCard({ room, sessions }: { room: { id: string; name: string 
 
 // ── Command Hub Panel — the wave IS the studio ────────────────────────────────
 
-function CommandHubPanel({ todaySessions, utilizationPct, studioOnline, studioName }: {
-  todaySessions: Session[]; utilizationPct: number; studioOnline: boolean; studioName?: string;
+function CommandHubPanel({ todaySessions, utilizationPct, studioOnline, studioName, tz }: {
+  todaySessions: Session[]; utilizationPct: number; studioOnline: boolean; studioName?: string; tz?: string;
 }) {
   const info = resolveHubState(todaySessions, utilizationPct, studioOnline);
   const { state, activeSession, nextSession, minsUntil, minsOver, minsLeft } = info;
@@ -451,7 +456,7 @@ function CommandHubPanel({ todaySessions, utilizationPct, studioOnline, studioNa
           </div>
           <div className="chp-artist-info">
             <p className="chp-artist-name" style={{ color: '#3a3a3a' }}>{nextSession.artist?.name ?? 'Walk-in'}</p>
-            <p className="chp-artist-sub">Up next · {fmtTime(nextSession.starts_at)}</p>
+            <p className="chp-artist-sub">Up next · {fmtTime(nextSession.starts_at, tz)}</p>
           </div>
         </div>
       )}
@@ -642,13 +647,15 @@ export default function PulseDashboard() {
     };
   }, []);
 
+  // Every session here belongs to this studio; read them in its zone.
+  const studioTz = pulseData?.studio?.timezone;
   const sorted = useMemo(
     () => [...sessions].sort((a, b) => new Date(sessionStart(a)).getTime() - new Date(sessionStart(b)).getTime()),
     [sessions]
   );
   const todaySessions = useMemo(
-    () => sorted.filter(s => isToday(sessionStart(s)) && !['CANCELLED','NO_SHOW'].includes(s.status ?? '')),
-    [sorted, tick]
+    () => sorted.filter(s => isToday(sessionStart(s), studioTz) && !['CANCELLED','NO_SHOW'].includes(s.status ?? '')),
+    [sorted, tick, studioTz]
   );
   const activeSession = useMemo(() => {
     const now = Date.now();
@@ -732,7 +739,7 @@ export default function PulseDashboard() {
       out.push({
         id: 'payment', icon: '🧾', label: 'Payment follow-up', severity: 'payment',
         headline: `${sessionArtist(outstanding)} — ${fmtCurrency(paymentAmount(outstanding))} outstanding`,
-        detail: outstanding.starts_at ? `Session ${fmtTime(outstanding.starts_at)} · ${outstanding.status?.toLowerCase()}` : 'Payment pending',
+        detail: outstanding.starts_at ? `Session ${fmtTime(outstanding.starts_at, studioTz)} · ${outstanding.status?.toLowerCase()}` : 'Payment pending',
         cta: 'View booking →',
         onClick: () => navigate(`/bookings/${outstanding.id}`),
       });
@@ -768,7 +775,7 @@ export default function PulseDashboard() {
     // Trend — trending genre + the 4h window with the most session starts
     if (pulseData?.trending_genre) {
       const buckets = new Array(24).fill(0);
-      sessions.forEach(s => { if (s.starts_at) buckets[new Date(s.starts_at).getHours()]++; });
+      sessions.forEach(s => { if (s.starts_at) buckets[Math.floor(studioHours(new Date(s.starts_at), studioTz))]++; });
       let bestStart = 8, bestSum = -1;
       for (let h = 8; h <= 18; h++) {
         const sum = buckets.slice(h, h + 4).reduce((a, b) => a + b, 0);
@@ -844,7 +851,7 @@ export default function PulseDashboard() {
           {/* ── Room status widgets ── */}
           <div className="cmd-rooms">
             <p className="cmd-section-label" style={{ marginBottom:8 }}>Studios</p>
-            {(pulseData?.rooms ?? []).map(room => <DynamicRoomCard key={room.id} room={room} sessions={todaySessions}/>) }
+            {(pulseData?.rooms ?? []).map(room => <DynamicRoomCard key={room.id} room={room} sessions={todaySessions} tz={studioTz}/>) }
             {!pulseLoading && !(pulseData?.rooms?.length) && <p style={{fontSize:10,color:'#3f3f46'}}>No rooms configured</p>}
           </div>
 
@@ -877,7 +884,7 @@ export default function PulseDashboard() {
           <header className="cmd-topbar">
             <div className="cmd-topbar-left">
               <p className="cmd-topbar-date">
-                {new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' })}
+                {new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', timeZone: studioTz })}
               </p>
               <div className="cmd-topbar-divider" />
               <LiveClock timeZone={pulseData?.studio?.timezone} />
@@ -913,7 +920,7 @@ export default function PulseDashboard() {
                   <p className="hero-detail">
                     {sessionTitle(activeSession)}
                     {activeSession.room ? ` · ${activeSession.room.name}` : ''}
-                    {' · '}{fmtTime(activeSession.starts_at)}–{fmtTime(activeSession.ends_at)}
+                    {' · '}{fmtTime(activeSession.starts_at, studioTz)}–{fmtTime(activeSession.ends_at, studioTz)}
                   </p>
                 </>
               ) : nextSession ? (
@@ -921,7 +928,7 @@ export default function PulseDashboard() {
                   <span className="hero-idle-pill">◎ NEXT SESSION</span>
                   <h2 className="hero-artist-name hero-artist-dim">{sessionArtist(nextSession)}</h2>
                   <p className="hero-detail">
-                    {sessionTitle(nextSession)} · {fmtTime(nextSession.starts_at)}
+                    {sessionTitle(nextSession)} · {fmtTime(nextSession.starts_at, studioTz)}
                     {nextSession.room ? ` · ${nextSession.room.name}` : ''}
                   </p>
                 </>
@@ -984,6 +991,7 @@ export default function PulseDashboard() {
             {/* Left: hub panel */}
             <div className="cmd-hub-col">
               <CommandHubPanel
+                tz={studioTz}
                 todaySessions={todaySessions}
                 utilizationPct={utilizationPct}
                 studioOnline={!error}
@@ -1015,7 +1023,7 @@ export default function PulseDashboard() {
                             <span className="work-face-kind">Project · {project.phase.replaceAll('_', ' ')}</span>
                             <strong>{project.title}</strong>
                             <span>{primaryName} · Producer {producerName}</span>
-                            <em>{latest ? `${latest.room.name} · ${fmtTime(latest.starts_at)}` : 'No linked session'}</em>
+                            <em>{latest ? `${latest.room.name} · ${fmtTime(latest.starts_at, studioTz)}` : 'No linked session'}</em>
                           </div>
                         </button>
                       );
@@ -1029,7 +1037,7 @@ export default function PulseDashboard() {
                             <span className="work-face-kind">Booked artist · {session.status.replaceAll('_', ' ')}</span>
                             <strong>{artistName}</strong>
                             <span>{session.service.name} · {session.room.name}</span>
-                            <em>{fmtTime(session.starts_at)} · Project not linked</em>
+                            <em>{fmtTime(session.starts_at, studioTz)} · Project not linked</em>
                           </div>
                         </button>
                       );
@@ -1053,7 +1061,7 @@ export default function PulseDashboard() {
                 </div>
               </div>
 
-              <TimelineStrip sessions={todaySessions} />
+              <TimelineStrip sessions={todaySessions} tz={studioTz} />
 
               <div className="cmd-session-list" aria-label="Today's studio sessions">
                 {loading ? (
@@ -1079,8 +1087,8 @@ export default function PulseDashboard() {
                         onClick={() => navigate(`/bookings/${s.id}`)}
                         onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') navigate(`/bookings/${s.id}`); }}>
                         <div className="csr-time">
-                          <span>{fmtTime(s.starts_at)}</span>
-                          <span className="csr-end">{fmtTime(s.ends_at)}</span>
+                          <span>{fmtTime(s.starts_at, studioTz)}</span>
+                          <span className="csr-end">{fmtTime(s.ends_at, studioTz)}</span>
                         </div>
                         <div className="csr-dot" style={{
                           background: isActive ? '#5A9BCB' : (STATUS_HEX[s.status as BookingStatus] ?? '#2a2a2a'),

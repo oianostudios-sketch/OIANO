@@ -33,7 +33,7 @@ export default function StudioConsole({ data, color, setPhase, markActivity, log
     { label: 'Phase', value: session?.phaseLabel ?? '—', accent: Boolean(session) },
     { label: 'Elapsed', value: fmtMins(session?.minutesElapsed), accent: false },
     { label: 'Remaining', value: fmtMins(session?.minutesRemaining), accent: Boolean(session) },
-    { label: 'Est end', value: fmtTime(data?.prediction.estimatedEndTime), accent: false },
+    { label: 'Est end', value: fmtTime(data?.prediction.estimatedEndTime, data?.timezone), accent: false },
     { label: 'OT logged', value: session?.overtimeLoggedMinutes ? `${session.overtimeLoggedMinutes}m` : '—', accent: (session?.overtimeLoggedMinutes ?? 0) > 0 },
   ];
 

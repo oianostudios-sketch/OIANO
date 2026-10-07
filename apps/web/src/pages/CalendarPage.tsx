@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
+import { studioDate, studioWallClock } from '../lib/fmt';
 import ArtistEmptyState from '../components/ArtistEmptyState';
 import { CalendarPlus2 } from 'lucide-react';
 import { BookingStatus, STATUS_HEX, hexAlpha } from '../lib/bookingStatus';
@@ -53,7 +54,7 @@ function addDays(d: Date, n: number): Date {
 function isSameDay(a: Date, b: Date) {
   return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
 }
-function toISO(d: Date) { return d.toISOString().split('T')[0]; }
+function toISO(d: Date) { return studioDate(d); }
 function fmtHour(h: number) {
   const ap = h >= 12 ? 'pm' : 'am';
   return `${h > 12 ? h-12 : h === 0 ? 12 : h}${ap}`;
@@ -66,7 +67,7 @@ function fmtTime(iso: string) {
   return m ? `${dh}:${String(m).padStart(2,'0')}${ap}` : `${dh}${ap}`;
 }
 function durLabel(b: any) {
-  const m = Math.round((new Date(b.ends_at).getTime() - new Date(b.starts_at).getTime()) / 60000);
+  const m = Math.round((b.duration_ms ?? (new Date(b.ends_at).getTime() - new Date(b.starts_at).getTime())) / 60000);
   return m < 60 ? `${m}m` : `${Math.floor(m/60)}h${m%60 ? ` ${m%60}m` : ''}`;
 }
 function hashColor(str: string, palette: string[]) {
@@ -80,8 +81,8 @@ function timePct(iso: string): number {
   const mins = d.getHours()*60 + d.getMinutes();
   return Math.max(0, Math.min(100, ((mins - HOUR_START*60) / (TOTAL_HOURS*60)) * 100));
 }
-function nowPct(): number {
-  const n = new Date();
+function nowPct(tz?: string): number {
+  const n = studioWallClock(new Date(), tz);
   const mins = n.getHours()*60 + n.getMinutes();
   return ((mins - HOUR_START*60) / (TOTAL_HOURS*60)) * 100;
 }
@@ -153,14 +154,26 @@ export default function CalendarPage() {
   const [anchor,    setAnchor]    = useState(() => new Date()); // focal date
   const [colorMode, setColorMode] = useState<ColorMode>('status');
   const [hoverId,   setHoverId]   = useState<string|null>(null);
-  const [nowPctVal, setNowPct]    = useState(() => nowPct());
   const dayScrollRef = useRef<HTMLDivElement>(null);
+
+  const { data: studio, isLoading: studioLoading } = useQuery({
+    queryKey: ['studio'],
+    queryFn: async () => (await api.get('/studio/current')).data,
+    staleTime: 300_000,
+  });
+  // The grid is laid out by wall clock. Staff see their studio's day: its
+  // "now" and "today". Each session sits at its own studio's wall clock (see
+  // bookings below), so a viewer elsewhere still sees the studio's times.
+  const viewTz: string | undefined = isArtist ? undefined : studio?.timezone;
+  const studioToday = () => studioWallClock(new Date(), viewTz);
+  const [nowPctVal, setNowPct]    = useState(() => nowPct());
 
   // Live clock tick every minute
   useEffect(() => {
-    const t = setInterval(() => setNowPct(nowPct()), 60_000);
+    setNowPct(nowPct(viewTz));
+    const t = setInterval(() => setNowPct(nowPct(viewTz)), 60_000);
     return () => clearInterval(t);
-  }, []);
+  }, [viewTz]);
 
   // Auto-scroll day view to current time
   useEffect(() => {
@@ -190,18 +203,20 @@ export default function CalendarPage() {
   const { data: raw = { data: [] }, isFetching } = useQuery({
     queryKey: ['cal-bookings', toISO(from), toISO(to)],
     queryFn: async () => (await api.get(
-      `/bookings?from=${from.toISOString()}&to=${to.toISOString()}&limit=500`
+      `/bookings?from=${addDays(from, -1).toISOString()}&to=${addDays(to, 1).toISOString()}&limit=500`
     )).data,
     refetchInterval: 90_000,
     staleTime: 30_000,
   });
-  const bookings: any[] = raw.data ?? raw ?? [];
+  // Layout copies: starts_at/ends_at moved to the studio's wall clock (display
+  // only; nothing here sends them back), the real length kept in duration_ms.
+  const bookings: any[] = useMemo(() => ((raw.data ?? raw ?? []) as any[]).map((b) => ({
+    ...b,
+    duration_ms: new Date(b.ends_at).getTime() - new Date(b.starts_at).getTime(),
+    starts_at: studioWallClock(new Date(b.starts_at), b.studio?.timezone).toISOString(),
+    ends_at: studioWallClock(new Date(b.ends_at), b.studio?.timezone).toISOString(),
+  })), [raw]);
 
-  const { data: studio, isLoading: studioLoading } = useQuery({
-    queryKey: ['studio'],
-    queryFn: async () => (await api.get('/studio/current')).data,
-    staleTime: 300_000,
-  });
   const rooms: any[] = studio?.rooms ?? [];
 
   const confirmMutation = useMutation({
@@ -220,7 +235,7 @@ export default function CalendarPage() {
     if (view === 'week')  setAnchor(a => addDays(a, 7));
     if (view === 'month') setAnchor(a => new Date(a.getFullYear(), a.getMonth()+1, 1));
   }
-  function goToday() { setAnchor(new Date()); }
+  function goToday() { setAnchor(studioToday()); }
 
   // Click empty slot → book
   function handleSlotClick(date: Date, hour: number, roomId?: string) {
@@ -247,7 +262,7 @@ export default function CalendarPage() {
     return `${MONTH_NAMES[anchor.getMonth()]} ${anchor.getFullYear()}`;
   }, [view, anchor]);
 
-  const isToday = isSameDay(anchor, new Date());
+  const isToday = isSameDay(anchor, studioToday());
   const showNow = (view === 'day' || view === 'week') && nowPctVal >= 0 && nowPctVal <= 100;
 
   // Room utilization for day view header
@@ -413,7 +428,7 @@ export default function CalendarPage() {
           <div style={{ display:'flex', borderBottom:'1px solid #1e1e1e', position:'sticky', top:0, zIndex:20, background:'#0d0d0d' }}>
             <div style={{ width:56, flexShrink:0, position:'sticky', left:0, zIndex:21, background:'#0d0d0d' }} />
             {days.map(day => {
-              const today = isSameDay(day, new Date());
+              const today = isSameDay(day, studioToday());
               const cnt = bookings.filter(b => isSameDay(new Date(b.starts_at), day)).length;
               return (
                 <div key={day.toISOString()} onClick={() => { setAnchor(day); setView('day'); }}
@@ -448,7 +463,7 @@ export default function CalendarPage() {
 
                 {/* Day columns */}
                 {days.map(day => {
-                  const today = isSameDay(day, new Date());
+                  const today = isSameDay(day, studioToday());
                   const dayBkgs = bookings.filter(b => b.room_id === room.id && isSameDay(new Date(b.starts_at), day));
                   return (
                     <div key={day.toISOString()} style={{
@@ -550,7 +565,7 @@ export default function CalendarPage() {
         <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)' }}>
           {cells.map((day, idx) => {
             const inMonth = day.getMonth() === curMonth;
-            const today   = isSameDay(day, new Date());
+            const today   = isSameDay(day, studioToday());
             const dayBkgs = bookings.filter(b => isSameDay(new Date(b.starts_at), day));
             const maxShow = 3;
 
