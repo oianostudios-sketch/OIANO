@@ -12,12 +12,12 @@ import {
   sendBookingCancelled,
 } from '../services/email.service';
 import { createNotification } from '../routes/notifications.routes';
-import { Prisma } from '@prisma/client';
 import { resolveStaffStudio } from '../middleware/studioScope.middleware';
 import { recordBookingCompleted } from '../lib/bookingCompletion';
 import { requireTransition, transitionBookingStatus } from '../lib/bookingTransitions';
 import { upsertSessionLog } from '../lib/sessionLog';
 import { assertEngineerFree } from '../lib/engineerSchedule';
+import { findRoomClash, isRoomClash } from '../lib/roomSchedule';
 import { addDeliverableVersion, recordDeliverableReview } from '../lib/deliverableVersions';
 import { applyWalletDelta } from '../lib/walletLedger';
 import { recordBookingPayment } from '../lib/financialLedger';
@@ -424,31 +424,25 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
       ends_at:   new Date(new Date(data.starts_at).getTime() + i * 7 * 24 * 60 * 60 * 1000 + durationMs),
     }));
 
-    // Single query that checks conflicts for ALL occurrences at once
-    const recurringConflict = await prisma.booking.findFirst({
-      where: {
-        room_id: data.room_id,
-        status: { notIn: ['CANCELLED', 'NO_SHOW'] },
-        OR: occurrences.flatMap((occ) => [
-          { starts_at: { lte: occ.starts_at }, ends_at: { gt: occ.starts_at } },
-          { starts_at: { lt: occ.ends_at },    ends_at: { gte: occ.ends_at } },
-        ]),
-      },
-      select: { starts_at: true },
-    });
-    if (recurringConflict) {
-      throw new AppError(
-        `Time slot not available on ${new Date(recurringConflict.starts_at).toLocaleDateString()}`,
-        409,
-      );
-    }
-
     // Create all bookings + deduct wallet in a single atomic transaction
     const txLabel = repeatWeeks > 1
       ? `${repeatWeeks} recurring sessions (${service.name})`
       : `Studio session: ${service.name}`;
 
     const bookings = await prisma.$transaction(async (tx) => {
+      // Every occurrence must be free in the room, checked in one query under the room's
+      // lock before anything is charged.
+      const recurringConflict = await findRoomClash(tx, {
+        roomId: data.room_id,
+        slots: occurrences.map((occ) => ({ startsAt: occ.starts_at, endsAt: occ.ends_at })),
+      });
+      if (recurringConflict) {
+        throw new AppError(
+          `Time slot not available on ${new Date(recurringConflict.starts_at).toLocaleDateString()}`,
+          409,
+        );
+      }
+
       await applyWalletDelta(tx, wallet.id, -totalCost, 'debit', txLabel);
 
       const created = [];
@@ -511,7 +505,7 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
         : booking
     );
   } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && ['P2004', 'P2034'].includes(err.code)) {
+    if (isRoomClash(err)) {
       return next(new AppError('Time slot is no longer available; please choose another slot', 409));
     }
     next(err);
