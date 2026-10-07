@@ -3,6 +3,7 @@ import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { AppError } from '../lib/errors';
 import { prisma } from '../lib/prisma';
 import { attachStudioScope } from '../middleware/studioScope.middleware';
+import { addCalendarDays, studioDate, studioDateBounds } from '../lib/studioClock';
 
 export const pulseRouter = Router();
 
@@ -19,13 +20,12 @@ const PULSE_CACHE_TTL = 60_000; // 60 s
 async function computePulseData(studioId: string, studio: any) {
       const now = new Date();
 
-      const todayStart = new Date(now);
-      todayStart.setHours(0, 0, 0, 0);
-      const todayEnd = new Date(todayStart);
-      todayEnd.setDate(todayEnd.getDate() + 1);
-
-      const weekStart = new Date(todayStart);
-      weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+      // Today and this week (from Sunday) are the studio's own, in its own zone
+      // (C29), not the server's: they used to cut at the server's midnight.
+      const today = studioDate(now, studio.timezone);
+      const { start: todayStart, end: todayEnd } = studioDateBounds(today, studio.timezone);
+      const weekday = new Date(`${today}T00:00:00Z`).getUTCDay();
+      const weekStart = studioDateBounds(addCalendarDays(today, -weekday), studio.timezone).start;
 
       const thirtyDaysAgo = new Date(now);
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
