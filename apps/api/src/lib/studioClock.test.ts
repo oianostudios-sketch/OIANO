@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { liveSession, minutesIntoStudioDay, studioDate, studioDateBounds, studioDayBounds } from './studioClock';
+import { liveSession, minutesIntoStudioDay, studioDate, studioDateBounds, studioDayBounds, studioLocalToInstant, weeklyOccurrences } from './studioClock';
 
 const at = (iso: string) => new Date(iso);
 
@@ -65,4 +65,66 @@ test('only a confirmed or in-progress session is live, and one in progress past 
   const overtime = liveSession([session('IN_PROGRESS', '2026-09-14T09:00:00Z', '2026-09-14T11:00:00Z')], now);
   assert.ok(overtime, 'a session still in progress after its end is running');
   assert.ok(overtime.ends_at < now, 'and it is overtime');
+});
+
+// Weekly series across clock changes. Every expected instant is worked by hand:
+// London moves to BST (UTC+1) at 01:00Z on 29 March 2026 and back to GMT at 01:00Z
+// on 25 October 2026; New York moves to EDT (UTC-4) on 8 March 2026 and back to
+// EST (UTC-5) on 1 November 2026, at 02:00 local each time.
+const series = (start: string, end: string, weeks: number, zone: string) =>
+  weeklyOccurrences(at(start), at(end), weeks, zone).map((occ) => `${occ.starts_at.toISOString()} ${occ.ends_at.toISOString()}`);
+
+test('a weekly 18:00 session in London stays at 18:00 across both clock changes', () => {
+  assert.deepEqual(series('2026-03-19T18:00:00Z', '2026-03-19T20:00:00Z', 4, 'Europe/London'), [
+    '2026-03-19T18:00:00.000Z 2026-03-19T20:00:00.000Z', // 18:00 GMT
+    '2026-03-26T18:00:00.000Z 2026-03-26T20:00:00.000Z',
+    '2026-04-02T17:00:00.000Z 2026-04-02T19:00:00.000Z', // 18:00 BST
+    '2026-04-09T17:00:00.000Z 2026-04-09T19:00:00.000Z',
+  ]);
+  assert.deepEqual(series('2026-10-15T17:00:00Z', '2026-10-15T19:00:00Z', 4, 'Europe/London'), [
+    '2026-10-15T17:00:00.000Z 2026-10-15T19:00:00.000Z', // 18:00 BST
+    '2026-10-22T17:00:00.000Z 2026-10-22T19:00:00.000Z',
+    '2026-10-29T18:00:00.000Z 2026-10-29T20:00:00.000Z', // 18:00 GMT
+    '2026-11-05T18:00:00.000Z 2026-11-05T20:00:00.000Z',
+  ]);
+});
+
+test('a weekly 18:00 session in New York stays at 18:00 across both clock changes', () => {
+  assert.deepEqual(series('2026-03-05T23:00:00Z', '2026-03-06T01:00:00Z', 2, 'America/New_York'), [
+    '2026-03-05T23:00:00.000Z 2026-03-06T01:00:00.000Z', // 18:00 EST
+    '2026-03-12T22:00:00.000Z 2026-03-13T00:00:00.000Z', // 18:00 EDT
+  ]);
+  assert.deepEqual(series('2026-10-29T22:00:00Z', '2026-10-30T00:00:00Z', 2, 'America/New_York'), [
+    '2026-10-29T22:00:00.000Z 2026-10-30T00:00:00.000Z', // 18:00 EDT
+    '2026-11-05T23:00:00.000Z 2026-11-06T01:00:00.000Z', // 18:00 EST
+  ]);
+});
+
+test('an overnight session keeps its wall-clock times even on the night the clocks go back', () => {
+  // 22:00 Saturday to 02:00 Sunday in New York: four hours on the clock, five real
+  // hours on the night of 31 October.
+  assert.deepEqual(series('2026-10-25T02:00:00Z', '2026-10-25T06:00:00Z', 2, 'America/New_York'), [
+    '2026-10-25T02:00:00.000Z 2026-10-25T06:00:00.000Z',
+    '2026-11-01T02:00:00.000Z 2026-11-01T07:00:00.000Z',
+  ]);
+});
+
+test('a time in the spring-forward gap moves forward; a repeated time takes the earlier instant', () => {
+  const local = (date: string, time: string) => {
+    const [year, month, day] = date.split('-').map(Number);
+    const [hour, minute] = time.split(':').map(Number);
+    return { year, month, day, hour, minute };
+  };
+  assert.equal(studioLocalToInstant(local('2026-03-29', '01:30'), 'Europe/London').toISOString(), '2026-03-29T01:30:00.000Z', '01:30 does not exist; 02:30 BST');
+  assert.equal(studioLocalToInstant(local('2026-03-08', '02:30'), 'America/New_York').toISOString(), '2026-03-08T07:30:00.000Z', '02:30 does not exist; 03:30 EDT');
+  assert.equal(studioLocalToInstant(local('2026-10-25', '01:30'), 'Europe/London').toISOString(), '2026-10-25T00:30:00.000Z', '01:30 BST, not 01:30 GMT');
+  assert.equal(studioLocalToInstant(local('2026-11-01', '01:30'), 'America/New_York').toISOString(), '2026-11-01T05:30:00.000Z', '01:30 EDT, not 01:30 EST');
+  assert.equal(studioLocalToInstant(local('2026-07-01', '18:00'), 'Europe/London').toISOString(), '2026-07-01T17:00:00.000Z');
+
+  // A Sunday 01:30 series in London lands in the gap once, then returns to 01:30 BST.
+  assert.deepEqual(series('2026-03-22T01:30:00Z', '2026-03-22T03:30:00Z', 3, 'Europe/London'), [
+    '2026-03-22T01:30:00.000Z 2026-03-22T03:30:00.000Z',
+    '2026-03-29T01:30:00.000Z 2026-03-29T02:30:00.000Z', // 02:30 to 03:30 BST
+    '2026-04-05T00:30:00.000Z 2026-04-05T02:30:00.000Z',
+  ]);
 });
