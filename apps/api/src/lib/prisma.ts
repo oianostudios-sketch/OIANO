@@ -35,6 +35,11 @@ export const prisma =
   new PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
     datasources: { db: { url: buildDbUrl() } },
+    // Starting an interactive transaction waits for a pooled connection, 2s by default. On
+    // a busy host or after an idle disconnect, opening one can take longer, and the work
+    // then fails with P2028 before it starts (Weave lost syncs that way, 2026-10-07). Wait
+    // as long as the booking transaction always has; a call can still set its own.
+    transactionOptions: { maxWait: 10_000 },
   });
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
