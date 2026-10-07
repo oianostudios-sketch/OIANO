@@ -22,7 +22,11 @@ those shifted times.
   uncharged, because its third session meets a booking only at its real time.
   Mutation: with `main`'s 7 × 24-hour arithmetic restored, all three integration subtests
   fail; choosing the later instant for a repeated time fails the gap/overlap unit test.
-  API unit 106 of 106, intelligence 31 of 31, both typechecks pass.
+  API unit 106 of 106, intelligence 31 of 31, web 88 of 88, both typechecks, the build
+  and the secret scan pass. Integration 157 of 159 on a fresh database: the two failures
+  are `lifecycle-guards`' "Studio Circle: answers sent together produce one decision" and
+  its parent, which fail the same way with `main`'s code in place, a race in Circle
+  consent that this change does not touch.
 - **Not exercised.** The web booking page only sends `repeat_weeks` and shows the first
   session, so it needed no change and has no new test. Zones that change their clocks by
   other than an hour, or twice within two days, are not tested.
