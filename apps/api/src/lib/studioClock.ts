@@ -77,3 +77,59 @@ export function minutesIntoStudioDay(moment: Date, timeZone: string): number {
   const local = zonedParts(moment, timeZone);
   return local.hour * 60 + local.minute;
 }
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The instant at which the studio's wall clock reads a local date and time.
+ * `month` is 1-based, and an out-of-range day rolls over as Date.UTC rolls it.
+ *
+ * Twice a year a wall-clock time does not name exactly one instant. Both cases
+ * resolve the way Temporal's 'compatible' disambiguation does:
+ * - a time inside the spring-forward gap (01:30 in London on the last Sunday of
+ *   March) does not exist, so it moves forward by the length of the gap, read
+ *   with the offset in force before the change (01:30 becomes 02:30 BST);
+ * - a time in the fall-back overlap (01:30 in London on the last Sunday of
+ *   October) happens twice, and the earlier one, before the clocks go back, wins.
+ */
+export function studioLocalToInstant(
+  local: { year: number; month: number; day: number; hour: number; minute: number; second?: number; millisecond?: number },
+  timeZone: string,
+): Date {
+  const asUtc = Date.UTC(local.year, local.month - 1, local.day, local.hour, local.minute, local.second ?? 0, local.millisecond ?? 0);
+  // The zone's offsets a day either side; no zone changes its clocks twice in two days.
+  const offsetBefore = zoneOffset(new Date(asUtc - DAY_MS), timeZone);
+  const offsetAfter = zoneOffset(new Date(asUtc + DAY_MS), timeZone);
+  const wanted = zonedParts(new Date(asUtc), 'UTC');
+  const readsAsWanted = (moment: Date) => {
+    const seen = zonedParts(moment, timeZone);
+    return seen.year === wanted.year && seen.month === wanted.month && seen.day === wanted.day
+      && seen.hour === wanted.hour && seen.minute === wanted.minute && seen.second === wanted.second;
+  };
+  const candidates = [asUtc - offsetBefore, asUtc - offsetAfter]
+    .map((ms) => new Date(ms))
+    .filter(readsAsWanted)
+    .sort((a, b) => a.getTime() - b.getTime());
+  // No candidate reads as wanted only inside the gap: keep the earlier offset.
+  return candidates[0] ?? new Date(asUtc - offsetBefore);
+}
+
+/**
+ * A session repeated weekly at the same studio-local time. Each occurrence is
+ * the first one's local date plus 7 × i days at the same local start and end
+ * times, converted to an instant on its own date, so an 18:00 session stays at
+ * 18:00 on both sides of a clock change. Duration is kept in wall-clock terms:
+ * a session that ends the next local day ends the next local day every week.
+ * The first occurrence is returned exactly as given.
+ */
+export function weeklyOccurrences(startsAt: Date, endsAt: Date, weeks: number, timeZone: string): { starts_at: Date; ends_at: Date }[] {
+  const start = zonedParts(startsAt, timeZone);
+  const end = zonedParts(endsAt, timeZone);
+  const endDayOffset = Math.round((Date.UTC(end.year, end.month - 1, end.day) - Date.UTC(start.year, start.month - 1, start.day)) / DAY_MS);
+  return Array.from({ length: weeks }, (_, i) => i === 0
+    ? { starts_at: new Date(startsAt), ends_at: new Date(endsAt) }
+    : {
+      starts_at: studioLocalToInstant({ ...start, day: start.day + 7 * i, millisecond: startsAt.getUTCMilliseconds() }, timeZone),
+      ends_at: studioLocalToInstant({ ...end, year: start.year, month: start.month, day: start.day + 7 * i + endDayOffset, millisecond: endsAt.getUTCMilliseconds() }, timeZone),
+    });
+}

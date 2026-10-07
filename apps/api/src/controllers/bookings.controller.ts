@@ -18,6 +18,7 @@ import { recordBookingCompleted } from '../lib/bookingCompletion';
 import { requireTransition, transitionBookingStatus } from '../lib/bookingTransitions';
 import { upsertSessionLog } from '../lib/sessionLog';
 import { assertEngineerFree } from '../lib/engineerSchedule';
+import { studioDate, weeklyOccurrences } from '../lib/studioClock';
 import { addDeliverableVersion, recordDeliverableReview } from '../lib/deliverableVersions';
 import { applyWalletDelta } from '../lib/walletLedger';
 import { recordBookingPayment } from '../lib/financialLedger';
@@ -417,12 +418,16 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
       throw new AppError(`Insufficient wallet balance for ${repeatWeeks} week(s)`, 402);
     }
 
-    // Build list of (starts_at, ends_at) for each occurrence
-    const durationMs = new Date(data.ends_at).getTime() - new Date(data.starts_at).getTime();
-    const occurrences = Array.from({ length: repeatWeeks }, (_, i) => ({
-      starts_at: new Date(new Date(data.starts_at).getTime() + i * 7 * 24 * 60 * 60 * 1000),
-      ends_at:   new Date(new Date(data.starts_at).getTime() + i * 7 * 24 * 60 * 60 * 1000 + durationMs),
-    }));
+    // Build list of (starts_at, ends_at) for each occurrence, at the same
+    // studio-local time every week. Adding 7 × 24 hours to the first instant
+    // moved every session after a clock change by an hour.
+    const occurrences = weeklyOccurrences(new Date(data.starts_at), new Date(data.ends_at), repeatWeeks, studio.timezone);
+    // Only a session lying across a spring-forward gap can collapse here
+    // (01:00 to 02:00 in London that night names no time at all).
+    const collapsed = occurrences.find((occ) => occ.ends_at <= occ.starts_at);
+    if (collapsed) {
+      throw new AppError(`This session does not exist on ${studioDate(collapsed.starts_at, studio.timezone)} because the clocks change`, 409);
+    }
 
     // Single query that checks conflicts for ALL occurrences at once
     const recurringConflict = await prisma.booking.findFirst({
