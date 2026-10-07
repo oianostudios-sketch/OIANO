@@ -285,11 +285,15 @@ test('status lifecycles apply each answer once, even under concurrency', async (
     }
   });
 
-  await t.test('Studio Circle: answers sent together produce one decision', async () => {
+  // The same answer sent together applies once. Mixed answers are not raced here: an
+  // artist may join after declining and decline after joining, so an accept and a decline
+  // that happen to run one after the other both succeed correctly, and asserting a single
+  // winner for them made this test fail whenever the machine was busy.
+  await t.test('Studio Circle: the same answer sent together applies once', async () => {
     for (let round = 0; round < ROUNDS; round += 1) {
       const { artist, member } = await circleMember('REQUESTED');
-      const bodies = [ACCEPT, { action: 'decline' }, ACCEPT, { action: 'decline' }, ACCEPT];
-      const results = await Promise.all(bodies.map((body) => answerCircle(member.id, artist, body)));
+      const body = round % 2 === 0 ? ACCEPT : { action: 'decline' };
+      const results = await Promise.all(Array.from({ length: 5 }, () => answerCircle(member.id, artist, body)));
       assert.deepEqual(statuses(results), ONE_WINNER, `round ${round}: ${JSON.stringify(results.map((r) => r.status))}`);
       const winner = results.find((result) => result.status === 200)!;
       const stored = await prisma.studioCircleMember.findUniqueOrThrow({ where: { id: member.id } });
