@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
 import { useToast } from '../components/Toast';
 import TrustSignal from '../components/TrustSignal';
+import { studioDate, studioTimeToIso } from '../lib/fmt';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Step = 'studio' | 'engineer' | 'service' | 'room' | 'datetime' | 'confirm';
@@ -56,17 +57,20 @@ function calcHours(start: string, end: string): number {
   return Math.max(0, (eh * 60 + em - (sh * 60 + sm)) / 60);
 }
 
-/** Build a proper ISO string in local timezone (avoids the UTC offset bug) */
-function toLocalISO(date: string, time: string): string {
-  return new Date(`${date}T${time}:00`).toISOString();
+// The date and the hour slots are the studio's wall clock, in the studio's
+// zone: the availability endpoint answers for that day there (C29), and a slot
+// read in the browser's zone would be another hour, or another day, for an
+// artist booking a studio somewhere else.
+function toStudioISO(date: string, time: string, tz?: string): string {
+  return studioTimeToIso(date, time, tz);
 }
 
-function isSlotBooked(slot: string, bookings: any[], date: string): boolean {
+function isSlotBooked(slot: string, bookings: any[], date: string, tz?: string): boolean {
   return bookings.some((b) => {
     const start = new Date(b.starts_at);
     const end = new Date(b.ends_at);
-    const slotStart = new Date(`${date}T${slot}:00`);
-    const slotEnd = new Date(`${date}T${addHours(slot, 1)}:00`);
+    const slotStart = new Date(toStudioISO(date, slot, tz));
+    const slotEnd = new Date(toStudioISO(date, addHours(slot, 1), tz));
     return slotStart < end && slotEnd > start;
   });
 }
@@ -142,6 +146,7 @@ export default function BookingPage() {
   });
 
   const bookedSlots: any[] = availData?.bookings ?? [];
+  const studioTz: string | undefined = studio?.timezone ?? availData?.timezone;
 
   const { data: artistProjects = [] } = useQuery<any[]>({
     queryKey: ['artist-projects'],
@@ -169,12 +174,12 @@ export default function BookingPage() {
   const grandTotal = total * sessionCount;
   const selectionConflicts = useMemo(() => {
     if (!selected.date || !selected.start_time || !selected.end_time) return false;
-    const start = new Date(toLocalISO(selected.date, selected.start_time)).getTime();
-    const end = new Date(toLocalISO(selected.date, selected.end_time)).getTime();
+    const start = new Date(toStudioISO(selected.date, selected.start_time, studioTz)).getTime();
+    const end = new Date(toStudioISO(selected.date, selected.end_time, studioTz)).getTime();
     return bookedSlots.some((booking: any) =>
       new Date(booking.starts_at).getTime() < end && new Date(booking.ends_at).getTime() > start,
     );
-  }, [bookedSlots, selected.date, selected.start_time, selected.end_time]);
+  }, [bookedSlots, selected.date, selected.start_time, selected.end_time, studioTz]);
 
   // Live wallet balance — auth store is stale after transactions
   const { data: meData, isLoading: loadingMe, isError: walletError, refetch: refetchWallet } = useQuery({
@@ -210,7 +215,7 @@ export default function BookingPage() {
 
   // ── Slot click logic ───────────────────────────────────────────────────────
   function handleSlotClick(slot: string) {
-    if (isSlotBooked(slot, bookedSlots, selected.date)) return;
+    if (isSlotBooked(slot, bookedSlots, selected.date, studioTz)) return;
     if (!selected.start_time || (selected.start_time && selected.end_time)) {
       setSelected((p) => ({ ...p, start_time: slot, end_time: '' }));
     } else if (slot > selected.start_time) {
@@ -233,8 +238,8 @@ export default function BookingPage() {
   // ── Submit ─────────────────────────────────────────────────────────────────
   const createBooking = useMutation({
     mutationFn: async () => {
-      const starts_at = toLocalISO(selected.date, selected.start_time);
-      const ends_at   = toLocalISO(selected.date, selected.end_time);
+      const starts_at = toStudioISO(selected.date, selected.start_time, studioTz);
+      const ends_at   = toStudioISO(selected.date, selected.end_time, studioTz);
       const notes = selected.intent || undefined;
       return (await api.post('/bookings', {
         studio_id:    effectiveStudioId,
@@ -635,7 +640,7 @@ export default function BookingPage() {
                 <input
                   type="date"
                   value={selected.date}
-                  min={new Date().toISOString().split('T')[0]}
+                  min={studioDate(new Date(), studioTz)}
                   onChange={(e) => setSelected((p) => ({
                     ...p, date: e.target.value, start_time: '', end_time: '',
                   }))}
@@ -686,7 +691,7 @@ export default function BookingPage() {
 
                   <div className="grid grid-cols-4 gap-1.5 mb-4">
                     {HOUR_SLOTS.map((slot) => {
-                      const booked  = isSlotBooked(slot, bookedSlots, selected.date);
+                      const booked  = isSlotBooked(slot, bookedSlots, selected.date, studioTz);
                       const isStart = slot === selected.start_time;
                       const inRange = isSlotInRange(slot);
                       return (
@@ -890,7 +895,7 @@ export default function BookingPage() {
                     { label: 'Project',  value: selectedProject?.title ?? 'Standalone session' },
                     {
                       label: 'Date',
-                      value: new Date(selected.date).toLocaleDateString('en-US', {
+                      value: new Date(`${selected.date}T12:00:00`).toLocaleDateString('en-US', {
                         weekday: 'long', month: 'long', day: 'numeric',
                       }),
                     },

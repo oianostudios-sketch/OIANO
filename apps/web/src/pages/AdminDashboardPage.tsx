@@ -7,7 +7,7 @@ import { api } from '../lib/api';
 import { useToast } from '../components/Toast';
 import OianoBrand from '../components/OianoBrand';
 import { SkeletonKPI, SkeletonRow, SkeletonArtistCard } from '../components/Skeleton';
-import { fmtDate } from '../lib/fmt';
+import { fmtDate, studioClock, studioDate, studioTimeToIso } from '../lib/fmt';
 import { BookingStatus, STATUS_TAILWIND } from '../lib/bookingStatus';
 import NetworkExchangePanel from '../components/NetworkExchangePanel';
 import NotificationBell from '../components/NotificationBell';
@@ -75,12 +75,12 @@ const SURFACE_ANIMS = [
   'animate-surface-4',
 ] as const;
 
-function todayStr() {
-  return new Date().toISOString().split('T')[0];
+// A walk-in's date and time are the studio's wall clock (tz), not the viewer's.
+function todayStr(tz?: string) {
+  return studioDate(new Date(), tz);
 }
-function nowTimeStr() {
-  const d = new Date();
-  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+function nowTimeStr(tz?: string) {
+  return studioClock(new Date(), tz);
 }
 
 export default function AdminDashboardPage() {
@@ -124,11 +124,6 @@ export default function AdminDashboardPage() {
     queryKey: ['artists', artistSearch],
     queryFn: async () => { const r = (await api.get('/artists', { params: artistSearch ? { q: artistSearch } : {} })).data; return Array.isArray(r) ? r : (r?.data ?? []); },
   });
-  const deleteArtist = useMutation({
-    mutationFn: (id: string) => api.delete(`/artists/${id}`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['artists'] }); toast.success('Artist deleted'); },
-    onError: (error: any) => toast.error(error?.response?.data?.error ?? 'Could not delete artist'),
-  });
 
   const { data: studio } = useQuery({
     queryKey: ['studio'],
@@ -160,7 +155,7 @@ export default function AdminDashboardPage() {
 
   const walkIn = useMutation({
     mutationFn: () => {
-      const starts_at = new Date(`${wiDate}T${wiTime}:00`).toISOString();
+      const starts_at = studioTimeToIso(wiDate, wiTime, tz);
       return api.post('/admin/walkin', {
         name: wiName.trim(),
         phone: wiPhone.trim() || undefined,
@@ -176,7 +171,7 @@ export default function AdminDashboardPage() {
       toast.success(`Walk-in booked for ${wiName}`);
       setShowWalkIn(false);
       setWiName(''); setWiPhone(''); setWiRoomId('');
-      setWiDate(todayStr()); setWiTime(nowTimeStr());
+      setWiDate(todayStr(tz)); setWiTime(nowTimeStr(tz));
       setWiDuration(120); setWiNotes('');
     },
     onError: () => toast.error('Walk-in booking failed'),
@@ -283,7 +278,7 @@ export default function AdminDashboardPage() {
         </section>
 
         <section aria-label="Operator shortcuts" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
-          <button onClick={()=>setShowWalkIn(true)} className="group flex items-center gap-3 rounded-xl border border-dome/20 bg-dome/[.055] p-4 text-left hover:bg-dome/[.09]"><span className="grid h-9 w-9 place-items-center rounded-lg bg-dome/10 text-dome"><Plus size={16}/></span><span><b className="block text-xs">Add walk-in</b><small className="text-[9px] text-zinc-600">Fast booking</small></span><ArrowRight size={13} className="ml-auto text-zinc-700 group-hover:text-dome"/></button>
+          <button onClick={()=>{ setWiDate(todayStr(tz)); setWiTime(nowTimeStr(tz)); setShowWalkIn(true); }} className="group flex items-center gap-3 rounded-xl border border-dome/20 bg-dome/[.055] p-4 text-left hover:bg-dome/[.09]"><span className="grid h-9 w-9 place-items-center rounded-lg bg-dome/10 text-dome"><Plus size={16}/></span><span><b className="block text-xs">Add walk-in</b><small className="text-[9px] text-zinc-600">Fast booking</small></span><ArrowRight size={13} className="ml-auto text-zinc-700 group-hover:text-dome"/></button>
           <Link to="/calendar" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-studio-surface p-4 hover:border-white/[.12]"><Calendar size={16} className="text-blue-400"/><span><b className="block text-xs">Calendar</b><small className="text-[9px] text-zinc-600">Capacity & conflicts</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
           <Link to="/admin/team" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-studio-surface p-4 hover:border-white/[.12]"><Users size={16} className="text-violet-400"/><span><b className="block text-xs">Team access</b><small className="text-[9px] text-zinc-600">People & permissions</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
           <Link to="/runsheet" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-studio-surface p-4 hover:border-white/[.12]"><ClipboardList size={16} className="text-emerald-400"/><span><b className="block text-xs">Session records</b><small className="text-[9px] text-zinc-600">Execution history</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
@@ -377,7 +372,7 @@ export default function AdminDashboardPage() {
                 Roster · {loadingArtists ? '…' : (artists as any[]).length} artists
               </p>
               <button
-                onClick={() => setShowWalkIn(true)}
+                onClick={() => { setWiDate(todayStr(tz)); setWiTime(nowTimeStr(tz)); setShowWalkIn(true); }}
                 className="flex items-center gap-2 bg-dome/10 border border-dome/30 text-dome text-xs px-3 py-1.5 rounded-lg hover:bg-dome/20 transition-colors font-medium"
               >
                 + Walk-in
@@ -426,17 +421,6 @@ export default function AdminDashboardPage() {
                               <span className="text-zinc-700 mx-1">·</span>
                               <span className="text-dome/70">{a.passport?.profile_strength ?? 0}%</span>
                             </p>
-                          </div>
-                          <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                            <button
-                              onClick={() => {
-                                if (window.confirm(`Delete ${a.name}? This only works for accounts with zero booking/session/file history — anything else will be refused.`)) {
-                                  deleteArtist.mutate(a.id);
-                                }
-                              }}
-                              disabled={deleteArtist.isPending}
-                              className="text-[10px] bg-red-500/10 border border-red-500/20 text-red-400 px-2 py-0.5 rounded hover:bg-red-500/20 transition-colors disabled:opacity-50"
-                            >Delete</button>
                           </div>
                         </div>
                       </div>

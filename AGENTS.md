@@ -129,5 +129,8 @@ the platform. For a browser preview, start `oiano-local` from `.claude/launch.js
 
 ## Recording work
 
-Record what landed, with its evidence, in `docs/OIANO_IMPLEMENTATION_STATUS.md`. Add
-entries; do not delete earlier ones, mark them.
+Record what landed, with its evidence, in a new file under [`docs/status/`](docs/status/README.md),
+one file per change, so changes made in parallel never edit the same file. Records up to
+2026-10-06 are in `docs/OIANO_IMPLEMENTATION_STATUS.md`, which is no longer appended to.
+Never delete a record; a later one supersedes it and says so. A new integration test file
+runs automatically; there is no list to add it to.

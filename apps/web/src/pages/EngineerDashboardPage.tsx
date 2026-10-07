@@ -6,17 +6,14 @@ import { api } from '../lib/api';
 import { useToast } from '../components/Toast';
 import { SkeletonRow } from '../components/Skeleton';
 import OianoBrand from '../components/OianoBrand';
-import { fmtTime, fmtDate } from '../lib/fmt';
+import { fmtStudioTime as fmtTime, fmtDate, studioDate } from '../lib/fmt';
 import { BookingStatus, STATUS_TAILWIND } from '../lib/bookingStatus';
 
 const RATING_LABELS = ['', 'Poor', 'Fair', 'Good', 'Great', 'Excellent'];
 
-function isToday(dateStr: string) {
-  const d = new Date(dateStr);
-  const now = new Date();
-  return d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate();
+// "Today" is the studio's day (tz), which is not the viewer's when they are elsewhere.
+function isToday(dateStr: string, tz?: string) {
+  return studioDate(new Date(dateStr), tz) === studioDate(new Date(), tz);
 }
 
 function isThisWeek(dateStr: string) {
@@ -75,10 +72,10 @@ export default function EngineerDashboardPage() {
   });
 
   const allBookings = bookings as any[];
-  const todaysSessions = allBookings.filter((b) => isToday(b.starts_at) && !['CANCELLED', 'NO_SHOW'].includes(b.status));
+  const todaysSessions = allBookings.filter((b) => isToday(b.starts_at, b.studio?.timezone) && !['CANCELLED', 'NO_SHOW'].includes(b.status));
   const upcomingThisWeek = allBookings.filter((b) =>
     isThisWeek(b.starts_at) &&
-    !isToday(b.starts_at) &&
+    !isToday(b.starts_at, b.studio?.timezone) &&
     new Date(b.starts_at) > new Date() &&
     !['CANCELLED', 'NO_SHOW'].includes(b.status)
   );
@@ -163,9 +160,9 @@ export default function EngineerDashboardPage() {
                       {/* Time block */}
                       <div className="w-20 flex-shrink-0 text-center">
                         <p className={`font-mono text-sm font-semibold ${isActive ? 'text-dome' : 'text-zinc-300'}`}>
-                          {fmtTime(b.starts_at)}
+                          {fmtTime(b.starts_at, b.studio?.timezone)}
                         </p>
-                        <p className="text-zinc-600 text-xs">{fmtTime(b.ends_at)}</p>
+                        <p className="text-zinc-600 text-xs">{fmtTime(b.ends_at, b.studio?.timezone)}</p>
                         {isActive && (
                           <span className="text-[9px] text-dome uppercase tracking-wider font-mono mt-1 block">● live</span>
                         )}
@@ -232,8 +229,8 @@ export default function EngineerDashboardPage() {
               {upcomingThisWeek.map((b: any) => (
                 <div key={b.id} className="bg-studio-surface border border-studio-border rounded-xl px-5 py-3.5 flex items-center gap-4">
                   <div className="w-24 flex-shrink-0">
-                    <p className="text-zinc-400 text-xs">{fmtDate(b.starts_at)}</p>
-                    <p className="text-zinc-600 text-xs">{fmtTime(b.starts_at)}</p>
+                    <p className="text-zinc-400 text-xs">{fmtDate(b.starts_at, b.studio?.timezone)}</p>
+                    <p className="text-zinc-600 text-xs">{fmtTime(b.starts_at, b.studio?.timezone)}</p>
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-white text-sm font-medium truncate">{b.artist?.name ?? '—'}</p>
@@ -259,7 +256,7 @@ export default function EngineerDashboardPage() {
               {recentCompleted.map((b: any) => (
                 <div key={b.id} className="bg-studio-surface border border-studio-border rounded-xl px-5 py-3.5 flex items-center gap-4">
                   <div className="w-24 flex-shrink-0">
-                    <p className="text-zinc-400 text-xs">{fmtDate(b.starts_at)}</p>
+                    <p className="text-zinc-400 text-xs">{fmtDate(b.starts_at, b.studio?.timezone)}</p>
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-white text-sm font-medium truncate">{b.artist?.name ?? '—'}</p>

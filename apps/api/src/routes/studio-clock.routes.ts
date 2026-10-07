@@ -136,6 +136,8 @@ studioClockRouter.get('/', authenticate, requireRole('STUDIO_ADMIN', 'ENGINEER')
       },
       studioLoad: todayBookings.length,
       bestRecordingWindows: [10, 14, 19],
+      // The zone outerRing is drawn in, so the browser places its own marks the same way.
+      timezone: studio.timezone,
     };
 
     clockCache.set(studio.id, { data: responseData, expiresAt: Date.now() + CLOCK_CACHE_TTL });

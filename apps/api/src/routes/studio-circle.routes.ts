@@ -93,7 +93,21 @@ studioCircleRouter.post('/:id/request', requireRole('STUDIO_ADMIN'), attachStudi
     });
     if (!member) throw new AppError('Circle member not found', 404);
     if (member.consent_status === 'ACCEPTED') return res.json(member);
-    const updated = await prisma.studioCircleMember.update({ where: { id: member.id }, data: { consent_status: 'REQUESTED' } });
+    if (member.consent_status === 'REQUESTED') throw new AppError('Consent has already been requested', 409);
+    // Owner decision 2026-10-06: once the artist has declined or withdrawn, the
+    // studio may not ask again. Only the artist can reopen it, from their side.
+    if (member.consent_status === 'DECLINED' || member.consent_status === 'WITHDRAWN') {
+      throw new AppError('The artist chose to keep this private. Only the artist can join the Circle now.', 409);
+    }
+    // Guard the write on the status just read: otherwise a request racing the
+    // artist's own answer could overwrite it, and two requests sent together
+    // would each notify the artist.
+    const claimed = await prisma.studioCircleMember.updateMany({
+      where: { id: member.id, consent_status: member.consent_status },
+      data: { consent_status: 'REQUESTED' },
+    });
+    if (claimed.count !== 1) throw new AppError('This Circle membership changed. Refresh and try again.', 409);
+    const updated = await prisma.studioCircleMember.findUniqueOrThrow({ where: { id: member.id } });
     await createNotification({
       user_id: member.artist.user_id,
       type: 'studio_circle_consent',
@@ -140,12 +154,23 @@ studioCircleRouter.patch('/:id/consent', requireRole('ARTIST'), async (req: Requ
     const member = await prisma.studioCircleMember.findFirst({ where: { id: req.params.id, artist_id: artist.id } });
     if (!member) throw new AppError('Circle membership not found', 404);
 
+    // Accepting is open from any state but ACCEPTED, declining from any state
+    // but DECLINED, and withdrawing only from ACCEPTED (what the consent
+    // centre offers). The write is guarded on the status read, so answers
+    // sent together cannot both apply.
+    const allowed = input.action === 'accept' ? member.consent_status !== 'ACCEPTED'
+      : input.action === 'decline' ? member.consent_status !== 'DECLINED'
+        : member.consent_status === 'ACCEPTED';
+    if (!allowed) throw new AppError('This Circle consent has already been answered', 409);
+
     const data = input.action === 'accept'
       ? { consent_status: 'ACCEPTED' as const, visibility: input.visibility, show_session_count: input.show_session_count, show_projects: input.show_projects, consented_at: new Date(), withdrawn_at: null }
       : input.action === 'decline'
         ? { consent_status: 'DECLINED' as const, visibility: 'HIDDEN' as const, show_session_count: false, show_projects: false, consented_at: null, withdrawn_at: null }
         : { consent_status: 'WITHDRAWN' as const, visibility: 'HIDDEN' as const, show_session_count: false, show_projects: false, withdrawn_at: new Date() };
 
-    res.json(await prisma.studioCircleMember.update({ where: { id: member.id }, data }));
+    const claimed = await prisma.studioCircleMember.updateMany({ where: { id: member.id, consent_status: member.consent_status }, data });
+    if (claimed.count !== 1) throw new AppError('This Circle consent has already been answered', 409);
+    res.json(await prisma.studioCircleMember.findUniqueOrThrow({ where: { id: member.id } }));
   } catch (error) { next(error); }
 });

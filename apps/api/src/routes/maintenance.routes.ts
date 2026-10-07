@@ -79,6 +79,8 @@ maintenanceRouter.get('/summary', async (_req, res, next) => {
       prisma.payment.count({ where: { status: 'PROCESSING' } }),
     ]);
 
+    // Network-wide, across every studio's zone, so these days are deliberately UTC
+    // days; a studio's own metrics count its own days (lib/studioClock.ts).
     const activity = Array.from({ length: 7 }, (_, index) => {
       const date = new Date(now.getTime() - (6 - index) * 86_400_000).toISOString().slice(0, 10);
       return { date, creators: 0, bookings: 0 };
@@ -156,7 +158,7 @@ maintenanceRouter.get('/search', async (req, res, next) => {
       }),
       prisma.booking.findUnique({
         where: { id: q },
-        select: { id: true, status: true, starts_at: true, artist: { select: { name: true } }, studio: { select: { name: true } } },
+        select: { id: true, status: true, starts_at: true, artist: { select: { name: true } }, studio: { select: { name: true, timezone: true } } },
       }).catch(() => null),
     ]);
 
@@ -166,7 +168,7 @@ maintenanceRouter.get('/search', async (req, res, next) => {
         artists: artists.map((a) => ({ id: a.id, type: 'artist', name: a.name, alias: a.alias, email: a.user.email, passport_code: a.passport?.passport_code ?? null })),
         producers: producers.map((p) => ({ id: p.id, type: 'producer', name: p.name, alias: p.alias, email: p.user.email, passport_code: p.passport?.passport_code ?? null })),
         studios: studios.map((s) => ({ id: s.id, type: 'studio', name: s.name, slug: s.slug })),
-        booking: booking ? { id: booking.id, type: 'booking', status: booking.status, starts_at: booking.starts_at, artist_name: booking.artist.name, studio_name: booking.studio.name } : null,
+        booking: booking ? { id: booking.id, type: 'booking', status: booking.status, starts_at: booking.starts_at, artist_name: booking.artist.name, studio_name: booking.studio.name, studio_timezone: booking.studio.timezone } : null,
       },
     });
   } catch (error) { next(error); }
@@ -275,7 +277,7 @@ maintenanceRouter.get('/bookings', async (_req, res, next) => {
     const bookings = await prisma.booking.findMany({
       orderBy: { created_at: 'desc' }, take: 250,
       include: {
-        studio: { select: { id: true, name: true } }, artist: { select: { id: true, name: true, alias: true } },
+        studio: { select: { id: true, name: true, timezone: true } }, artist: { select: { id: true, name: true, alias: true } },
         room: { select: { name: true } }, service: { select: { name: true } }, engineer: { select: { name: true } },
         payment: { select: { status: true, amount_usd: true, provider: true } },
       },

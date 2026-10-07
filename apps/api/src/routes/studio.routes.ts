@@ -6,6 +6,7 @@ import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { rateLimit } from '../middleware/rateLimit.middleware';
 import { AppError } from '../lib/errors';
 import { resolveStaffStudio } from '../middleware/studioScope.middleware';
+import { studioDayBounds } from '../lib/studioClock';
 import { getNavigationRecommendation } from '../intelligence/intelligence.service';
 import { buildNavigationContext } from '../intelligence/context/context-builder';
 import crypto from 'crypto';
@@ -229,11 +230,12 @@ studioRouter.get('/navigation-intelligence', authenticate, requireRole('STUDIO_A
     const studio = await resolveStaffStudio(userId);
 
     const now = new Date();
-    const todayEnd = new Date(now); todayEnd.setHours(23, 59, 59, 999);
+    // The rest of the studio's own day, not the server's (C29).
+    const { end: todayEnd } = studioDayBounds(now, studio.timezone);
 
     const [pendingBookings, todaySessionsRemaining, pendingReviewDeliverables, draftCredits, overduePayments] = await Promise.all([
       prisma.booking.count({ where: { studio_id: studio.id, status: 'PENDING' } }),
-      prisma.booking.count({ where: { studio_id: studio.id, status: { in: ['CONFIRMED', 'IN_PROGRESS'] }, starts_at: { gte: now, lte: todayEnd } } }),
+      prisma.booking.count({ where: { studio_id: studio.id, status: { in: ['CONFIRMED', 'IN_PROGRESS'] }, starts_at: { gte: now, lt: todayEnd } } }),
       prisma.deliverable.count({ where: { status: 'PENDING_REVIEW', booking: { studio_id: studio.id } } }),
       prisma.projectCredit.count({ where: { status: 'DRAFT', project: { bookings: { some: { studio_id: studio.id } } } } }),
       prisma.payment.count({ where: { status: 'UNPAID', booking: { studio_id: studio.id, ends_at: { lt: now } } } }),

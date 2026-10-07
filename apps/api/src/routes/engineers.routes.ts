@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { AppError } from '../lib/errors';
 import { resolveStaffStudio } from '../middleware/studioScope.middleware';
+import { studioDate, studioDateBounds } from '../lib/studioClock';
 
 export const engineersRouter = Router();
 
@@ -100,20 +101,21 @@ const RunsheetQuerySchema = z.object({
 engineersRouter.get('/runsheet', authenticate, requireRole('ENGINEER', 'STUDIO_ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { date } = RunsheetQuerySchema.parse(req.query);
-    const target = date ? new Date(date) : new Date();
-    const dayStart = new Date(target);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(target);
-    dayEnd.setHours(23, 59, 59, 999);
-
     const studio = await resolveStaffStudio((req as any).userId);
+
+    // The day, and "today" when no date is named, are the studio's own (C29),
+    // not the server's: the server's midnight is not the studio's. A session
+    // running across midnight is on the sheet for both days it touches.
+    const day = date ?? studioDate(new Date(), studio.timezone);
+    const { start: dayStart, end: dayEnd } = studioDateBounds(day, studio.timezone);
 
     // Engineers see all sessions for the day (no per-engineer filter since Engineer
     // model isn't linked to User in schema; engineer is matched by name at booking time)
     const bookings = await prisma.booking.findMany({
       where: {
         studio_id: studio.id,
-        starts_at: { gte: dayStart, lte: dayEnd },
+        starts_at: { lt: dayEnd },
+        ends_at: { gt: dayStart },
         status: { notIn: ['CANCELLED', 'NO_SHOW'] },
       },
       include: {
@@ -169,7 +171,8 @@ engineersRouter.get('/runsheet', authenticate, requireRole('ENGINEER', 'STUDIO_A
     });
 
     res.json({
-      date: dayStart.toISOString().split('T')[0],
+      date: day,
+      timezone: studio.timezone,
       studio_name: studio.name,
       generated_at: new Date().toISOString(),
       revenue: { expected: 0, paid: 0, outstanding: 0 }, // not shown in engineer view

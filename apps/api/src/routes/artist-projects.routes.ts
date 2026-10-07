@@ -29,6 +29,7 @@ artistProjectsRouter.get('/', async (req: any, res, next) => {
         rights_agreements: { include: { shares: { orderBy: { percentage: 'desc' } }, decisions: { orderBy: { created_at: 'asc' } } }, orderBy: { created_at: 'desc' } },
         bookings: {
           include: {
+            studio: { select: { id: true, name: true, timezone: true } },
             room: { select: { name: true } },
             service: { select: { name: true } },
             engineer: { select: { id: true, name: true, avatar_url: true } },
@@ -98,7 +99,15 @@ artistProjectsRouter.patch('/:id/promotional-consents/:consentId', async (req: a
     if (!consent) throw new AppError('Consent request not found', 404);
     if (!isConsentTransitionAllowed(consent.status, action)) throw new AppError('This consent action is not allowed from its current state', 409);
     const now = new Date();
-    const updated = await prisma.promotionalConsent.update({ where: { id: consent.id }, data: { status: action === 'APPROVE' ? 'APPROVED' : action === 'DECLINE' ? 'DECLINED' : 'WITHDRAWN', responded_by: req.userId, responded_at: action === 'WITHDRAW' ? consent.responded_at : now, withdrawn_at: action === 'WITHDRAW' ? now : null } });
+    // Guard the write on the status just read: a plain update() would let two
+    // concurrent answers both pass the check above and both apply, so an
+    // approval and a decline could each succeed and the last one silently win.
+    const claimed = await prisma.promotionalConsent.updateMany({
+      where: { id: consent.id, status: consent.status },
+      data: { status: action === 'APPROVE' ? 'APPROVED' : action === 'DECLINE' ? 'DECLINED' : 'WITHDRAWN', responded_by: req.userId, responded_at: action === 'WITHDRAW' ? consent.responded_at : now, withdrawn_at: action === 'WITHDRAW' ? now : null },
+    });
+    if (claimed.count !== 1) throw new AppError('This consent request has already been answered', 409);
+    const updated = await prisma.promotionalConsent.findUniqueOrThrow({ where: { id: consent.id } });
     res.json(updated);
   } catch (error) { next(error); }
 });

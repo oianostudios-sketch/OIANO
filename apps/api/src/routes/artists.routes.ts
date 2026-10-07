@@ -8,7 +8,6 @@ import { AppError } from '../lib/errors';
 import { emitActivityEvent } from '../lib/activityEvents';
 import { computeArtistTier } from '../lib/artistTier';
 import { publishArtistStatus } from '../services/liveUpdates';
-import { writeAdminAudit } from '../lib/adminAudit';
 import { resolveStaffStudio } from '../middleware/studioScope.middleware';
 import { isAiEnabled } from '../intelligence/config';
 
@@ -83,50 +82,11 @@ artistsRouter.get('/', requireRole('STUDIO_ADMIN'), async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// DELETE /api/artists/:id — ART-04. Deliberately conservative: only allows
-// deleting artists with zero booking/session/file history (the real-world
-// use case is cleaning up a duplicate/mistaken signup, not offboarding a
-// customer with financial history). Anyone with real activity is refused
-// with a clear 409 rather than either silently orphaning records or
-// cascading through payments/ledger entries — a buggy financial cascade
-// would be a far worse bug than the missing delete button.
-artistsRouter.delete('/:id', requireRole('STUDIO_ADMIN'), async (req: any, res, next) => {
-  try {
-    const studio = await resolveStaffStudio(req.userId);
-    const artist = await prisma.artist.findFirst({
-      where: { id: req.params.id, bookings: { some: { studio_id: studio.id } } },
-      include: {
-        user: { select: { id: true, email: true } },
-        _count: { select: { bookings: true, files: true, session_logs: true, releases: true } },
-      },
-    });
-    if (!artist) throw new AppError('Artist not found', 404);
-
-    const { bookings, files, session_logs, releases } = artist._count;
-    if (bookings > 0 || files > 0 || session_logs > 0 || releases > 0) {
-      throw new AppError(
-        `Cannot delete ${artist.name} — this account has ${bookings} booking(s), ${files} file(s), ` +
-        `${session_logs} session log(s), and ${releases} release(s). Deleting would either destroy ` +
-        `real studio/financial history or orphan records. Set their status instead, or contact support ` +
-        `for accounts that genuinely need to be removed.`,
-        409,
-      );
-    }
-
-    await prisma.$transaction([
-      prisma.studioCircleMember.deleteMany({ where: { artist_id: artist.id } }),
-      prisma.artistPassport.delete({ where: { artist_id: artist.id } }),
-      prisma.wallet.delete({ where: { artist_id: artist.id } }),
-      prisma.artist.delete({ where: { id: artist.id } }),
-      prisma.user.delete({ where: { id: artist.user.id } }),
-    ]);
-
-    await keepIdentityInStep({ legacyIds: [artist.id] });
-    await writeAdminAudit(req.userId, 'artist.deleted', req, { artist_id: artist.id, artist_name: artist.name, email: artist.user.email });
-
-    res.json({ success: true });
-  } catch (err) { next(err); }
-});
+// There is no studio route to delete an artist. Identity is issued by OIANO, never by a
+// studio (AGENTS.md), so a studio cannot remove a person from the network. The route that
+// stood here could not work anyway: it found only artists who had booked the studio, then
+// refused any artist with a booking. Removing an account belongs to the person or to a
+// platform operator, and arrives with the Identity migration.
 
 // What any signed-in account may read about an artist. Signup is open and discovery hands
 // out artist ids, so this is public in practice. Fields are listed here rather than
@@ -184,7 +144,7 @@ artistsRouter.get('/:id', async (req: any, res, next) => {
         include: {
           passport: true,
           wallet: true,
-          bookings: { include: { room: true, service: true, engineer: { select: { id: true, name: true } } }, orderBy: { starts_at: 'desc' }, take: 50 },
+          bookings: { include: { studio: { select: { id: true, name: true, timezone: true } }, room: true, service: true, engineer: { select: { id: true, name: true } } }, orderBy: { starts_at: 'desc' }, take: 50 },
           session_logs: { orderBy: { started_at: 'desc' }, take: 10 },
           files: { orderBy: { uploaded_at: 'desc' }, take: 20 },
           user: { select: { id: true, created_at: true } },
@@ -204,7 +164,7 @@ artistsRouter.get('/:id', async (req: any, res, next) => {
       const relationship = await prisma.artist.findFirst({
         where: { id: artist.id, bookings: { some: atStudio } },
         select: {
-          bookings: { where: atStudio, include: { room: true, service: true, engineer: { select: { id: true, name: true } } }, orderBy: { starts_at: 'desc' }, take: 50 },
+          bookings: { where: atStudio, include: { studio: { select: { id: true, name: true, timezone: true } }, room: true, service: true, engineer: { select: { id: true, name: true } } }, orderBy: { starts_at: 'desc' }, take: 50 },
           session_logs: { where: { booking: atStudio }, orderBy: { started_at: 'desc' }, take: 10 },
           files: { orderBy: { uploaded_at: 'desc' }, take: 20 },
         },

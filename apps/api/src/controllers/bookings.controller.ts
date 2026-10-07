@@ -12,11 +12,13 @@ import {
   sendBookingCancelled,
 } from '../services/email.service';
 import { createNotification } from '../routes/notifications.routes';
-import { Prisma } from '@prisma/client';
 import { resolveStaffStudio } from '../middleware/studioScope.middleware';
 import { recordBookingCompleted } from '../lib/bookingCompletion';
 import { requireTransition, transitionBookingStatus } from '../lib/bookingTransitions';
 import { upsertSessionLog } from '../lib/sessionLog';
+import { assertEngineerFree } from '../lib/engineerSchedule';
+import { findRoomClash, isRoomClash } from '../lib/roomSchedule';
+import { studioDate, weeklyOccurrences } from '../lib/studioClock';
 import { addDeliverableVersion, recordDeliverableReview } from '../lib/deliverableVersions';
 import { applyWalletDelta } from '../lib/walletLedger';
 import { recordBookingPayment } from '../lib/financialLedger';
@@ -60,10 +62,19 @@ export async function assignBookingEngineer(req: Request, res: Response, next: N
       const engineer = await prisma.engineer.findFirst({ where: { id: engineer_id, studio_id: studio.id } });
       if (!engineer) throw new AppError('Engineer not found at this studio', 404);
     }
-    const updated = await prisma.booking.update({
-      where: { id: booking.id },
-      data: { engineer_id },
-      include: { artist: true, room: true, engineer: true, service: true, payment: true },
+    // The booking row is locked before the engineer's, as on every path that places an
+    // engineer, so its time and status cannot change while the engineer is checked.
+    const updated = await prisma.$transaction(async (tx) => {
+      const [current] = await tx.$queryRaw<Array<{ starts_at: Date; ends_at: Date; status: string }>>`
+        SELECT starts_at, ends_at, status::text AS status FROM bookings WHERE id = ${booking.id} FOR UPDATE
+      `;
+      if (['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(current.status)) throw new AppError('Engineer assignment is closed for this booking', 409);
+      if (engineer_id) await assertEngineerFree(tx, { engineerId: engineer_id, startsAt: current.starts_at, endsAt: current.ends_at, exceptBookingId: booking.id });
+      return tx.booking.update({
+        where: { id: booking.id },
+        data: { engineer_id },
+        include: { artist: true, room: true, engineer: true, service: true, payment: true },
+      });
     });
     res.json(updated);
   } catch (error) { next(error); }
@@ -94,8 +105,11 @@ export async function getBookings(req: Request, res: Response, next: NextFunctio
 
     // Shared include shape — every role except ARTIST also gets `artist`
     // (an artist already knows who they are; everyone else needs it).
-    const staffInclude = { artist: true, room: true, engineer: true, service: true, payment: true, project: { select: { id: true, title: true, phase: true } } };
-    const artistInclude = { room: true, engineer: true, service: true, payment: true, project: { select: { id: true, title: true, phase: true } } };
+    // The studio's zone comes with every booking so its times read in the
+    // studio's clock wherever the viewer is.
+    const studioZone = { select: { id: true, name: true, timezone: true } };
+    const staffInclude = { artist: true, studio: studioZone, room: true, engineer: true, service: true, payment: true, project: { select: { id: true, title: true, phase: true } } };
+    const artistInclude = { studio: studioZone, room: true, engineer: true, service: true, payment: true, project: { select: { id: true, title: true, phase: true } } };
 
     if (role === 'STUDIO_ADMIN' || role === 'ENGINEER') {
       const where = { studio_id: staffStudio!.id, ...dateRange };
@@ -407,30 +421,15 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
       throw new AppError(`Insufficient wallet balance for ${repeatWeeks} week(s)`, 402);
     }
 
-    // Build list of (starts_at, ends_at) for each occurrence
-    const durationMs = new Date(data.ends_at).getTime() - new Date(data.starts_at).getTime();
-    const occurrences = Array.from({ length: repeatWeeks }, (_, i) => ({
-      starts_at: new Date(new Date(data.starts_at).getTime() + i * 7 * 24 * 60 * 60 * 1000),
-      ends_at:   new Date(new Date(data.starts_at).getTime() + i * 7 * 24 * 60 * 60 * 1000 + durationMs),
-    }));
-
-    // Single query that checks conflicts for ALL occurrences at once
-    const recurringConflict = await prisma.booking.findFirst({
-      where: {
-        room_id: data.room_id,
-        status: { notIn: ['CANCELLED', 'NO_SHOW'] },
-        OR: occurrences.flatMap((occ) => [
-          { starts_at: { lte: occ.starts_at }, ends_at: { gt: occ.starts_at } },
-          { starts_at: { lt: occ.ends_at },    ends_at: { gte: occ.ends_at } },
-        ]),
-      },
-      select: { starts_at: true },
-    });
-    if (recurringConflict) {
-      throw new AppError(
-        `Time slot not available on ${new Date(recurringConflict.starts_at).toLocaleDateString()}`,
-        409,
-      );
+    // Build list of (starts_at, ends_at) for each occurrence, at the same
+    // studio-local time every week. Adding 7 × 24 hours to the first instant
+    // moved every session after a clock change by an hour.
+    const occurrences = weeklyOccurrences(new Date(data.starts_at), new Date(data.ends_at), repeatWeeks, studio.timezone);
+    // Only a session lying across a spring-forward gap can collapse here
+    // (01:00 to 02:00 in London that night names no time at all).
+    const collapsed = occurrences.find((occ) => occ.ends_at <= occ.starts_at);
+    if (collapsed) {
+      throw new AppError(`This session does not exist on ${studioDate(collapsed.starts_at, studio.timezone)} because the clocks change`, 409);
     }
 
     // Create all bookings + deduct wallet in a single atomic transaction
@@ -439,6 +438,19 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
       : `Studio session: ${service.name}`;
 
     const bookings = await prisma.$transaction(async (tx) => {
+      // Every occurrence must be free in the room, checked in one query under the room's
+      // lock before anything is charged.
+      const recurringConflict = await findRoomClash(tx, {
+        roomId: data.room_id,
+        slots: occurrences.map((occ) => ({ startsAt: occ.starts_at, endsAt: occ.ends_at })),
+      });
+      if (recurringConflict) {
+        throw new AppError(
+          `Time slot not available on ${new Date(recurringConflict.starts_at).toLocaleDateString()}`,
+          409,
+        );
+      }
+
       await applyWalletDelta(tx, wallet.id, -totalCost, 'debit', txLabel);
 
       const created = [];
@@ -501,7 +513,7 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
         : booking
     );
   } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && ['P2004', 'P2034'].includes(err.code)) {
+    if (isRoomClash(err)) {
       return next(new AppError('Time slot is no longer available; please choose another slot', 409));
     }
     next(err);

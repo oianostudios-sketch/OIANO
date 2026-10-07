@@ -125,6 +125,25 @@ jobs:
       - name: Build shared package
         run: npm run build --workspace=packages/shared
 
+      # Stabilization gate 2. A fresh database built from the tracked migrations
+      # must be exactly what schema.prisma describes. prisma migrate dev compares
+      # the same two things, so any difference would be folded into the next
+      # migration it writes. On failure the output is re-emitted as an
+      # annotation, for the same reason as the tests step in the verify job.
+      - name: Tracked migrations build exactly schema.prisma
+        env:
+          DATABASE_URL: ${{ env.INTEGRATION_DATABASE_URL }}
+        run: |
+          npx prisma migrate deploy
+          set +e
+          npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code > drift-output.txt 2>&1
+          status=$?
+          cat drift-output.txt
+          if [ "$status" -ne 0 ]; then
+            printf '::error::%s\n' "$(tail -c 4000 drift-output.txt | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | sed -e ':a' -e 'N' -e '$!ba' -e 's/\n/%0A/g')"
+          fi
+          exit "$status"
+
       - name: Database-backed platform integration tests
         run: npm run test:integration --workspace=apps/api
 

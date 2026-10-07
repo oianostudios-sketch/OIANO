@@ -6,6 +6,12 @@ import { keepIdentityInStep } from '../lib/identity/backfill';
 import { AppError } from '../lib/errors';
 import { publishBookingUpdate, publishStudioAnnouncement } from '../services/liveUpdates';
 import { attachStudioScope } from '../middleware/studioScope.middleware';
+import { Prisma } from '@prisma/client';
+import { CASH_PLATFORM_FEE_BPS, recordBookingPayment, recordStudioCollectedCash } from '../lib/financialLedger';
+import { transitionBookingStatus } from '../lib/bookingTransitions';
+import { writeAdminAudit } from '../lib/adminAudit';
+import { addCalendarDays, studioDate, studioDateBounds } from '../lib/studioClock';
+import { findRoomClash, isRoomClash } from '../lib/roomSchedule';
 export const adminRouter = Router();
 
 // Artist-facing routes, mounted before adminRouter, whose role check would refuse
@@ -52,10 +58,12 @@ adminRouter.get('/analytics', async (req, res, next) => {
   try {
     const studio = (req as any).studio;
 
-    // Build UTC day boundaries for the last 14 days
+    // Days are the studio's own, in its own zone (C29): a 23:00 session west of UTC
+    // used to count on the next UTC day. Index 0 is 13 studio days ago, 13 is today.
     const now = new Date();
-    const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    const fourteenDaysAgo = new Date(todayUTC.getTime() - 13 * 86_400_000);
+    const today = studioDate(now, studio.timezone);
+    const { start: todayStart, end: todayEnd } = studioDateBounds(today, studio.timezone);
+    const fourteenDaysAgo = studioDateBounds(addCalendarDays(today, -13), studio.timezone).start;
 
     const [totalArtists, totalBookings, revenue, todayBookings, recentPayments, recentBookings, funnelCounts] = await Promise.all([
       prisma.artist.count({ where: { bookings: { some: { studio_id: studio.id } } } }),
@@ -67,10 +75,7 @@ adminRouter.get('/analytics', async (req, res, next) => {
       prisma.booking.findMany({
         where: {
           studio_id: studio.id,
-          starts_at: {
-            gte: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())),
-            lte: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999)),
-          },
+          starts_at: { gte: todayStart, lt: todayEnd },
           status: { notIn: ['CANCELLED', 'NO_SHOW'] },
         },
         include: { artist: true, room: true, engineer: true },
@@ -102,20 +107,20 @@ adminRouter.get('/analytics', async (req, res, next) => {
       }),
     ]);
 
-    // Build 7-day arrays: index 0 = 6 days ago, index 6 = today
+    // 14 studio days: the last 7 are this week, the 7 before it the prior week. Only
+    // seven were built, so this week sliced to nothing and always read zero.
     type DayBucket = { date: string; revenue_usd: number; booking_count: number };
-    const days: DayBucket[] = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(todayUTC.getTime() - (6 - i) * 86_400_000);
-      return { date: d.toISOString().slice(0, 10), revenue_usd: 0, booking_count: 0 };
-    });
+    const days: DayBucket[] = Array.from({ length: 14 }, (_, i) => (
+      { date: addCalendarDays(today, i - 13), revenue_usd: 0, booking_count: 0 }
+    ));
 
     for (const p of recentPayments) {
-      const date = new Date(p.paid_at!).toISOString().slice(0, 10);
+      const date = studioDate(new Date(p.paid_at!), studio.timezone);
       const bucket = days.find((d) => d.date === date);
       if (bucket) bucket.revenue_usd += Number(p.amount_usd);
     }
     for (const b of recentBookings) {
-      const date = new Date(b.starts_at).toISOString().slice(0, 10);
+      const date = studioDate(new Date(b.starts_at), studio.timezone);
       const bucket = days.find((d) => d.date === date);
       if (bucket) bucket.booking_count += 1;
     }
@@ -135,7 +140,7 @@ adminRouter.get('/analytics', async (req, res, next) => {
       total_bookings: totalBookings,
       total_revenue_usd: revenue._sum.amount_usd ?? 0,
       todays_bookings: todayBookings,
-      weekly_days: days,          // 7-element array for sparkline
+      weekly_days: weekly,        // 7-element array for sparkline
       week_revenue_usd: weekRevenue,
       prev_week_revenue_usd: prevRevenue,
       week_sessions: weekSessions,
@@ -160,18 +165,17 @@ const RunsheetQuery = z.object({
 adminRouter.get('/runsheet', async (req, res, next) => {
   try {
     const { date } = RunsheetQuery.parse(req.query);
-    const target = date ? new Date(date) : new Date();
-    const dayStart = new Date(target);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(target);
-    dayEnd.setHours(23, 59, 59, 999);
-
     const studio = (req as any).studio;
+
+    // The studio's own day, as on the engineer runsheet (C29).
+    const day = date ?? studioDate(new Date(), studio.timezone);
+    const { start: dayStart, end: dayEnd } = studioDateBounds(day, studio.timezone);
 
     const bookings = await prisma.booking.findMany({
       where: {
         studio_id: studio.id,
-        starts_at: { gte: dayStart, lte: dayEnd },
+        starts_at: { lt: dayEnd },
+        ends_at: { gt: dayStart },
         status: { notIn: ['CANCELLED', 'NO_SHOW'] },
       },
       include: {
@@ -232,7 +236,8 @@ adminRouter.get('/runsheet', async (req, res, next) => {
     const totalOutstanding = totalExpected - totalPaid;
 
     res.json({
-      date: dayStart.toISOString().split('T')[0],
+      date: day,
+      timezone: studio.timezone,
       studio_name: studio.name,
       generated_at: new Date().toISOString(),
       revenue: { expected: totalExpected, paid: totalPaid, outstanding: totalOutstanding },
@@ -276,66 +281,152 @@ adminRouter.post('/walkin', async (req, res, next) => {
     const starts_at = new Date(data.starts_at);
     const ends_at   = new Date(starts_at.getTime() + data.duration_minutes * 60_000);
 
-    // Conflict check — same room, overlapping time
-    const conflict = await prisma.booking.findFirst({
-      where: {
-        room_id: data.room_id,
-        status:  { notIn: ['CANCELLED', 'NO_SHOW'] },
-        OR: [
-          { starts_at: { lte: starts_at }, ends_at: { gt: starts_at } },
-          { starts_at: { lt: ends_at },    ends_at: { gte: ends_at } },
-        ],
-      },
-    });
-    if (conflict) throw new AppError('That room is already booked for this time', 409);
-
     const hours = data.duration_minutes / 60;
     const total = Number(service.min_price_usd) * (service.unit === 'hour' ? hours : 1);
 
-    // Create a guest account for the walk-in — no password, can't log in
-    const guestEmail = `walkin-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@${studio.slug}.walkin`;
-    const guestUser = await prisma.user.create({
-      data: {
-        email: guestEmail,
-        password_hash: null,
-        role: 'ARTIST',
-        artist: {
-          create: {
-            name: data.name,
-            bio: data.phone ? `Walk-in guest — phone: ${data.phone}` : 'Walk-in guest',
-          },
-        },
-      },
-      include: { artist: true },
-    });
-    const artist = guestUser.artist!;
-    await keepIdentityInStep({ userIds: [guestUser.id] });
+    // The room is checked under its lock, and the guest and the booking are written in the
+    // same transaction, so a refused walk-in leaves no guest account behind.
+    const booking = await prisma.$transaction(async (tx) => {
+      if (await findRoomClash(tx, { roomId: data.room_id, slots: [{ startsAt: starts_at, endsAt: ends_at }] })) {
+        throw new AppError('That room is already booked for this time', 409);
+      }
 
-    const booking = await prisma.booking.create({
-      data: {
-        studio_id:  studio.id,
-        artist_id:  artist.id,
-        room_id:    data.room_id,
-        service_id: service.id,
-        starts_at,
-        ends_at,
-        status:     'CONFIRMED',
-        total_usd:  total,
-        notes:      data.notes,
-        payment: {
-          create: {
-            provider:   'cash',
-            amount_usd: total,
-            status:     'UNPAID',
+      // Create a guest account for the walk-in — no password, can't log in
+      const guestEmail = `walkin-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@${studio.slug}.walkin`;
+      const guestUser = await tx.user.create({
+        data: {
+          email: guestEmail,
+          password_hash: null,
+          role: 'ARTIST',
+          artist: {
+            create: {
+              name: data.name,
+              bio: data.phone ? `Walk-in guest — phone: ${data.phone}` : 'Walk-in guest',
+            },
           },
         },
-      },
-      include: { room: true, service: true, payment: true, artist: true },
+        include: { artist: true },
+      });
+      const artist = guestUser.artist!;
+
+      return tx.booking.create({
+        data: {
+          studio_id:  studio.id,
+          artist_id:  artist.id,
+          room_id:    data.room_id,
+          service_id: service.id,
+          starts_at,
+          ends_at,
+          status:     'CONFIRMED',
+          total_usd:  total,
+          notes:      data.notes,
+          payment: {
+            create: {
+              provider:   'cash',
+              amount_usd: total,
+              status:     'UNPAID',
+            },
+          },
+        },
+        include: { room: true, service: true, payment: true, artist: true },
+      });
+    }).catch((error) => {
+      throw isRoomClash(error) ? new AppError('That room is already booked for this time', 409) : error;
     });
+    await keepIdentityInStep({ userIds: [booking.artist.user_id] });
 
     await publishBookingUpdate(booking.id, booking.status);
 
     res.status(201).json(booking);
+  } catch (err) { next(err); }
+});
+
+// ── POST /api/admin/bookings/:id/cash-payment — record cash taken at the desk ──
+// A walk-in pays cash, and until this route nothing could record it: PAID was
+// written only by the wallet, the Stripe webhook and payouts (C26). The amount is
+// the booking's stored total, never the caller's. The payment posts through the
+// booking-payment posting with no platform fee (owner decision, 2026-10-06), and
+// because the studio is holding the cash, the cash it kept is set against what
+// OIANO owes it (financialLedger.ts, recordStudioCollectedCash): the studio's
+// payable is unchanged and a payout never pays the cash again.
+//
+// Permission: the studio membership's MANAGE_BOOKINGS capability, or a
+// STUDIO_ADMIN membership with no capabilities at all (the legacy owner, as in
+// studio-policy.routes.ts). VIEW_FINANCE reads money; it does not record it.
+const CashPaymentSchema = z.object({}).strict();
+const PAYABLE_IN_CASH = new Set(['UNPAID']);
+
+adminRouter.post('/bookings/:id/cash-payment', async (req, res, next) => {
+  try {
+    // Nothing the caller sends decides the payment; an amount is refused, not ignored.
+    CashPaymentSchema.parse(req.body ?? {});
+    const userId = (req as any).userId as string;
+    const studio = (req as any).studio;
+
+    const membership = await prisma.studioStaff.findUnique({ where: { user_id_studio_id: { user_id: userId, studio_id: studio.id } } });
+    const mayRecord = !!membership && (membership.capabilities.includes('MANAGE_BOOKINGS')
+      || (membership.capabilities.length === 0 && membership.role === 'STUDIO_ADMIN'));
+    if (!mayRecord) throw new AppError('Booking management permission required', 403);
+
+    const result = await prisma.$transaction(async (tx) => {
+      // The booking row is locked first, so two recordings of the same payment take
+      // turns and the second sees the first one's PAID. Payment.booking_id is also
+      // unique, so two payment rows for one booking cannot exist either way.
+      const [locked] = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM bookings WHERE id = ${req.params.id} AND studio_id = ${studio.id} FOR UPDATE`;
+      if (!locked) throw new AppError('Booking not found', 404);
+      const booking = await tx.booking.findUniqueOrThrow({ where: { id: locked.id }, include: { payment: true } });
+
+      if (booking.status === 'CANCELLED' || booking.status === 'NO_SHOW') {
+        throw new AppError(`This booking is ${booking.status === 'CANCELLED' ? 'cancelled' : 'marked no-show'}; no payment can be recorded for it`, 409);
+      }
+      const existing = booking.payment;
+      if (existing && existing.status === 'PAID') throw new AppError('This booking is already paid', 409);
+      // A payment that was ever sent to a checkout may still be paid there, and one
+      // that was refunded has its own history; neither becomes a cash payment.
+      if (existing && (!PAYABLE_IN_CASH.has(existing.status) || existing.provider_ref || existing.payment_intent_id)) {
+        throw new AppError('This booking has a payment in another state; it cannot be recorded as cash', 409);
+      }
+      const amountUsd = Number(booking.total_usd);
+      if (!Number.isFinite(amountUsd) || amountUsd <= 0) throw new AppError('This booking has no amount to pay', 409);
+
+      const paidAt = new Date();
+      let paymentId: string;
+      if (existing) {
+        const claimed = await tx.payment.updateMany({
+          where: { id: existing.id, status: 'UNPAID', provider_ref: null, payment_intent_id: null },
+          data: { provider: 'cash', amount_usd: booking.total_usd, status: 'PAID', paid_at: paidAt },
+        });
+        if (claimed.count !== 1) throw new AppError('This booking\'s payment changed while it was being recorded. Refresh and try again.', 409);
+        paymentId = existing.id;
+      } else {
+        try {
+          paymentId = (await tx.payment.create({
+            data: { booking_id: booking.id, provider: 'cash', amount_usd: booking.total_usd, status: 'PAID', paid_at: paidAt },
+          })).id;
+        } catch (err) {
+          if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') throw new AppError('This booking is already paid', 409);
+          throw err;
+        }
+      }
+
+      const posted = await recordBookingPayment(tx, { paymentId, provider: 'cash', amountUsd, platformFeeBps: CASH_PLATFORM_FEE_BPS, artistId: booking.artist_id, studioId: studio.id, bookingId: booking.id });
+      await recordStudioCollectedCash(tx, { paymentId, amountUsd, studioId: studio.id, bookingId: booking.id });
+
+      // Payment confirms a booking only while it is waiting to be confirmed (A03).
+      const confirmation = await transitionBookingStatus(tx, { bookingId: booking.id, to: 'CONFIRMED', studioId: studio.id, onlyFrom: ['PENDING'] });
+      const payment = await tx.payment.findUniqueOrThrow({ where: { id: paymentId } });
+      const after = await tx.booking.findUniqueOrThrow({ where: { id: booking.id }, select: { status: true } });
+      return { payment, bookingStatus: after.status, confirmedNow: confirmation.outcome === 'APPLIED', ledgerTransactionId: posted.id };
+    });
+
+    await writeAdminAudit(userId, 'booking.payment.cash_recorded', req, {
+      studio_id: studio.id, booking_id: req.params.id, payment_id: result.payment.id,
+      amount_usd: Number(result.payment.amount_usd), ledger_transaction_id: result.ledgerTransactionId,
+    }).catch((error) => console.error('[audit] cash payment write failed:', error?.message));
+    if (result.confirmedNow) await publishBookingUpdate(req.params.id, result.bookingStatus);
+
+    res.status(201).json({ payment: result.payment, booking_status: result.bookingStatus });
   } catch (err) { next(err); }
 });
 
