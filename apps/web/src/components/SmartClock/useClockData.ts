@@ -83,6 +83,8 @@ export interface ClockData {
   };
   studioLoad: number;
   bestRecordingWindows: number[];
+  /** The studio's IANA zone; the dial is drawn in it. */
+  timezone?: string;
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────

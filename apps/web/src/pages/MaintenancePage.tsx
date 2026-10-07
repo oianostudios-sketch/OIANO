@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
+import { fmtDate, zoneName } from '../lib/fmt';
 import MaintenanceShell, { maintenanceSections } from '../components/MaintenanceShell';
 import MaintenanceMetricCard from '../components/MaintenanceMetricCard';
 
@@ -14,7 +15,7 @@ type Summary = {
   system: { api: string; database: string };
 };
 
-type SearchHit = { id: string; type: string; name?: string; alias?: string | null; email?: string; passport_code?: string | null; slug?: string; status?: string; starts_at?: string; artist_name?: string; studio_name?: string };
+type SearchHit = { id: string; type: string; name?: string; alias?: string | null; email?: string; passport_code?: string | null; slug?: string; status?: string; starts_at?: string; artist_name?: string; studio_name?: string; studio_timezone?: string };
 type SearchResults = { query: string; results: { artists: SearchHit[]; producers: SearchHit[]; studios: SearchHit[]; booking: SearchHit | null } };
 
 const SEARCH_DESTINATION: Record<string, string> = { artist: '/maintenance/creators', producer: '/maintenance/creators', studio: '/maintenance/studios', booking: '/maintenance/bookings' };
@@ -84,7 +85,7 @@ export default function MaintenancePage() {
           <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-white/[.035] text-[8px] font-mono uppercase text-dome">{hit.type.slice(0,2)}</span>
           <span className="min-w-0 flex-1">
             <b className="block truncate text-xs font-medium text-zinc-200">{hit.type==='booking'?`Booking · ${hit.artist_name} @ ${hit.studio_name}`:hit.name ?? hit.alias ?? hit.slug}</b>
-            <small className="mt-0.5 block truncate text-[10px] text-zinc-700">{hit.type==='booking'?`${hit.status} · starts ${hit.starts_at?new Date(hit.starts_at).toLocaleString():''}`:[hit.passport_code,hit.email].filter(Boolean).join(' · ')}</small>
+            <small className="mt-0.5 block truncate text-[10px] text-zinc-700">{hit.type==='booking'?`${hit.status} · starts ${hit.starts_at?`${fmtDate(hit.starts_at,hit.studio_timezone)}${hit.studio_timezone?` ${zoneName(hit.starts_at,hit.studio_timezone)}`:''}`:''}`:[hit.passport_code,hit.email].filter(Boolean).join(' · ')}</small>
           </span>
           <ChevronRight size={13} className="text-zinc-800"/>
         </button>)}

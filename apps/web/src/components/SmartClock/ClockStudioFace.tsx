@@ -11,20 +11,24 @@ type Booking = {
   room?: { name?: string };
 };
 
-export default function StudioFace({ data, todayBookings, hoveredBooking }: {
+export default function StudioFace({ data, todayBookings, hoveredBooking, tz }: {
   data: ClockData | null;
   todayBookings: Booking[];
   hoveredBooking: Booking | null;
+  /** The studio's zone; the face shows the studio's time. */
+  tz?: string;
 }) {
   const [now, setNow] = useState(new Date());
-  const [angle, setAngle] = useState(nowAngle());
+  const [angle, setAngle] = useState(nowAngle(tz));
   useEffect(() => {
+    setAngle(nowAngle(tz));
     const timer = window.setInterval(() => {
       setNow(new Date());
-      setAngle(nowAngle());
+      setAngle(nowAngle(tz));
     }, 15_000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [tz]);
+  const nowText = fmtTime(now.toISOString(), tz);
 
   const session = data?.activeSession ?? null;
   const color = STATUS_COLOR[data?.sessionStatus ?? 'idle'];
@@ -55,14 +59,14 @@ export default function StudioFace({ data, todayBookings, hoveredBooking }: {
         <text x={CX} y={137} textAnchor="middle" fontSize={15} fill="#e4e4e7" fontFamily="'DM Sans', sans-serif" fontWeight={700}>{hoveredBooking.artist?.name ?? 'Artist'}</text>
         <text x={CX} y={153} textAnchor="middle" fontSize={10} fill={ROOM_COLOR[hoveredBooking.room?.name ?? ''] ?? '#888'} fontFamily="'JetBrains Mono', monospace">{hoveredBooking.room?.name ?? 'Room TBA'}</text>
         <line x1={122} y1={163} x2={198} y2={163} stroke={color} strokeWidth={0.5} strokeOpacity={0.2} />
-        <text x={CX} y={178} textAnchor="middle" fontSize={18} fill={color} fontFamily="'JetBrains Mono', monospace" fontWeight={700}>{fmtTime(hoveredBooking.starts_at)}</text>
-        <text x={CX} y={195} textAnchor="middle" fontSize={10} fill="#444" fontFamily="'JetBrains Mono', monospace">→ {fmtTime(hoveredBooking.ends_at)}</text>
+        <text x={CX} y={178} textAnchor="middle" fontSize={18} fill={color} fontFamily="'JetBrains Mono', monospace" fontWeight={700}>{fmtTime(hoveredBooking.starts_at, tz)}</text>
+        <text x={CX} y={195} textAnchor="middle" fontSize={10} fill="#444" fontFamily="'JetBrains Mono', monospace">→ {fmtTime(hoveredBooking.ends_at, tz)}</text>
         <text x={CX} y={215} textAnchor="middle" fontSize={11}
           fill={hoveredBooking.status ? STATUS_HEX[hoveredBooking.status as BookingStatus] ?? '#555' : '#555'}
           fontFamily="'JetBrains Mono', monospace" letterSpacing="0.08em">{hoveredBooking.status}</text>
       </> : session ? <>
         <text x={CX} y={110} textAnchor="middle" fontSize={8} fill={color} fontFamily="'JetBrains Mono', monospace" letterSpacing="0.14em">● LIVE</text>
-        <text x={CX} y={130} textAnchor="middle" fontSize={22} fill="#E6EDF5" fontFamily="'JetBrains Mono', monospace" fontWeight={700}>{now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</text>
+        <text x={CX} y={130} textAnchor="middle" fontSize={22} fill="#E6EDF5" fontFamily="'JetBrains Mono', monospace" fontWeight={700}>{nowText}</text>
         <text x={CX} y={148} textAnchor="middle" fontSize={12} fill="#e4e4e7" fontFamily="'DM Sans', sans-serif" fontWeight={700}>{session.artistName}</text>
         <text x={CX} y={163} textAnchor="middle" fontSize={10} fill={ROOM_COLOR[session.room] ?? '#888'} fontFamily="'JetBrains Mono', monospace">{session.room}</text>
         <line x1={120} y1={172} x2={200} y2={172} stroke={color} strokeWidth={0.5} strokeOpacity={0.2} />
@@ -72,14 +76,14 @@ export default function StudioFace({ data, todayBookings, hoveredBooking }: {
         <rect x={122} y={216} width={Math.round(76 * Math.min(1, session.minutesElapsed / Math.max(1, session.minutesTotal)))} height={3} rx={1.5} fill={color} />
         <text x={CX} y={232} textAnchor="middle" fontSize={9} fill="#333" fontFamily="'JetBrains Mono', monospace" letterSpacing="0.1em">{session.phaseLabel}</text>
       </> : <>
-        <text x={CX} y={120} textAnchor="middle" fontSize={28} fill="#E6EDF5" fontFamily="'JetBrains Mono', monospace" fontWeight={300}>{now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</text>
+        <text x={CX} y={120} textAnchor="middle" fontSize={28} fill="#E6EDF5" fontFamily="'JetBrains Mono', monospace" fontWeight={300}>{nowText}</text>
         <text x={CX} y={140} textAnchor="middle" fontSize={9} fill="#5A9BCB" fontFamily="'JetBrains Mono', monospace" letterSpacing="0.16em">◎  STUDIO READY</text>
         <line x1={120} y1={150} x2={200} y2={150} stroke="#5A9BCB" strokeWidth={0.5} strokeOpacity={0.2} />
         {nextSession ? <>
           <text x={CX} y={165} textAnchor="middle" fontSize={9} fill="#444" fontFamily="'JetBrains Mono', monospace" letterSpacing="0.08em">next session in</text>
           <text x={CX} y={188} textAnchor="middle" fontSize={22} fill="#5A9BCB" fontFamily="'JetBrains Mono', monospace" fontWeight={700}>{minutesToNext != null ? `${minutesToNext}m` : '--'}</text>
           <text x={CX} y={207} textAnchor="middle" fontSize={13} fill="#e4e4e7" fontFamily="'DM Sans', sans-serif" fontWeight={600}>{nextSession.artist?.name ?? 'Artist'}</text>
-          <text x={CX} y={222} textAnchor="middle" fontSize={10} fill="#555" fontFamily="'JetBrains Mono', monospace">{fmtTime(nextSession.starts_at)} · {nextSession.room?.name ?? 'TBA'}</text>
+          <text x={CX} y={222} textAnchor="middle" fontSize={10} fill="#555" fontFamily="'JetBrains Mono', monospace">{fmtTime(nextSession.starts_at, tz)} · {nextSession.room?.name ?? 'TBA'}</text>
         </> : <>
           <text x={CX} y={172} textAnchor="middle" fontSize={11} fill="#333" fontFamily="'DM Sans', sans-serif">No sessions remaining</text>
           <text x={CX} y={190} textAnchor="middle" fontSize={9} fill="#222" fontFamily="'JetBrains Mono', monospace">Ready to book</text>

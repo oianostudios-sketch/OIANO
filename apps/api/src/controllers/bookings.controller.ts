@@ -104,8 +104,11 @@ export async function getBookings(req: Request, res: Response, next: NextFunctio
 
     // Shared include shape — every role except ARTIST also gets `artist`
     // (an artist already knows who they are; everyone else needs it).
-    const staffInclude = { artist: true, room: true, engineer: true, service: true, payment: true, project: { select: { id: true, title: true, phase: true } } };
-    const artistInclude = { room: true, engineer: true, service: true, payment: true, project: { select: { id: true, title: true, phase: true } } };
+    // The studio's zone comes with every booking so its times read in the
+    // studio's clock wherever the viewer is.
+    const studioZone = { select: { id: true, name: true, timezone: true } };
+    const staffInclude = { artist: true, studio: studioZone, room: true, engineer: true, service: true, payment: true, project: { select: { id: true, title: true, phase: true } } };
+    const artistInclude = { studio: studioZone, room: true, engineer: true, service: true, payment: true, project: { select: { id: true, title: true, phase: true } } };
 
     if (role === 'STUDIO_ADMIN' || role === 'ENGINEER') {
       const where = { studio_id: staffStudio!.id, ...dateRange };

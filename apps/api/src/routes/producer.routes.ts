@@ -175,7 +175,7 @@ producerRouter.get('/projects', requireRole('PRODUCER'), async (req: any, res, n
       include: {
         artist: { select: { id: true, name: true, alias: true, avatar_url: true } },
         bookings: {
-          include: { room: true, service: true, deliverables: { select: { id: true, title: true, status: true, current_version: true } } },
+          include: { studio: { select: { id: true, name: true, timezone: true } }, room: true, service: true, deliverables: { select: { id: true, title: true, status: true, current_version: true } } },
           orderBy: { starts_at: 'desc' },
         },
         participants: { where: { status: { not: 'REMOVED' } }, orderBy: { created_at: 'asc' } },
@@ -460,7 +460,7 @@ producerRouter.get('/projects/:id/available-sessions', requireRole('PRODUCER'), 
 
     const bookings = await db.booking.findMany({
       where: { artist_id: project.artist_id, project_id: null },
-      include: { room: true, service: true },
+      include: { studio: { select: { id: true, name: true, timezone: true } }, room: true, service: true },
       orderBy: { starts_at: 'desc' },
       take: 20,
     });

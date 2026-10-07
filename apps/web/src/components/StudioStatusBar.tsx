@@ -11,10 +11,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStudioState } from '../context/StudioState';
+import { fmtStudioRange, fmtStudioTime } from '../lib/fmt';
 
-function fmtTime(iso?: string) {
+// Session times are the studio's clock (tz), labelled when the viewer is elsewhere.
+function fmtTime(iso?: string, tz?: string) {
   if (!iso) return '--:--';
-  return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  return fmtStudioTime(iso, tz);
 }
 
 function useCountdown(endsAt?: string) {
@@ -61,7 +63,9 @@ function LiveBanner() {
       <span className="ssb-divider">·</span>
       <span className="ssb-room">{room}</span>
       <span className="ssb-divider">·</span>
-      <span className="ssb-time">{fmtTime(activeSession?.starts_at)} → {fmtTime(activeSession?.ends_at)}</span>
+      <span className="ssb-time">{activeSession?.starts_at && activeSession?.ends_at
+        ? fmtStudioRange(activeSession.starts_at, activeSession.ends_at, activeSession.studio?.timezone, ' → ')
+        : '--:-- → --:--'}</span>
       {remaining && (
         <>
           <span className="ssb-divider">·</span>
@@ -89,7 +93,7 @@ function AmbientTicker() {
     .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())[0];
 
   if (nextSession) {
-    items.push({ label: 'next session', value: `${fmtTime(nextSession.starts_at)} · ${nextSession.artist?.name ?? 'Artist'}` });
+    items.push({ label: 'next session', value: `${fmtTime(nextSession.starts_at, nextSession.studio?.timezone)} ·${nextSession.artist?.name ?? 'Artist'}` });
   } else {
     items.push({ label: 'today', value: `${todaySessions.filter((s) => !['CANCELLED', 'NO_SHOW'].includes(s.status ?? '')).length} session${todaySessions.length !== 1 ? 's' : ''} booked` });
   }
