@@ -20,8 +20,15 @@ way, and `/api/auth/enter` always was.
   passport contains the email's local part; a professional without a name is listed in
   producer discovery without it. With the email-derived names put back, the four nameless
   cases fail (the name equals the local part); restored from backup, confirmed with `cmp`.
-  Integration 159 tests on a fresh database; API unit 102, intelligence 31, web suite, both
-  typechecks, the build and the secret scan pass.
+  The new file passes on every local run. API unit 102 of 102, intelligence 31 of 31, web 88
+  of 88, both typechecks, the build and the secret scan pass. The local integration suite
+  (157 of 159) also failed two concurrency tests this change does not touch, on a machine
+  shared with several other test runs: Studio Circle "answers sent together produce one
+  decision" (two answers succeeded) and Weave "bookings synced at the same moment are all
+  counted". The Studio Circle failure is a real race, below; CI's run is the record for both.
+- **Observed, not changed.** `PATCH /:id/consent` in `studio-circle.routes.ts` guards its write on
+  the status it read, but an accept and a decline can both succeed in turn: the decline
+  reads the already committed `ACCEPTED`, which declining is allowed from.
 - **Not changed.** Existing accounts keep their names; there is no backfill, so accounts
   already named after their email stay that way until the person renames themselves. The
   artist dashboard's greeting still falls back to the email's local part when an artist has
