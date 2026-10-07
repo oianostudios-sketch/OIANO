@@ -3,7 +3,9 @@
 What gets built next, in what order, and what "done" means at each stage. The target is
 [`OIANO_FROZEN_ARCHITECTURE.md`](OIANO_FROZEN_ARCHITECTURE.md); the table-level design is
 [`OIANO_SCHEMA_REDESIGN.md`](OIANO_SCHEMA_REDESIGN.md); what has landed, with evidence, is
-[`OIANO_IMPLEMENTATION_STATUS.md`](OIANO_IMPLEMENTATION_STATUS.md).
+[`OIANO_IMPLEMENTATION_STATUS.md`](OIANO_IMPLEMENTATION_STATUS.md). What the four surfaces
+should look like and show, as the owner set them out on 2026-10-07, is
+[`design/OIANO_SURFACES_TARGET.md`](design/OIANO_SURFACES_TARGET.md).
 
 ## The base, as of 2026-09-14
 

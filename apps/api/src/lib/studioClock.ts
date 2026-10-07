@@ -67,6 +67,12 @@ export function studioDate(moment: Date, timeZone: string): string {
   return `${String(local.year).padStart(4, '0')}-${pad(local.month)}-${pad(local.day)}`;
 }
 
+/** The calendar date (YYYY-MM-DD) a number of days from another; dates have no zone. */
+export function addCalendarDays(date: string, days: number): string {
+  const [year, month, day] = date.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+}
+
 /** When the studio's current day starts and ends, as instants. */
 export function studioDayBounds(now: Date, timeZone: string): { start: Date; end: Date } {
   return studioDateBounds(studioDate(now, timeZone), timeZone);
