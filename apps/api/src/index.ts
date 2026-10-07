@@ -1,9 +1,11 @@
 import { app } from './app';
 import { registerClockActivityConsumer } from './services/clockActivityConsumer';
 import { registerSseActivityBridge } from './services/sseActivityBridge';
+import { scheduleWeaveRepair } from './lib/weave/repair';
 
 registerClockActivityConsumer();
 registerSseActivityBridge();
+scheduleWeaveRepair();
 
 const PORT = process.env.PORT ?? 4000;
 
