@@ -5,13 +5,14 @@ import {
 
 type Booking = { status?: string };
 
-export function DayFace({ todayBookings, rooms }: { todayBookings: Booking[]; rooms: { name: string }[] }) {
+export function DayFace({ todayBookings, rooms, tz }: { todayBookings: Booking[]; rooms: { name: string }[]; tz?: string }) {
   const roomNames = rooms.slice(0, ROOM_R.length).map(room => room.name);
-  const [currentAngle, setCurrentAngle] = useState(nowAngle());
+  const [currentAngle, setCurrentAngle] = useState(nowAngle(tz));
   useEffect(() => {
-    const timer = window.setInterval(() => setCurrentAngle(nowAngle()), 30_000);
+    setCurrentAngle(nowAngle(tz));
+    const timer = window.setInterval(() => setCurrentAngle(nowAngle(tz)), 30_000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [tz]);
 
   const confirmed = todayBookings.filter(booking => booking.status === 'CONFIRMED').length;
   const pending = todayBookings.filter(booking => booking.status === 'PENDING').length;

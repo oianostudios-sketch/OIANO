@@ -7,6 +7,7 @@ import { isArtistProfileOwner } from '../lib/artistProfileOwner';
 import { useToast } from '../components/Toast';
 import OianoBrand from '../components/OianoBrand';
 import { BookingStatus, STATUS_HEX } from '../lib/bookingStatus';
+import { studioDate, studioZoneLabel } from '../lib/fmt';
 
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 
@@ -88,12 +89,16 @@ function fmtSize(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+// A session's date and time are given in its studio's zone (tz); without one,
+// as for a file's upload time, the viewer's own.
+function fmtDate(iso: string, tz?: string) {
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: tz });
 }
 
-function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+function fmtTime(iso: string, tz?: string, labelled = true) {
+  const time = new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz });
+  const zone = labelled ? studioZoneLabel(iso, tz) : '';
+  return zone ? `${time} ${zone}` : time;
 }
 
 function totalHours(bookings: any[]) {
@@ -130,9 +135,11 @@ function PreSessionCard({ booking }: { booking: any }) {
   const hours = Math.floor(diffMs / 3_600_000);
   const mins = Math.floor((diffMs % 3_600_000) / 60_000);
   const countdown = hours > 0 ? `${hours}h ${mins}m away` : `${mins}m away`;
-  const isToday = start.toDateString() === new Date().toDateString();
-  const isTomorrow = start.toDateString() === new Date(Date.now() + 86_400_000).toDateString();
-  const dayLabel = isToday ? 'Today' : isTomorrow ? 'Tomorrow' : fmtDate(booking.starts_at);
+  const tz: string | undefined = booking.studio?.timezone;
+  const day = studioDate(start, tz);
+  const isToday = day === studioDate(new Date(), tz);
+  const isTomorrow = day === studioDate(new Date(Date.now() + 86_400_000), tz);
+  const dayLabel = isToday ? 'Today' : isTomorrow ? 'Tomorrow' : fmtDate(booking.starts_at, tz);
 
   return (
     <div style={{ background:'#0f0d08', border:'1px solid #C9A84C33', borderRadius:12, padding:'16px 20px', marginBottom:20, position:'relative', overflow:'hidden' }}>
@@ -146,7 +153,7 @@ function PreSessionCard({ booking }: { booking: any }) {
             {booking.service?.name ?? 'Studio session'} &middot; {booking.room?.name ?? 'Room TBA'}
           </p>
           <p style={{ fontSize:12, color:'#555', fontFamily:"'JetBrains Mono',monospace" }}>
-            {dayLabel} &middot; {fmtTime(booking.starts_at)} &ndash; {fmtTime(booking.ends_at)}
+            {dayLabel} &middot; {fmtTime(booking.starts_at, tz, false)} &ndash; {fmtTime(booking.ends_at, tz)}
             {booking.engineer && ` · ${booking.engineer.name}`}
           </p>
         </div>
@@ -487,7 +494,7 @@ export default function ArtistProfilePage() {
                         {b.room?.name && <span style={{ color:'#3a3a3a', fontWeight:400 }}> &middot; {b.room.name}</span>}
                       </p>
                       <p style={{ fontSize:11, color:'#3a3a3a', fontFamily:"'JetBrains Mono',monospace" }}>
-                        {fmtDate(b.starts_at)} &middot; {fmtTime(b.starts_at)}
+                        {fmtDate(b.starts_at, b.studio?.timezone)} &middot; {fmtTime(b.starts_at, b.studio?.timezone)}
                         {b.engineer?.name && ` · ${b.engineer.name}`}
                       </p>
                     </div>

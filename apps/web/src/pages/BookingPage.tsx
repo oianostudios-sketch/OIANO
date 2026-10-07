@@ -895,7 +895,7 @@ export default function BookingPage() {
                     { label: 'Project',  value: selectedProject?.title ?? 'Standalone session' },
                     {
                       label: 'Date',
-                      value: new Date(selected.date).toLocaleDateString('en-US', {
+                      value: new Date(`${selected.date}T12:00:00`).toLocaleDateString('en-US', {
                         weekday: 'long', month: 'long', day: 'numeric',
                       }),
                     },

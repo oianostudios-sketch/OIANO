@@ -142,7 +142,7 @@ artistsRouter.get('/:id', async (req: any, res, next) => {
         include: {
           passport: true,
           wallet: true,
-          bookings: { include: { room: true, service: true, engineer: { select: { id: true, name: true } } }, orderBy: { starts_at: 'desc' }, take: 50 },
+          bookings: { include: { studio: { select: { id: true, name: true, timezone: true } }, room: true, service: true, engineer: { select: { id: true, name: true } } }, orderBy: { starts_at: 'desc' }, take: 50 },
           session_logs: { orderBy: { started_at: 'desc' }, take: 10 },
           files: { orderBy: { uploaded_at: 'desc' }, take: 20 },
           user: { select: { id: true, created_at: true } },
@@ -162,7 +162,7 @@ artistsRouter.get('/:id', async (req: any, res, next) => {
       const relationship = await prisma.artist.findFirst({
         where: { id: artist.id, bookings: { some: atStudio } },
         select: {
-          bookings: { where: atStudio, include: { room: true, service: true, engineer: { select: { id: true, name: true } } }, orderBy: { starts_at: 'desc' }, take: 50 },
+          bookings: { where: atStudio, include: { studio: { select: { id: true, name: true, timezone: true } }, room: true, service: true, engineer: { select: { id: true, name: true } } }, orderBy: { starts_at: 'desc' }, take: 50 },
           session_logs: { where: { booking: atStudio }, orderBy: { started_at: 'desc' }, take: 10 },
           files: { orderBy: { uploaded_at: 'desc' }, take: 20 },
         },

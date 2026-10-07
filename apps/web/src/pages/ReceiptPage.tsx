@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import OianoBrand from '../components/OianoBrand';
+import { fmtDateLong, fmtTime, zoneName } from '../lib/fmt';
 
 export default function ReceiptPage() {
   const { id } = useParams<{ id: string }>();
@@ -41,10 +42,10 @@ export default function ReceiptPage() {
   const endsAt = new Date(booking.ends_at);
   const durationHrs = (endsAt.getTime() - startsAt.getTime()) / 3_600_000;
 
-  const fmtDate = (d: Date) =>
-    d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  const fmtTime = (d: Date) =>
-    d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  // A receipt can be read anywhere, so the session is stated in the studio's
+  // zone and always names it.
+  const tz: string | undefined = booking.studio?.timezone;
+  const zone = tz ? ` ${zoneName(booking.starts_at, tz)}` : '';
 
   const total = Number(booking.total_usd ?? 0);
 
@@ -154,10 +155,10 @@ export default function ReceiptPage() {
                     {booking.service?.name ?? 'Studio Session'}
                   </p>
                   <p style={{ margin: '4px 0 0', fontSize: 12, color: '#777' }}>
-                    {fmtDate(startsAt)}
+                    {fmtDateLong(booking.starts_at, tz)}
                   </p>
                   <p style={{ margin: '2px 0 0', fontSize: 12, color: '#999', fontFamily: "'JetBrains Mono', monospace" }}>
-                    {fmtTime(startsAt)} → {fmtTime(endsAt)} ({durationHrs.toFixed(1)}h)
+                    {fmtTime(booking.starts_at, tz)} → {fmtTime(booking.ends_at, tz)}{zone} ({durationHrs.toFixed(1)}h)
                   </p>
                   {booking.room && (
                     <p style={{ margin: '2px 0 0', fontSize: 12, color: '#999' }}>

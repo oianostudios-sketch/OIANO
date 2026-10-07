@@ -1,5 +1,8 @@
-import { describe, expect, it } from 'vitest';
-import { fmtCurrency, fmtDateShort, fmtDuration, fmtTime, studioDate, studioTimeToIso } from './fmt';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import {
+  fmtCurrency, fmtDateShort, fmtDuration, fmtStudioRange, fmtStudioTime, fmtTime, studioClock, studioDate,
+  studioMinutes, studioTimeToIso, studioWallClock, studioZoneLabel, zoneName,
+} from './fmt';
 
 // A studio in New York and an artist in Berlin must read the same session as
 // the same wall-clock time in the studio's zone, so the timezone argument is
@@ -67,6 +70,49 @@ describe('studio wall-clock time', () => {
   it("reads today's date at the studio", () => {
     expect(studioDate(new Date('2026-10-05T20:00:00Z'), 'Pacific/Auckland')).toBe('2026-10-06');
     expect(studioDate(new Date('2026-10-06T03:00:00Z'), 'America/Los_Angeles')).toBe('2026-10-05');
+  });
+});
+
+// A session at a studio in Auckland, read by someone whose browser is in Los
+// Angeles: 2026-10-06T02:00Z is 3 PM on the 6th in Auckland and 7 PM on the 5th
+// in Los Angeles. The viewer's zone is set for real (process.env.TZ) so the
+// fallbacks are exercised too, and restored afterwards.
+describe('studio-anchored times for a viewer elsewhere', () => {
+  const AUCKLAND_3PM = '2026-10-06T02:00:00.000Z';
+  const AUCKLAND_6PM = '2026-10-06T05:00:00.000Z';
+  let savedTz: string | undefined;
+  beforeEach(() => { savedTz = process.env.TZ; process.env.TZ = 'America/Los_Angeles'; });
+  afterEach(() => { if (savedTz === undefined) delete process.env.TZ; else process.env.TZ = savedTz; });
+
+  it('reads the clock and minutes at the studio, not the browser', () => {
+    expect(studioClock(new Date(AUCKLAND_3PM), 'Pacific/Auckland')).toBe('15:00');
+    expect(studioClock(new Date(AUCKLAND_3PM))).toBe('19:00');
+    expect(studioMinutes(new Date(AUCKLAND_3PM), 'Pacific/Auckland')).toBe(15 * 60);
+    expect(studioMinutes(new Date(AUCKLAND_3PM))).toBe(19 * 60);
+  });
+
+  it('gives a layout date whose local fields are the studio wall clock', () => {
+    const wall = studioWallClock(new Date(AUCKLAND_3PM), 'Pacific/Auckland');
+    expect([wall.getDate(), wall.getHours(), wall.getMinutes()]).toEqual([6, 15, 0]);
+    const browser = studioWallClock(new Date(AUCKLAND_3PM));
+    expect([browser.getDate(), browser.getHours()]).toEqual([5, 19]);
+  });
+
+  it('labels the studio zone for a viewer elsewhere, and not for one in the same zone', () => {
+    expect(zoneName(AUCKLAND_3PM, 'Pacific/Auckland')).toBe('GMT+13');
+    expect(studioZoneLabel(AUCKLAND_3PM, 'Pacific/Auckland')).toBe('GMT+13');
+    expect(studioZoneLabel(AUCKLAND_3PM, 'Pacific/Auckland', 'Pacific/Auckland')).toBe('');
+    // A different zone name that reads the same clock needs no label either.
+    expect(studioZoneLabel(AUCKLAND_3PM, 'America/Los_Angeles', 'America/Vancouver')).toBe('');
+    expect(studioZoneLabel(AUCKLAND_3PM, undefined)).toBe('');
+  });
+
+  it('formats a session time and span at the studio with its zone', () => {
+    expect(spaces(fmtStudioTime(AUCKLAND_3PM, 'Pacific/Auckland'))).toBe('03:00 PM GMT+13');
+    expect(spaces(fmtStudioRange(AUCKLAND_3PM, AUCKLAND_6PM, 'Pacific/Auckland', ' → '))).toBe('03:00 PM → 06:00 PM GMT+13');
+    expect(spaces(fmtStudioRange(AUCKLAND_3PM, AUCKLAND_6PM, 'Pacific/Auckland', ' – ', 'Pacific/Auckland'))).toBe('03:00 PM – 06:00 PM');
+    // No zone known: the browser's clock, unlabelled, as before.
+    expect(spaces(fmtStudioTime(AUCKLAND_3PM))).toBe('07:00 PM');
   });
 });
 

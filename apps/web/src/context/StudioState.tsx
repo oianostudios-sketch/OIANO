@@ -7,6 +7,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '../store/auth.store';
 import { api } from '../lib/api';
+import { fmtTime, studioDate } from '../lib/fmt';
 
 // ── Sun arc — OIANO's mark is a sun, so the ambient light itself should trace
 // a real day: dim ember before dawn, warming through morning gold, peaking
@@ -84,10 +85,11 @@ export function StudioStateProvider({ children }: { children: React.ReactNode })
   });
 
   const todaySessions = useMemo(() => {
-    const today = new Date().toDateString();
+    // "Today" is the studio's day, which is not the viewer's when they are elsewhere.
     return (bookings as any[]).filter((b) => {
       if (!b.starts_at) return false;
-      return new Date(b.starts_at).toDateString() === today &&
+      const tz = b.studio?.timezone;
+      return studioDate(new Date(b.starts_at), tz) === studioDate(new Date(), tz) &&
         !['CANCELLED', 'NO_SHOW'].includes(b.status ?? '');
     });
   }, [bookings]);
@@ -151,7 +153,7 @@ export function StudioStateProvider({ children }: { children: React.ReactNode })
     const rooms = roomStatus.map(r => `${r.name.toUpperCase()} · ${r.busy ? 'IN USE' : 'OPEN'}`).join('   ·   ');
     const next = todaySessions.find(s => new Date(s.starts_at).getTime() > now);
     const nextStr = next
-      ? `NEXT SESSION ${new Date(next.starts_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} · ${next.artist?.name ?? 'Artist'}`
+      ? `NEXT SESSION ${fmtTime(next.starts_at, next.studio?.timezone)} · ${next.artist?.name ?? 'Artist'}`
       : 'NO FURTHER SESSIONS TODAY';
     const liveStr = activeSession
       ? `● LIVE · ${activeSession.artist?.name ?? 'Session'} · ${activeSession.room?.name ?? 'Studio'}`
