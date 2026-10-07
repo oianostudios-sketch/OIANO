@@ -9,7 +9,7 @@ import { Prisma } from '@prisma/client';
 import { CASH_PLATFORM_FEE_BPS, recordBookingPayment, recordStudioCollectedCash } from '../lib/financialLedger';
 import { transitionBookingStatus } from '../lib/bookingTransitions';
 import { writeAdminAudit } from '../lib/adminAudit';
-import { studioDate, studioDateBounds } from '../lib/studioClock';
+import { addCalendarDays, studioDate, studioDateBounds } from '../lib/studioClock';
 import { findRoomClash, isRoomClash } from '../lib/roomSchedule';
 export const adminRouter = Router();
 
@@ -57,10 +57,12 @@ adminRouter.get('/analytics', async (req, res, next) => {
   try {
     const studio = (req as any).studio;
 
-    // Build UTC day boundaries for the last 14 days
+    // Days are the studio's own, in its own zone (C29): a 23:00 session west of UTC
+    // used to count on the next UTC day. Index 0 is 13 studio days ago, 13 is today.
     const now = new Date();
-    const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    const fourteenDaysAgo = new Date(todayUTC.getTime() - 13 * 86_400_000);
+    const today = studioDate(now, studio.timezone);
+    const { start: todayStart, end: todayEnd } = studioDateBounds(today, studio.timezone);
+    const fourteenDaysAgo = studioDateBounds(addCalendarDays(today, -13), studio.timezone).start;
 
     const [totalArtists, totalBookings, revenue, todayBookings, recentPayments, recentBookings, funnelCounts] = await Promise.all([
       prisma.artist.count({ where: { bookings: { some: { studio_id: studio.id } } } }),
@@ -72,10 +74,7 @@ adminRouter.get('/analytics', async (req, res, next) => {
       prisma.booking.findMany({
         where: {
           studio_id: studio.id,
-          starts_at: {
-            gte: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())),
-            lte: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999)),
-          },
+          starts_at: { gte: todayStart, lt: todayEnd },
           status: { notIn: ['CANCELLED', 'NO_SHOW'] },
         },
         include: { artist: true, room: true, engineer: true },
@@ -107,20 +106,20 @@ adminRouter.get('/analytics', async (req, res, next) => {
       }),
     ]);
 
-    // Build 7-day arrays: index 0 = 6 days ago, index 6 = today
+    // 14 studio days: the last 7 are this week, the 7 before it the prior week. Only
+    // seven were built, so this week sliced to nothing and always read zero.
     type DayBucket = { date: string; revenue_usd: number; booking_count: number };
-    const days: DayBucket[] = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(todayUTC.getTime() - (6 - i) * 86_400_000);
-      return { date: d.toISOString().slice(0, 10), revenue_usd: 0, booking_count: 0 };
-    });
+    const days: DayBucket[] = Array.from({ length: 14 }, (_, i) => (
+      { date: addCalendarDays(today, i - 13), revenue_usd: 0, booking_count: 0 }
+    ));
 
     for (const p of recentPayments) {
-      const date = new Date(p.paid_at!).toISOString().slice(0, 10);
+      const date = studioDate(new Date(p.paid_at!), studio.timezone);
       const bucket = days.find((d) => d.date === date);
       if (bucket) bucket.revenue_usd += Number(p.amount_usd);
     }
     for (const b of recentBookings) {
-      const date = new Date(b.starts_at).toISOString().slice(0, 10);
+      const date = studioDate(new Date(b.starts_at), studio.timezone);
       const bucket = days.find((d) => d.date === date);
       if (bucket) bucket.booking_count += 1;
     }
@@ -140,7 +139,7 @@ adminRouter.get('/analytics', async (req, res, next) => {
       total_bookings: totalBookings,
       total_revenue_usd: revenue._sum.amount_usd ?? 0,
       todays_bookings: todayBookings,
-      weekly_days: days,          // 7-element array for sparkline
+      weekly_days: weekly,        // 7-element array for sparkline
       week_revenue_usd: weekRevenue,
       prev_week_revenue_usd: prevRevenue,
       week_sessions: weekSessions,
