@@ -31,6 +31,8 @@ had already created its guest account before the refused booking.
   typechecks, the build and the secret scan pass. `lifecycle-guards` "Studio Circle: answers
   sent together produce one decision" failed in one earlier local run on `main`'s code and in
   one with this change, under heavy machine load; it is unrelated and passed in the final run.
+  After merging `main` (#27, #28) the suite ran 163 of 165, the two failures being that same
+  test and its parent.
 - **Not exercised.** The room lock and the 23P01 mapping are each covered by the constraint
   and serializable isolation as well, so removing either one alone changes no test result.
   Display-only overlap reads (availability, studio clock, engineer schedule) already use the
