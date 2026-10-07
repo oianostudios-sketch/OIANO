@@ -10,6 +10,7 @@ import { CASH_PLATFORM_FEE_BPS, recordBookingPayment, recordStudioCollectedCash 
 import { transitionBookingStatus } from '../lib/bookingTransitions';
 import { writeAdminAudit } from '../lib/adminAudit';
 import { addCalendarDays, studioDate, studioDateBounds } from '../lib/studioClock';
+import { findRoomClash, isRoomClash } from '../lib/roomSchedule';
 export const adminRouter = Router();
 
 // Artist-facing routes, mounted before adminRouter, whose role check would refuse
@@ -279,60 +280,57 @@ adminRouter.post('/walkin', async (req, res, next) => {
     const starts_at = new Date(data.starts_at);
     const ends_at   = new Date(starts_at.getTime() + data.duration_minutes * 60_000);
 
-    // Conflict check — same room, overlapping time
-    const conflict = await prisma.booking.findFirst({
-      where: {
-        room_id: data.room_id,
-        status:  { notIn: ['CANCELLED', 'NO_SHOW'] },
-        OR: [
-          { starts_at: { lte: starts_at }, ends_at: { gt: starts_at } },
-          { starts_at: { lt: ends_at },    ends_at: { gte: ends_at } },
-        ],
-      },
-    });
-    if (conflict) throw new AppError('That room is already booked for this time', 409);
-
     const hours = data.duration_minutes / 60;
     const total = Number(service.min_price_usd) * (service.unit === 'hour' ? hours : 1);
 
-    // Create a guest account for the walk-in — no password, can't log in
-    const guestEmail = `walkin-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@${studio.slug}.walkin`;
-    const guestUser = await prisma.user.create({
-      data: {
-        email: guestEmail,
-        password_hash: null,
-        role: 'ARTIST',
-        artist: {
-          create: {
-            name: data.name,
-            bio: data.phone ? `Walk-in guest — phone: ${data.phone}` : 'Walk-in guest',
-          },
-        },
-      },
-      include: { artist: true },
-    });
-    const artist = guestUser.artist!;
+    // The room is checked under its lock, and the guest and the booking are written in the
+    // same transaction, so a refused walk-in leaves no guest account behind.
+    const booking = await prisma.$transaction(async (tx) => {
+      if (await findRoomClash(tx, { roomId: data.room_id, slots: [{ startsAt: starts_at, endsAt: ends_at }] })) {
+        throw new AppError('That room is already booked for this time', 409);
+      }
 
-    const booking = await prisma.booking.create({
-      data: {
-        studio_id:  studio.id,
-        artist_id:  artist.id,
-        room_id:    data.room_id,
-        service_id: service.id,
-        starts_at,
-        ends_at,
-        status:     'CONFIRMED',
-        total_usd:  total,
-        notes:      data.notes,
-        payment: {
-          create: {
-            provider:   'cash',
-            amount_usd: total,
-            status:     'UNPAID',
+      // Create a guest account for the walk-in — no password, can't log in
+      const guestEmail = `walkin-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@${studio.slug}.walkin`;
+      const guestUser = await tx.user.create({
+        data: {
+          email: guestEmail,
+          password_hash: null,
+          role: 'ARTIST',
+          artist: {
+            create: {
+              name: data.name,
+              bio: data.phone ? `Walk-in guest — phone: ${data.phone}` : 'Walk-in guest',
+            },
           },
         },
-      },
-      include: { room: true, service: true, payment: true, artist: true },
+        include: { artist: true },
+      });
+      const artist = guestUser.artist!;
+
+      return tx.booking.create({
+        data: {
+          studio_id:  studio.id,
+          artist_id:  artist.id,
+          room_id:    data.room_id,
+          service_id: service.id,
+          starts_at,
+          ends_at,
+          status:     'CONFIRMED',
+          total_usd:  total,
+          notes:      data.notes,
+          payment: {
+            create: {
+              provider:   'cash',
+              amount_usd: total,
+              status:     'UNPAID',
+            },
+          },
+        },
+        include: { room: true, service: true, payment: true, artist: true },
+      });
+    }).catch((error) => {
+      throw isRoomClash(error) ? new AppError('That room is already booked for this time', 409) : error;
     });
 
     await publishBookingUpdate(booking.id, booking.status);

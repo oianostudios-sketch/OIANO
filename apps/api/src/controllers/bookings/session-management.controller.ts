@@ -1,12 +1,12 @@
 import { NextFunction, Request, Response } from 'express';
 import { z } from 'zod';
-import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../lib/errors';
 import { publishBookingUpdate } from '../../services/liveUpdates';
 import { resolveStaffStudio } from '../../middleware/studioScope.middleware';
 import { upsertSessionLog } from '../../lib/sessionLog';
 import { assertEngineerFree } from '../../lib/engineerSchedule';
+import { findRoomClash, isRoomClash } from '../../lib/roomSchedule';
 import { evaluateStudioPolicies, policiesAffectedByChanges, type PolicyContract } from '../../lib/studioPolicyEngine';
 
 const RescheduleSchema = z.object({
@@ -14,14 +14,6 @@ const RescheduleSchema = z.object({
   ends_at: z.string().datetime(),
   policy_exception_ids: z.array(z.string().uuid()).max(10).optional().default([]),
 });
-
-// A write the room's exclusion constraint refused (Postgres 23P01), or the deadlock
-// two such writes can end in (40P01). Prisma 5.22 reports both from an update as
-// unknown request errors; P2004 and P2034 are its own codes for the same failures.
-function isRoomClash(error: unknown) {
-  if (error instanceof Prisma.PrismaClientKnownRequestError) return ['P2004', 'P2034'].includes(error.code);
-  return error instanceof Prisma.PrismaClientUnknownRequestError && /\b(23P01|40P01)\b/.test(error.message);
-}
 
 export async function rescheduleBooking(req: Request, res: Response, next: NextFunction) {
   try {
@@ -82,28 +74,18 @@ export async function rescheduleBooking(req: Request, res: Response, next: NextF
     const missingOverrides = policyDecisions.filter(decision => decision.result === 'OVERRIDE_REQUIRED' && !approvedPolicyIds.has(decision.policy_id));
     if (missingOverrides.length) throw new AppError(`Studio policy exception required: ${missingOverrides.map(item => item.policy_name).join(', ')}`, 409);
 
-    const conflict = await prisma.booking.findFirst({
-      where: {
-        id: { not: booking.id },
-        room_id: booking.room_id ?? undefined,
-        status: { notIn: ['CANCELLED', 'NO_SHOW'] },
-        OR: [
-          { starts_at: { lte: newStart }, ends_at: { gt: newStart } },
-          { starts_at: { lt: newEnd }, ends_at: { gte: newEnd } },
-        ],
-      },
-    });
-    if (conflict) throw new AppError('That time slot is not available', 409);
-
-    // The room's exclusion constraint is what keeps a slot to one booking; the check
-    // above only answers early. A booking written between the two, or one the check
-    // misses, fails this update instead.
+    // The new time must be free in the room. It is checked under the booking's and the
+    // room's locks, so no booking for the room can be written in between; the room's
+    // exclusion constraint still refuses any write that gets past the check.
     // The session's engineer moves with it, so the new time must be free for them too. The
     // engineer is read under the booking's lock, so an assignment cannot slip in between.
     const updated = await prisma.$transaction(async (tx) => {
       const [current] = await tx.$queryRaw<Array<{ engineer_id: string | null }>>`
         SELECT engineer_id FROM bookings WHERE id = ${booking.id} FOR UPDATE
       `;
+      if (booking.room_id && await findRoomClash(tx, { roomId: booking.room_id, slots: [{ startsAt: newStart, endsAt: newEnd }], exceptBookingId: booking.id })) {
+        throw new AppError('That time slot is not available', 409);
+      }
       if (current?.engineer_id) await assertEngineerFree(tx, { engineerId: current.engineer_id, startsAt: newStart, endsAt: newEnd, exceptBookingId: booking.id });
       return tx.booking.update({
         where: { id: booking.id },
