@@ -37,6 +37,7 @@ export default function EnterPage() {
   const [searchParams] = useSearchParams();
   const setAuth = useAuthStore((state) => state.setAuth);
   const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [focused, setFocused] = useState(false);
   const [error, setError] = useState('');
@@ -59,6 +60,9 @@ export default function EnterPage() {
         email,
         password,
         ...(mode === 'signup' ? { role: signupRole } : {}),
+        // Public on the profile and passport. Left out when blank, and the account
+        // starts under a neutral placeholder that onboarding asks them to replace.
+        ...(mode === 'signup' && name.trim() ? { name: name.trim() } : {}),
         ...(mode === 'signup' && signupRole === 'PRODUCER' ? {
           primary_discipline: disciplines[0], disciplines,
         } : {}),
@@ -182,6 +186,7 @@ export default function EnterPage() {
           </>}
           <form onSubmit={(event) => { event.preventDefault(); if (!loading && email && password) handleEnter(); }}>
             <div style={{display:'flex',flexDirection:'column',gap:15,marginBottom:20}}>
+              {mode === 'signup' && <div className="enter-field"><label htmlFor="enter-name">{signupRole === 'ARTIST' ? 'Your name' : 'Professional name'}</label><input id="enter-name" className="enter-input" type="text" placeholder="How others will see you" value={name} autoComplete="name" maxLength={120} onChange={(event)=>setName(event.target.value)} onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)}/></div>}
               <div className="enter-field"><label htmlFor="enter-email">Email address</label><input id="enter-email" className="enter-input" type="email" placeholder="you@example.com" value={email} autoComplete="email" required onChange={(event)=>setEmail(event.target.value)} onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)}/></div>
               <div className="enter-field"><label htmlFor="enter-password">Password</label><input id="enter-password" className="enter-input" style={{paddingRight:48}} type={showPassword?'text':'password'} placeholder={mode === 'signup' ? 'At least 8 characters' : 'Your password'} value={password} minLength={mode === 'signup' ? 8 : undefined} required autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} onChange={(event)=>setPassword(event.target.value)} onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)}/><button type="button" className="enter-eye" onClick={()=>setShowPassword(value=>!value)} aria-label={showPassword?'Hide password':'Show password'}>{showPassword?<EyeOff size={16}/>:<Eye size={16}/>}</button></div>
               {mode === 'signin' && <Link to="/forgot-password" style={{alignSelf:'flex-end',marginTop:-7,color:'#666',fontSize:10,textDecoration:'none'}}>Forgot password?</Link>}

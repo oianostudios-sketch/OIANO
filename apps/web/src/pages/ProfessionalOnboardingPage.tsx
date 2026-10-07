@@ -11,7 +11,8 @@ export default function ProfessionalOnboardingPage() {
   const navigate = useNavigate();
   const { user, token, setAuth } = useAuthStore();
   const existing = (user?.producer?.disciplines ?? ['PRODUCER']) as CreativeDiscipline[];
-  const [name, setName] = useState(user?.producer?.name ?? '');
+  // Signup without a name gives a neutral placeholder; ask for the real one here.
+  const [name, setName] = useState(user?.producer?.name === 'New creative professional' ? '' : user?.producer?.name ?? '');
   const [alias, setAlias] = useState(user?.producer?.alias ?? '');
   const [disciplines, setDisciplines] = useState<CreativeDiscipline[]>(existing);
   const [primary, setPrimary] = useState<CreativeDiscipline>((user?.producer?.primary_discipline as CreativeDiscipline) ?? existing[0] ?? 'PRODUCER');

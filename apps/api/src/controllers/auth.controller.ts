@@ -55,6 +55,15 @@ const ResetPasswordSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters'),
 });
 
+// A name is public: it shows on the profile, in discovery and on the passport. When
+// the person gave none, the account carries one of these until onboarding asks for a
+// real one. Never derive it from the email; that publishes part of a private address.
+const PLACEHOLDER_NAMES = {
+  ARTIST: 'New artist',
+  PRODUCER: 'New creative professional',
+  STUDIO_ADMIN: 'New studio operator',
+} as const;
+
 function signToken(userId: string, role: string, authVersion: number): string {
   return jwt.sign({ sub: userId, role, ver: authVersion }, process.env.JWT_SECRET!, {
     expiresIn: '7d',
@@ -110,7 +119,7 @@ export async function signup(req: Request, res: Response, next: NextFunction) {
 
     const password_hash = await bcrypt.hash(data.password, 10);
     const role = data.role ?? 'ARTIST';
-    const name = data.name?.trim() || data.email.split('@')[0];
+    const name = data.name?.trim() || PLACEHOLDER_NAMES[role];
 
     // A studio registers itself and its first operator together. Kept before the
     // artist/producer path because it creates a Studio as well as a User, which
@@ -269,7 +278,7 @@ export async function enter(req: Request, res: Response, next: NextFunction) {
     } else {
       const password_hash = await bcrypt.hash(data.password, 10);
       const passportCode = await generatePassportCode();
-      const name = data.email.split('@')[0];
+      const name = PLACEHOLDER_NAMES.ARTIST;
 
       user = await prisma.user.create({
         data: {
