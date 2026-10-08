@@ -1,5 +1,6 @@
 import { prisma } from './prisma';
 import { PERFORMED_SESSION_WHERE, summariseVerifiedWork } from './verifiedWork';
+import { addCalendarDays, studioDate } from './studioClock';
 
 // One answer to "where am I, what's happening, what should I do next".
 //
@@ -99,12 +100,14 @@ function rank(action: NextAction) {
   return RANK.indexOf(action.kind);
 }
 
-function whenLabel(at: Date, now: Date): string {
+// "Tomorrow" is the studio's tomorrow: the session happens on its calendar, and
+// the server's calendar is nobody's.
+function whenLabel(at: Date, now: Date, timeZone: string): string {
   const hours = (at.getTime() - now.getTime()) / 3_600_000;
   if (hours < 0) return 'now';
   if (hours < 1) return 'within the hour';
   if (hours < 12) return `in ${Math.round(hours)} hours`;
-  return at.toDateString() === new Date(now.getTime() + 86_400_000).toDateString() ? 'tomorrow' : 'soon';
+  return studioDate(at, timeZone) === addCalendarDays(studioDate(now, timeZone), 1) ? 'tomorrow' : 'soon';
 }
 
 /** The shape sessionAction needs. Narrower than a Booking row on purpose. */
@@ -113,7 +116,7 @@ export interface SessionForAction {
   starts_at: Date;
   ends_at: Date;
   status: string;
-  studio?: { name: string | null } | null;
+  studio?: { name: string | null; timezone?: string } | null;
   room?: { name: string | null } | null;
 }
 
@@ -130,6 +133,7 @@ export function sessionAction(booking: SessionForAction | null, now: Date): Next
   if (!booking) return null;
   const studio = booking.studio?.name ?? 'Studio';
   const where = `${studio}${booking.room?.name ? ` — ${booking.room.name}` : ''}`;
+  const timeZone = booking.studio?.timezone ?? 'UTC';
 
   // Already running, and not yet over — the query that finds it filters on
   // ends_at for exactly this reason.
@@ -148,7 +152,7 @@ export function sessionAction(booking: SessionForAction | null, now: Date): Next
     return {
       kind: 'SESSION_AWAITING_STUDIO',
       title: `${studio} hasn't confirmed your session yet`,
-      detail: `Starts ${whenLabel(booking.starts_at, now)}. You'll hear when they accept it.`,
+      detail: `Starts ${whenLabel(booking.starts_at, now, timeZone)}. You'll hear when they accept it.`,
       href: `/bookings/${booking.id}`,
       at: booking.starts_at.toISOString(),
     };
@@ -157,7 +161,7 @@ export function sessionAction(booking: SessionForAction | null, now: Date): Next
   if (booking.starts_at.getTime() - now.getTime() < HOURS_36) {
     return {
       kind: 'SESSION_IMMINENT',
-      title: `Your session is ${whenLabel(booking.starts_at, now)}`,
+      title: `Your session is ${whenLabel(booking.starts_at, now, timeZone)}`,
       detail: `${where}. Confirmed.`,
       href: `/bookings/${booking.id}`,
       at: booking.starts_at.toISOString(),
@@ -207,7 +211,7 @@ export async function buildCreatorContext(userId: string, role: string): Promise
         orderBy: { starts_at: 'asc' },
         select: {
           id: true, starts_at: true, ends_at: true, status: true,
-          studio: { select: { name: true } },
+          studio: { select: { name: true, timezone: true } },
           room: { select: { name: true } },
           service: { select: { name: true } },
         },

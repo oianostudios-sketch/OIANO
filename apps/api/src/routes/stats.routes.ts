@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import { authenticate } from '../middleware/auth.middleware';
 import { AppError } from '../lib/errors';
+import { studioDate } from '../lib/studioClock';
 
 export const statsRouter = Router();
 statsRouter.use(authenticate);
@@ -30,16 +31,19 @@ statsRouter.get('/', async (req: any, res: Response, next: NextFunction) => {
         ends_at:    true,
         status:     true,
         room:       { select: { name: true } },
+        studio:     { select: { timezone: true } },
         engineer:   { select: { name: true } },
         session_log: { select: { quality_rating: true } },
       },
       orderBy: { starts_at: 'desc' },
     });
 
+    // A session's year and month are its studio's, not the server's: an Auckland
+    // session on the morning of 1 January belongs to January there.
     const now        = new Date();
-    const yearStart  = new Date(now.getFullYear(), 0, 1);
+    const studioYearMonth = (b: (typeof bookings)[number]) => studioDate(b.starts_at, b.studio.timezone).slice(0, 7);
     const completed  = bookings.filter((b) => b.status === 'COMPLETED');
-    const thisYear   = bookings.filter((b) => new Date(b.starts_at) >= yearStart);
+    const thisYear   = bookings.filter((b) => studioYearMonth(b).slice(0, 4) === studioDate(now, b.studio.timezone).slice(0, 4));
 
     // Total hours
     const totalHours = completed.reduce((sum, b) => {
@@ -79,7 +83,7 @@ statsRouter.get('/', async (req: any, res: Response, next: NextFunction) => {
     const monthly: Record<number, { sessions: number; hours: number }> = {};
     for (let m = 0; m < 12; m++) monthly[m] = { sessions: 0, hours: 0 };
     for (const b of thisYear.filter((b) => b.status === 'COMPLETED')) {
-      const m   = new Date(b.starts_at).getMonth();
+      const m   = Number(studioYearMonth(b).slice(5, 7)) - 1;
       const hrs = (new Date(b.ends_at).getTime() - new Date(b.starts_at).getTime()) / 3_600_000;
       monthly[m].sessions += 1;
       monthly[m].hours    += hrs;

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { CREATIVE_DISCIPLINES, type CreativeDiscipline } from '../lib/creativeDisciplines';
 import { useAuthStore } from '../store/auth.store';
+import { isSignupPlaceholderName } from '../../../../packages/shared/src/placeholderNames';
 
 const COMMON_SERVICES = ['Production', 'Recording', 'Editing', 'Mixing', 'Mastering', 'Songwriting', 'Composition', 'Session performance', 'Creative direction'];
 
@@ -12,7 +13,7 @@ export default function ProfessionalOnboardingPage() {
   const { user, token, setAuth } = useAuthStore();
   const existing = (user?.producer?.disciplines ?? ['PRODUCER']) as CreativeDiscipline[];
   // Signup without a name gives a neutral placeholder; ask for the real one here.
-  const [name, setName] = useState(user?.producer?.name === 'New creative professional' ? '' : user?.producer?.name ?? '');
+  const [name, setName] = useState(isSignupPlaceholderName(user?.producer?.name) ? '' : user?.producer?.name ?? '');
   const [alias, setAlias] = useState(user?.producer?.alias ?? '');
   const [disciplines, setDisciplines] = useState<CreativeDiscipline[]>(existing);
   const [primary, setPrimary] = useState<CreativeDiscipline>((user?.producer?.primary_discipline as CreativeDiscipline) ?? existing[0] ?? 'PRODUCER');
@@ -79,7 +80,7 @@ export default function ProfessionalOnboardingPage() {
         <fieldset><legend className="text-xs font-semibold">Services you offer</legend><div className="mt-3 flex flex-wrap gap-2">{COMMON_SERVICES.map((service)=>{const active=services.includes(service);return <button type="button" key={service} aria-pressed={active} onClick={()=>setServices((current)=>active?current.filter((item)=>item!==service):[...current,service])} className={`rounded-full border px-3 py-2 text-[10px] ${active?'border-sky-400/50 bg-sky-400/10 text-sky-200':'border-white/[.07] text-zinc-600'}`}>{service}</button>})}</div></fieldset>
 
         <div className="grid gap-4 md:grid-cols-2"><label className="text-[10px] uppercase tracking-wider text-zinc-500"><span className="flex items-center gap-2"><MapPin size={12}/>Location</span><input value={location} onChange={(e)=>setLocation(e.target.value)} placeholder="City, country or Remote" className="mt-2 w-full rounded-xl border border-white/[.08] bg-black/30 p-3 text-sm normal-case text-white outline-none focus:border-dome" /></label><label className="text-[10px] uppercase tracking-wider text-zinc-500">Short professional introduction<textarea value={bio} onChange={(e)=>setBio(e.target.value)} rows={3} className="mt-2 w-full resize-y rounded-xl border border-white/[.08] bg-black/30 p-3 text-sm normal-case text-white outline-none focus:border-dome" /></label></div>
-        <div className="rounded-2xl border border-sky-400/10 bg-sky-400/[.025] p-4 text-[11px] leading-5 text-zinc-500"><Sparkles size={14} className="mb-2 text-sky-300"/>Studio ownership is not a discipline. A verified studio can invite this same identity as an owner, manager, engineer or other staff position—with its own accountable permissions.</div>
+        <div className="rounded-2xl border border-sky-400/10 bg-sky-400/[.025] p-4 text-[11px] leading-5 text-zinc-500"><Sparkles size={14} className="mb-2 text-sky-300"/>Studio ownership is not a discipline. For now, running a studio or working on a studio’s staff needs a separate studio account; this profile cannot hold studio access.</div>
         {error&&<p role="alert" className="text-sm text-red-300">{error}</p>}
         <button type="button" disabled={saving||!name.trim()||!disciplines.length} onClick={complete} className="inline-flex items-center justify-center gap-2 rounded-xl bg-dome px-5 py-4 text-sm font-semibold text-black disabled:opacity-40">{saving?'Building your workspace…':'Enter your professional home'}<ArrowRight size={16}/></button>
       </section>

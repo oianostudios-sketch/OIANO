@@ -3,6 +3,7 @@ import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
+import { SIGNUP_PLACEHOLDER_NAMES } from '@oiano/shared';
 import { prisma } from '../lib/prisma';
 import { generatePassportCode } from '../lib/passport';
 import { AppError } from '../lib/errors';
@@ -59,11 +60,7 @@ const ResetPasswordSchema = z.object({
 // A name is public: it shows on the profile, in discovery and on the passport. When
 // the person gave none, the account carries one of these until onboarding asks for a
 // real one. Never derive it from the email; that publishes part of a private address.
-const PLACEHOLDER_NAMES = {
-  ARTIST: 'New artist',
-  PRODUCER: 'New creative professional',
-  STUDIO_ADMIN: 'New studio operator',
-} as const;
+const PLACEHOLDER_NAMES = SIGNUP_PLACEHOLDER_NAMES;
 
 function signToken(userId: string, role: string, authVersion: number): string {
   return jwt.sign({ sub: userId, role, ver: authVersion }, process.env.JWT_SECRET!, {
