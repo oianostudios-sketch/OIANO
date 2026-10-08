@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { CREATIVE_DISCIPLINES, type CreativeDiscipline } from '../lib/creativeDisciplines';
 import { useAuthStore } from '../store/auth.store';
+import { isSignupPlaceholderName } from '../../../../packages/shared/src/placeholderNames';
 
 const COMMON_SERVICES = ['Production', 'Recording', 'Editing', 'Mixing', 'Mastering', 'Songwriting', 'Composition', 'Session performance', 'Creative direction'];
 
@@ -12,7 +13,7 @@ export default function ProfessionalOnboardingPage() {
   const { user, token, setAuth } = useAuthStore();
   const existing = (user?.producer?.disciplines ?? ['PRODUCER']) as CreativeDiscipline[];
   // Signup without a name gives a neutral placeholder; ask for the real one here.
-  const [name, setName] = useState(user?.producer?.name === 'New creative professional' ? '' : user?.producer?.name ?? '');
+  const [name, setName] = useState(isSignupPlaceholderName(user?.producer?.name) ? '' : user?.producer?.name ?? '');
   const [alias, setAlias] = useState(user?.producer?.alias ?? '');
   const [disciplines, setDisciplines] = useState<CreativeDiscipline[]>(existing);
   const [primary, setPrimary] = useState<CreativeDiscipline>((user?.producer?.primary_discipline as CreativeDiscipline) ?? existing[0] ?? 'PRODUCER');
