@@ -18,7 +18,7 @@ import { requireTransition, transitionBookingStatus } from '../lib/bookingTransi
 import { upsertSessionLog } from '../lib/sessionLog';
 import { assertEngineerFree } from '../lib/engineerSchedule';
 import { findRoomClash, isRoomClash } from '../lib/roomSchedule';
-import { studioDate, weeklyOccurrences } from '../lib/studioClock';
+import { studioDate, studioTime, weeklyOccurrences } from '../lib/studioClock';
 import { addDeliverableVersion, recordDeliverableReview } from '../lib/deliverableVersions';
 import { applyWalletDelta } from '../lib/walletLedger';
 import { recordBookingPayment } from '../lib/financialLedger';
@@ -445,10 +445,9 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
         slots: occurrences.map((occ) => ({ startsAt: occ.starts_at, endsAt: occ.ends_at })),
       });
       if (recurringConflict) {
-        throw new AppError(
-          `Time slot not available on ${new Date(recurringConflict.starts_at).toLocaleDateString()}`,
-          409,
-        );
+        // Named on the studio's clock; the server's own zone means nothing to the artist.
+        const clash = `${studioDate(recurringConflict.starts_at, studio.timezone)}, ${studioTime(recurringConflict.starts_at, studio.timezone)}–${studioTime(recurringConflict.ends_at, studio.timezone)}`;
+        throw new AppError(`Time slot not available on ${clash} (${studio.timezone})`, 409);
       }
 
       await applyWalletDelta(tx, wallet.id, -totalCost, 'debit', txLabel);
@@ -587,7 +586,9 @@ export async function updateBookingStatus(req: Request, res: Response, next: Nex
 
     // Persist notification to DB so the inbox shows it even after SSE reconnect
     if (existing.artist?.user_id) {
-      const startsLabel = existing.starts_at.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      // The studio's date and time, with its zone; the server's zone is nobody's.
+      const startsDay = existing.starts_at.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: studio.timezone });
+      const startsLabel = `${startsDay}, ${studioTime(existing.starts_at, studio.timezone)} (${studio.timezone})`;
       const notifMap: Record<string, { title: string; body: string }> = {
         CONFIRMED:   { title: 'Session confirmed',        body: `Your session on ${startsLabel} is confirmed. See you in the studio.` },
         CANCELLED:   { title: 'Session cancelled',        body: `Your session on ${startsLabel} has been cancelled.` },
