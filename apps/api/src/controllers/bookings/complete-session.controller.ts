@@ -11,6 +11,7 @@ import { recordBookingCompleted } from '../../lib/bookingCompletion';
 import { upsertSessionLog } from '../../lib/sessionLog';
 import { addDeliverableVersion } from '../../lib/deliverableVersions';
 import { requireTransition, transitionBookingStatus } from '../../lib/bookingTransitions';
+import { studioWhenLabel } from '../../lib/studioClock';
 
 // POST /api/bookings/:id/complete — the session completion screen.
 // Single entry point that replaces the old "flip status, then separately
@@ -236,7 +237,8 @@ export async function completeSession(req: Request, res: Response, next: NextFun
 
       await publishBookingUpdate(booking.id, 'COMPLETED');
 
-      const startsLabel = booking.starts_at.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      // The studio's date and time, with its zone; the server's zone is nobody's.
+      const startsLabel = studioWhenLabel(booking.starts_at, studio.timezone);
       if (booking.artist?.user_id) {
         createNotification({
           user_id: booking.artist.user_id,
@@ -256,6 +258,7 @@ export async function completeSession(req: Request, res: Response, next: NextFun
           startsAt: booking.starts_at.toISOString(),
           endsAt: booking.ends_at.toISOString(),
           bookingId: booking.id,
+          timeZone: studio.timezone,
           totalUsd: Number(booking.total_usd ?? 0),
         }).catch((e) => console.error('[email] complete failed:', e?.message));
       }

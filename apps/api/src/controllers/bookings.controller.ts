@@ -18,7 +18,7 @@ import { requireTransition, transitionBookingStatus } from '../lib/bookingTransi
 import { upsertSessionLog } from '../lib/sessionLog';
 import { assertEngineerFree } from '../lib/engineerSchedule';
 import { findRoomClash, isRoomClash } from '../lib/roomSchedule';
-import { studioDate, studioTime, weeklyOccurrences } from '../lib/studioClock';
+import { studioDate, studioTime, studioWhenLabel, weeklyOccurrences } from '../lib/studioClock';
 import { addDeliverableVersion, recordDeliverableReview } from '../lib/deliverableVersions';
 import { applyWalletDelta } from '../lib/walletLedger';
 import { recordBookingPayment } from '../lib/financialLedger';
@@ -587,8 +587,7 @@ export async function updateBookingStatus(req: Request, res: Response, next: Nex
     // Persist notification to DB so the inbox shows it even after SSE reconnect
     if (existing.artist?.user_id) {
       // The studio's date and time, with its zone; the server's zone is nobody's.
-      const startsDay = existing.starts_at.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: studio.timezone });
-      const startsLabel = `${startsDay}, ${studioTime(existing.starts_at, studio.timezone)} (${studio.timezone})`;
+      const startsLabel = studioWhenLabel(existing.starts_at, studio.timezone);
       const notifMap: Record<string, { title: string; body: string }> = {
         CONFIRMED:   { title: 'Session confirmed',        body: `Your session on ${startsLabel} is confirmed. See you in the studio.` },
         CANCELLED:   { title: 'Session cancelled',        body: `Your session on ${startsLabel} has been cancelled.` },
@@ -615,6 +614,7 @@ export async function updateBookingStatus(req: Request, res: Response, next: Nex
           startsAt: existing.starts_at.toISOString(),
           endsAt:   existing.ends_at.toISOString(),
           bookingId: existing.id,
+          timeZone: studio.timezone,
           totalUsd,
         }).catch((e) => console.error('[email] confirmed failed:', e?.message));
       } else if (status === 'COMPLETED') {
@@ -623,6 +623,7 @@ export async function updateBookingStatus(req: Request, res: Response, next: Nex
           startsAt: existing.starts_at.toISOString(),
           endsAt:   existing.ends_at.toISOString(),
           bookingId: existing.id,
+          timeZone: studio.timezone,
           totalUsd,
         }).catch((e) => console.error('[email] complete failed:', e?.message));
       } else if (status === 'CANCELLED') {
@@ -630,6 +631,7 @@ export async function updateBookingStatus(req: Request, res: Response, next: Nex
           to: artistEmail, artistName, service,
           startsAt: existing.starts_at.toISOString(),
           bookingId: existing.id,
+          timeZone: studio.timezone,
         }).catch((e) => console.error('[email] cancelled failed:', e?.message));
       }
     }
