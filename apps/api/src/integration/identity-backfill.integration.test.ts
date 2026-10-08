@@ -145,6 +145,9 @@ test('identity backfill: one person per login, one profile per legacy identity, 
     assert.equal(none.display_name, null, '"New artist" is not a name the person chose');
     const half = await prisma.person.findUniqueOrThrow({ where: { user_id: unnamedArtistNamedProducer.id } });
     assert.equal(half.display_name, 'Adjoa Beats', 'the next record with a real name names the person');
+    // The name is a placeholder, but the role is real: an artist record is still the artist discipline.
+    assert.deepEqual(await held(unnamed.id), [['ARTIST', true]]);
+    assert.deepEqual(await held(unnamedArtistNamedProducer.id), [['ARTIST', true], ['PRODUCER', false]]);
   });
 
   await t.test('engineers: a login joins its person, a listed engineer is an unclaimed identity', async () => {

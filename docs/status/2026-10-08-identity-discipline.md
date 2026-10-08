@@ -55,6 +55,15 @@ CreativeProfile, with no route or reader changes. `OIANO_SCHEMA_REDESIGN.md` §3
   writers (6 dual-write tests failed), extra links never removed, every producer made
   PRODUCER only, the chosen primary ignored, parity blind to a missing link, and
   `is_primary` rewritten on every run (the second-run test failed).
+- **Rebased onto #16's update, 2026-10-08.** `claude/identity-person-profile` was merged in
+  (main through #40, and "A signup placeholder names no person"), with no conflicts. Both
+  behaviours hold: a placeholder name such as `New artist` names no person, but the
+  artist record behind it still gives the ARTIST discipline, because the role is real even
+  when the name is not. The placeholder test now asserts that (ARTIST alone, and ARTIST
+  primary beside PRODUCER); with placeholder-named artist rows made to declare nothing,
+  it failed, and the file was restored byte-identical. After the merge: integration 211 of
+  211 on a fresh database, both typechecks pass, and the drift check reports no
+  difference. These supersede the integration count above.
 - **Before merge.** PR #16 merges first and its migration is applied in production; then
   this migration is applied there by the owner, and `prisma/backfill-identity.ts` is run
   and reports parity.
