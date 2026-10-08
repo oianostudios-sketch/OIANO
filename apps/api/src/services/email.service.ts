@@ -4,6 +4,8 @@
  * All functions are no-ops when SENDGRID_API_KEY is not set.
  */
 
+import { studioDayLabel, studioTime, studioWhenLabel } from '../lib/studioClock';
+
 const FROM      = process.env.SENDGRID_FROM_EMAIL ?? 'noreply@oiano.net';
 const FROM_NAME = 'OIANO';
 
@@ -38,17 +40,18 @@ export async function sendStudioInvitationEmail(toEmail: string, studioName: str
 
 // ── Receipt email — fired by Stripe webhook on checkout.session.completed ─────
 
-export async function sendReceiptEmail(toEmail: string, booking: any) {
+// Session times in every email are the studio's wall clock with its zone named,
+// because the session happens there; the server's zone is nobody's.
+
+export function receiptEmail(booking: any, issuedAt: Date = new Date()) {
   const studioName  = booking.studio?.name ?? 'OIANO Studio Network';
+  const timeZone: string = booking.studio.timezone;
   const startsAt    = new Date(booking.starts_at);
   const endsAt      = new Date(booking.ends_at);
   const durationHrs = (endsAt.getTime() - startsAt.getTime()) / 3_600_000;
   const total       = Number(booking.total_usd ?? 0).toFixed(2);
   const receiptNum  = (booking.id ?? '').slice(0, 8).toUpperCase();
   const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
-
-  const fmtDate = (d: Date) => d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  const fmtTime = (d: Date) => d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
   const html = `
 <!DOCTYPE html>
@@ -67,7 +70,7 @@ export async function sendReceiptEmail(toEmail: string, booking: any) {
               </td>
               <td align="right" style="vertical-align:top;">
                 <p style="color:#888;font-size:11px;margin:0;font-family:monospace;">Receipt #${receiptNum}</p>
-                <p style="color:#666;font-size:11px;margin:4px 0 0;font-family:monospace;">${new Date().toLocaleDateString('en-US')}</p>
+                <p style="color:#666;font-size:11px;margin:4px 0 0;font-family:monospace;">${issuedAt.toISOString().slice(0, 10)} UTC</p>
               </td>
             </tr></table>
           </td>
@@ -82,8 +85,8 @@ export async function sendReceiptEmail(toEmail: string, booking: any) {
               <tr>
                 <td style="padding:16px 0;vertical-align:top;width:75%;">
                   <p style="margin:0;font-size:14px;font-weight:600;color:#111;">${booking.service?.name ?? 'Studio Session'}</p>
-                  <p style="margin:4px 0 0;font-size:12px;color:#777;">${fmtDate(startsAt)}</p>
-                  <p style="margin:2px 0 0;font-size:12px;color:#999;font-family:monospace;">${fmtTime(startsAt)} → ${fmtTime(endsAt)} (${durationHrs.toFixed(1)}h)</p>
+                  <p style="margin:4px 0 0;font-size:12px;color:#777;">${studioDayLabel(startsAt, timeZone, 'long')}</p>
+                  <p style="margin:2px 0 0;font-size:12px;color:#999;font-family:monospace;">${studioTime(startsAt, timeZone)} → ${studioTime(endsAt, timeZone)} ${timeZone} (${durationHrs.toFixed(1)}h)</p>
                   ${booking.room ? `<p style="margin:2px 0 0;font-size:12px;color:#999;">Room: ${booking.room.name}</p>` : ''}
                   ${booking.engineer ? `<p style="margin:2px 0 0;font-size:12px;color:#999;">Engineer: ${booking.engineer.name}</p>` : ''}
                 </td>
@@ -131,7 +134,12 @@ export async function sendReceiptEmail(toEmail: string, booking: any) {
 </body>
 </html>`;
 
-  await send(toEmail, `Receipt #${receiptNum} — ${studioName}`, html);
+  return { subject: `Receipt #${receiptNum} — ${studioName}`, html };
+}
+
+export async function sendReceiptEmail(toEmail: string, booking: any) {
+  const { subject, html } = receiptEmail(booking);
+  await send(toEmail, subject, html);
 }
 
 // ── Session file delivery email ───────────────────────────────────────────────
@@ -247,16 +255,16 @@ interface BookingEmailArgs {
   startsAt: string;
   endsAt?: string;
   bookingId: string;
+  /** The booking's studio's IANA zone; its times are stated on that clock. */
+  timeZone: string;
   totalUsd?: number;
 }
 
-export async function sendBookingConfirmed(args: BookingEmailArgs) {
-  const { to, artistName, service, room, startsAt, endsAt, bookingId, totalUsd } = args;
+export function bookingConfirmedEmail(args: BookingEmailArgs) {
+  const { artistName, service, room, startsAt, endsAt, bookingId, timeZone, totalUsd } = args;
   const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
   const start = new Date(startsAt);
   const end   = endsAt ? new Date(endsAt) : null;
-  const fmtDate = (d: Date) => d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  const fmtTime = (d: Date) => d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
   const html = `
 <div style="font-family:sans-serif;max-width:520px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden;">
@@ -268,7 +276,7 @@ export async function sendBookingConfirmed(args: BookingEmailArgs) {
   <div style="padding:28px 32px;">
     <p style="font-size:16px;font-weight:600;color:#111;margin:0 0 6px;">Session confirmed, ${artistName}.</p>
     <p style="font-size:13px;color:#555;margin:0 0 20px;">${service}${room ? ` · ${room}` : ''}</p>
-    <p style="font-size:13px;color:#333;margin:0;">${fmtDate(start)} · ${fmtTime(start)}${end ? ` – ${fmtTime(end)}` : ''}</p>
+    <p style="font-size:13px;color:#333;margin:0;">${studioWhenLabel(start, timeZone, end)}</p>
     ${totalUsd ? `<p style="font-size:13px;color:#999;margin:4px 0 0;">Total: <strong>$${totalUsd.toFixed(2)}</strong></p>` : ''}
     <div style="margin-top:24px;">
       <a href="${frontendUrl}/bookings/${bookingId}" style="background:#C9A84C;color:#000;font-weight:600;font-size:12px;padding:10px 22px;border-radius:6px;text-decoration:none;display:inline-block;">View Booking →</a>
@@ -277,14 +285,18 @@ export async function sendBookingConfirmed(args: BookingEmailArgs) {
   </div>
 </div>`;
 
-  await send(to, `Session confirmed — ${fmtDate(start)}`, html);
+  return { subject: `Session confirmed — ${studioDayLabel(start, timeZone)}`, html };
 }
 
-export async function sendSessionComplete(args: BookingEmailArgs) {
-  const { to, artistName, service, startsAt, bookingId } = args;
+export async function sendBookingConfirmed(args: BookingEmailArgs) {
+  const { subject, html } = bookingConfirmedEmail(args);
+  await send(args.to, subject, html);
+}
+
+export function sessionCompleteEmail(args: BookingEmailArgs) {
+  const { artistName, service, startsAt, bookingId, timeZone } = args;
   const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
   const start = new Date(startsAt);
-  const fmtDate = (d: Date) => d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 
   const html = `
 <div style="font-family:sans-serif;max-width:520px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden;">
@@ -294,20 +306,24 @@ export async function sendSessionComplete(args: BookingEmailArgs) {
   <div style="height:3px;background:linear-gradient(90deg,#C9A84C,#E2C97E,#C9A84C);"></div>
   <div style="padding:28px 32px;">
     <p style="font-size:16px;font-weight:600;color:#111;margin:0 0 6px;">Session complete, ${artistName}.</p>
-    <p style="font-size:13px;color:#555;margin:0 0 20px;">${service} · ${fmtDate(start)}</p>
+    <p style="font-size:13px;color:#555;margin:0 0 20px;">${service} · ${studioWhenLabel(start, timeZone)}</p>
     <p style="font-size:13px;color:#555;margin:0 0 20px;">Your session log and any delivered files are on your booking page.</p>
     <a href="${frontendUrl}/bookings/${bookingId}" style="background:#C9A84C;color:#000;font-weight:600;font-size:12px;padding:10px 22px;border-radius:6px;text-decoration:none;display:inline-block;">View Session →</a>
     <p style="margin-top:24px;font-size:10px;color:#bbb;font-family:monospace;">OIANO · Discover · Connect · Create</p>
   </div>
 </div>`;
 
-  await send(to, `Session complete — ${service}`, html);
+  return { subject: `Session complete — ${service}`, html };
 }
 
-export async function sendBookingCancelled(args: BookingEmailArgs) {
-  const { to, artistName, service, startsAt } = args;
+export async function sendSessionComplete(args: BookingEmailArgs) {
+  const { subject, html } = sessionCompleteEmail(args);
+  await send(args.to, subject, html);
+}
+
+export function bookingCancelledEmail(args: BookingEmailArgs) {
+  const { artistName, service, startsAt, timeZone } = args;
   const start = new Date(startsAt);
-  const fmtDate = (d: Date) => d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
 
   const html = `
@@ -318,12 +334,17 @@ export async function sendBookingCancelled(args: BookingEmailArgs) {
   <div style="height:3px;background:linear-gradient(90deg,#C9A84C,#E2C97E,#C9A84C);"></div>
   <div style="padding:28px 32px;">
     <p style="font-size:16px;font-weight:600;color:#111;margin:0 0 6px;">Booking cancelled, ${artistName}.</p>
-    <p style="font-size:13px;color:#555;margin:0 0 20px;">${service} · ${fmtDate(start)} has been cancelled.</p>
+    <p style="font-size:13px;color:#555;margin:0 0 20px;">${service} · ${studioWhenLabel(start, timeZone)} has been cancelled.</p>
     <p style="font-size:13px;color:#555;margin:0 0 20px;">Contact the studio if you have questions, or book a new session below.</p>
     <a href="${frontendUrl}/book" style="background:#C9A84C;color:#000;font-weight:600;font-size:12px;padding:10px 22px;border-radius:6px;text-decoration:none;display:inline-block;">Book another session →</a>
     <p style="margin-top:24px;font-size:10px;color:#bbb;font-family:monospace;">OIANO · Discover · Connect · Create</p>
   </div>
 </div>`;
 
-  await send(to, `Booking cancelled — ${service} on ${fmtDate(start)}`, html);
+  return { subject: `Booking cancelled — ${service} on ${studioDayLabel(start, timeZone)}`, html };
+}
+
+export async function sendBookingCancelled(args: BookingEmailArgs) {
+  const { subject, html } = bookingCancelledEmail(args);
+  await send(args.to, subject, html);
 }

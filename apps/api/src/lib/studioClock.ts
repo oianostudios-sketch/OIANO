@@ -73,6 +73,23 @@ export function studioTime(moment: Date, timeZone: string): string {
   return `${String(local.hour).padStart(2, '0')}:${String(local.minute).padStart(2, '0')}`;
 }
 
+/** The studio's calendar day at a moment, for people to read: "Tue, Oct 15". */
+export function studioDayLabel(moment: Date, timeZone: string, weekday: 'short' | 'long' = 'short'): string {
+  return moment.toLocaleDateString('en-US', weekday === 'long'
+    ? { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone }
+    : { weekday: 'short', month: 'short', day: 'numeric', timeZone });
+}
+
+/**
+ * A studio-anchored moment, or span, as a message states it: the studio's day,
+ * its wall clock and the zone named, "Tue, Oct 15, 09:00 (Pacific/Auckland)" or
+ * "Tue, Oct 15, 09:00–11:00 (Pacific/Auckland)". The server's zone is nobody's.
+ */
+export function studioWhenLabel(startsAt: Date, timeZone: string, endsAt?: Date | null): string {
+  const end = endsAt ? `–${studioTime(endsAt, timeZone)}` : '';
+  return `${studioDayLabel(startsAt, timeZone)}, ${studioTime(startsAt, timeZone)}${end} (${timeZone})`;
+}
+
 /** The calendar date (YYYY-MM-DD) a number of days from another; dates have no zone. */
 export function addCalendarDays(date: string, days: number): string {
   const [year, month, day] = date.split('-').map(Number);
