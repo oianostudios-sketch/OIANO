@@ -30,6 +30,12 @@ test('identity backfill: one person per login, one profile per legacy identity, 
     data: { email: email('both'), role: 'ARTIST', artist: { create: { name: 'Kwame Both' } }, producer: { create: { name: 'K. Both Productions', alias: 'KB Beats' } } },
     include: { artist: true, producer: true },
   });
+  // A professional who chose their disciplines, one of them not on the reference list.
+  const photographer = await prisma.user.create({
+    data: { email: email('photographer'), role: 'PRODUCER', producer: { create: {
+      name: 'Adwoa Lens', primary_discipline: 'PHOTOGRAPHER', disciplines: ['VIDEOGRAPHER', 'PHOTOGRAPHER', 'Drone pilot'],
+    } } },
+  });
   const operator = await prisma.user.create({ data: { email: email('operator'), role: 'STUDIO_ADMIN' } });
   const engineerLogin = await prisma.user.create({ data: { email: email('engineer'), role: 'ENGINEER' } });
   const linkedEngineer = await prisma.engineer.create({ data: { studio_id: studio.id, user_id: engineerLogin.id, name: 'Esi Linked', specialties: [] } });
@@ -54,8 +60,10 @@ test('identity backfill: one person per login, one profile per legacy identity, 
     const snapshot = async () => ({
       persons: await prisma.person.findMany({ orderBy: { id: 'asc' } }),
       profiles: await prisma.creativeProfile.findMany({ orderBy: { id: 'asc' } }),
+      disciplines: await prisma.personDiscipline.findMany({ orderBy: [{ person_id: 'asc' }, { discipline_code: 'asc' }] }),
     });
     const before = await snapshot();
+    assert.ok(before.disciplines.length > 0);
     assert.ok(Object.values(await backfillIdentity(prisma)).every((n) => n === 0), 'nothing created, updated or removed');
     assert.deepEqual(await snapshot(), before);
   });
@@ -76,6 +84,45 @@ test('identity backfill: one person per login, one profile per legacy identity, 
     assert.deepEqual(person.profiles.map((p) => [p.id, p.legacy_source]), [[both.artist!.id, 'ARTIST'], [both.producer!.id, 'PRODUCER']]);
     assert.equal(person.display_name, 'Kwame Both', 'named from the artist record before the producer record');
     assert.equal(person.profiles[1].display_name, 'KB Beats');
+  });
+
+  const held = async (userId: string) => (await prisma.personDiscipline.findMany({
+    where: { person: { user_id: userId } }, orderBy: { discipline_code: 'asc' },
+  })).map((d) => [d.discipline_code, d.is_primary]);
+
+  await t.test('one person, several disciplines: an artist and producer account holds both', async () => {
+    assert.deepEqual(await held(both.id), [['ARTIST', true], ['PRODUCER', false]], 'primarily an artist, named from that record');
+    assert.deepEqual(await held(artist.id), [['ARTIST', true]]);
+  });
+
+  await t.test('a professional holds the disciplines they chose, known ones only', async () => {
+    assert.deepEqual(await held(photographer.id), [['PHOTOGRAPHER', true], ['VIDEOGRAPHER', false]], 'their chosen primary leads; no PRODUCER they never chose');
+    assert.deepEqual(await held(operator.id), [], 'a studio operator declares none');
+    const engineers = await prisma.personDiscipline.findMany({ where: { person: { profiles: { some: { id: { in: [linkedEngineer.id, listedEngineer.id] } } } } } });
+    assert.deepEqual(engineers.map((d) => [d.discipline_code, d.is_primary]), [['ENGINEER', true], ['ENGINEER', true]]);
+  });
+
+  await t.test('the reference list carries every discipline a professional can choose', async () => {
+    const codes = (await prisma.discipline.findMany({ select: { code: true } })).map((d) => d.code).sort();
+    assert.deepEqual(codes, [
+      'ARTIST', 'COMPOSER', 'CREATIVE_DIRECTOR', 'DJ', 'ENGINEER', 'MASTERING_ENGINEER', 'MIX_ENGINEER',
+      'MUSICIAN', 'PHOTOGRAPHER', 'PRODUCER', 'RECORDING_ENGINEER', 'SONGWRITER', 'VIDEOGRAPHER', 'VOCALIST',
+    ]);
+  });
+
+  await t.test('parity reports a discipline missing, extra or wrongly primary, and the next run repairs each', async () => {
+    const person = await prisma.person.findUniqueOrThrow({ where: { user_id: both.id } });
+    await prisma.personDiscipline.delete({ where: { person_id_discipline_code: { person_id: person.id, discipline_code: 'PRODUCER' } } });
+    await prisma.personDiscipline.create({ data: { person_id: person.id, discipline_code: 'DJ' } });
+    await prisma.personDiscipline.update({ where: { person_id_discipline_code: { person_id: person.id, discipline_code: 'ARTIST' } }, data: { is_primary: false } });
+    const { mismatches } = await identityParity(prisma);
+    assert.ok(mismatches.includes(`person ${person.id} is missing discipline PRODUCER`));
+    assert.ok(mismatches.includes(`person ${person.id} holds discipline DJ that no record declares`));
+    assert.ok(mismatches.includes(`person ${person.id}: ARTIST is not primary, unlike their records`));
+    const repaired = await backfillIdentity(prisma);
+    assert.deepEqual([repaired.disciplinesCreated, repaired.disciplinesUpdated, repaired.disciplinesRemoved], [1, 1, 1]);
+    assert.deepEqual(await held(both.id), [['ARTIST', true], ['PRODUCER', false]]);
+    assert.deepEqual((await identityParity(prisma)).mismatches, []);
   });
 
   await t.test('names come from records, never from an email address', async () => {
