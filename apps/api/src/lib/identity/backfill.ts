@@ -17,6 +17,7 @@
 // identityParity() is the verification: it lists every legacy identity whose canonical
 // rows are missing or differ. Zero mismatches is the condition for moving readers.
 import { Prisma, type PrismaClient } from '@prisma/client';
+import { isSignupPlaceholderName } from '@oiano/shared';
 import { prisma } from '../prisma';
 
 type Source = 'ARTIST' | 'PRODUCER' | 'ENGINEER';
@@ -117,9 +118,13 @@ async function loadLegacy(db: PrismaClient, scope: Scope): Promise<LegacyIdentit
 }
 
 // A user's person is named from their artist, producer or engineer record in that order.
+// A signup placeholder ("New artist") is not a name the person chose, so it names no
+// one: the next record's name is used, or the person stays unnamed until they give one.
 function personNames(rows: LegacyIdentity[]) {
   const names = new Map<string, string>();
-  for (const row of rows) if (row.user_id && !names.has(row.user_id)) names.set(row.user_id, row.name);
+  for (const row of rows) {
+    if (row.user_id && !names.has(row.user_id) && !isSignupPlaceholderName(row.name)) names.set(row.user_id, row.name);
+  }
   return names;
 }
 

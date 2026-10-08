@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { liveSession, minutesIntoStudioDay, studioDate, studioDateBounds, studioDayBounds, studioLocalToInstant, weeklyOccurrences } from './studioClock';
+import { liveSession, minutesIntoStudioDay, studioDate, studioDateBounds, studioDayBounds, studioLocalToInstant, studioTime, weeklyOccurrences } from './studioClock';
 
 const at = (iso: string) => new Date(iso);
 
@@ -127,4 +127,10 @@ test('a time in the spring-forward gap moves forward; a repeated time takes the 
     '2026-03-29T01:30:00.000Z 2026-03-29T02:30:00.000Z', // 02:30 to 03:30 BST
     '2026-04-05T00:30:00.000Z 2026-04-05T02:30:00.000Z',
   ]);
+});
+
+test('studioTime reads the wall clock in the studio zone, not the server zone', () => {
+  assert.equal(studioTime(at('2030-10-14T20:00:00Z'), 'Pacific/Auckland'), '09:00');
+  assert.equal(studioTime(at('2030-10-14T20:05:00Z'), 'America/Los_Angeles'), '13:05');
+  assert.equal(studioTime(at('2030-01-01T00:00:00Z'), 'Europe/London'), '00:00', 'midnight is 00:00, not 24:00');
 });

@@ -177,7 +177,7 @@ export default function EnterPage() {
                   return <button key={discipline.id} type="button" aria-pressed={active} onClick={() => setDisciplines((current) => active ? current.filter((id) => id !== discipline.id) : current.length < 6 ? [...current, discipline.id] : current)} style={{border:`1px solid ${active?'rgba(90,155,203,.65)':'#292929'}`,background:active?'rgba(90,155,203,.13)':'#101010',color:active?'#bfe3f7':'#777',borderRadius:999,padding:'7px 10px',fontSize:10,cursor:'pointer'}}>{discipline.label}</button>;
                 })}
               </div>
-              <p style={{fontSize:9,color:'#505050',lineHeight:1.5,margin:'9px 0 0'}}>The first choice becomes your primary discipline. Studio ownership and staff access are added separately through verified studio onboarding.</p>
+              <p style={{fontSize:9,color:'#505050',lineHeight:1.5,margin:'9px 0 0'}}>The first choice becomes your primary discipline. For now, running a studio or working on a studio’s staff needs a separate studio account.</p>
             </fieldset>}
             <div className="enter-account-note" aria-label="Managed account access">
               <div><Building2 size={13}/><span><b>Studio</b><br/>Verified operator onboarding</span></div>

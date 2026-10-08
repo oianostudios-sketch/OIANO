@@ -44,6 +44,13 @@ test('identity backfill: one person per login, one profile per legacy identity, 
   const twins = await Promise.all([1, 2].map((n) => prisma.user.create({
     data: { email: email(`twin-${n}`), role: 'ARTIST', artist: { create: { name: twinName } } }, include: { artist: true },
   })));
+  // Signed up without a name: the account carries a placeholder, which names no person.
+  const unnamed = await prisma.user.create({
+    data: { email: email('unnamed'), role: 'ARTIST', artist: { create: { name: 'New artist' } } },
+  });
+  const unnamedArtistNamedProducer = await prisma.user.create({
+    data: { email: email('half-named'), role: 'ARTIST', artist: { create: { name: 'New artist' } }, producer: { create: { name: 'Adjoa Beats' } } },
+  });
   await prisma.weaveNode.create({ data: { id: artist.artist!.id, type: 'ARTIST' } });
 
   const first = await backfillIdentity(prisma);
@@ -131,6 +138,13 @@ test('identity backfill: one person per login, one profile per legacy identity, 
     const ours = await prisma.person.findMany({ where: { user: { email: { endsWith: `${runId}@example.test` } } } });
     assert.ok(ours.length >= 6);
     assert.ok(ours.every((p) => !p.display_name?.includes('@')));
+  });
+
+  await t.test('a signup placeholder names no one', async () => {
+    const none = await prisma.person.findUniqueOrThrow({ where: { user_id: unnamed.id } });
+    assert.equal(none.display_name, null, '"New artist" is not a name the person chose');
+    const half = await prisma.person.findUniqueOrThrow({ where: { user_id: unnamedArtistNamedProducer.id } });
+    assert.equal(half.display_name, 'Adjoa Beats', 'the next record with a real name names the person');
   });
 
   await t.test('engineers: a login joins its person, a listed engineer is an unclaimed identity', async () => {

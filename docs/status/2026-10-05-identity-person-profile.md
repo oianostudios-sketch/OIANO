@@ -65,3 +65,9 @@ route changes.
   email-derived names holds only for what the backfill itself chooses. A studio admin can
   never delete an artist: `DELETE /api/artists/:id` finds only artists who booked the
   studio, then refuses any artist with a booking.
+
+- **Signup placeholders, 2026-10-08.** Since #32, an account that gave no name at signup carries
+  a placeholder (`New artist`). The backfill treats it as no name: the person is named from
+  their next record with a real name, or stays unnamed. A profile still mirrors its legacy row
+  as it is. Held by "a signup placeholder names no one" in `identity-backfill`, which fails
+  when the check is removed.
