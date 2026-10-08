@@ -67,6 +67,12 @@ export function studioDate(moment: Date, timeZone: string): string {
   return `${String(local.year).padStart(4, '0')}-${pad(local.month)}-${pad(local.day)}`;
 }
 
+/** The studio's wall-clock time at a moment, as HH:MM on a 24-hour clock. */
+export function studioTime(moment: Date, timeZone: string): string {
+  const local = zonedParts(moment, timeZone);
+  return `${String(local.hour).padStart(2, '0')}:${String(local.minute).padStart(2, '0')}`;
+}
+
 /** The calendar date (YYYY-MM-DD) a number of days from another; dates have no zone. */
 export function addCalendarDays(date: string, days: number): string {
   const [year, month, day] = date.split('-').map(Number);

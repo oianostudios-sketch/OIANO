@@ -27,7 +27,7 @@ export async function findRoomClash(tx: Prisma.TransactionClient, input: {
       status: { notIn: ['CANCELLED', 'NO_SHOW'] },
       OR: input.slots.map((slot) => ({ starts_at: { lt: slot.endsAt }, ends_at: { gt: slot.startsAt } })),
     },
-    select: { id: true, starts_at: true },
+    select: { id: true, starts_at: true, ends_at: true },
   });
 }
 

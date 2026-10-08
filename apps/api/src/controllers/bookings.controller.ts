@@ -18,7 +18,7 @@ import { requireTransition, transitionBookingStatus } from '../lib/bookingTransi
 import { upsertSessionLog } from '../lib/sessionLog';
 import { assertEngineerFree } from '../lib/engineerSchedule';
 import { findRoomClash, isRoomClash } from '../lib/roomSchedule';
-import { studioDate, weeklyOccurrences } from '../lib/studioClock';
+import { studioDate, studioTime, weeklyOccurrences } from '../lib/studioClock';
 import { addDeliverableVersion, recordDeliverableReview } from '../lib/deliverableVersions';
 import { applyWalletDelta } from '../lib/walletLedger';
 import { recordBookingPayment } from '../lib/financialLedger';
@@ -445,10 +445,9 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
         slots: occurrences.map((occ) => ({ startsAt: occ.starts_at, endsAt: occ.ends_at })),
       });
       if (recurringConflict) {
-        throw new AppError(
-          `Time slot not available on ${new Date(recurringConflict.starts_at).toLocaleDateString()}`,
-          409,
-        );
+        // Named on the studio's clock; the server's own zone means nothing to the artist.
+        const clash = `${studioDate(recurringConflict.starts_at, studio.timezone)}, ${studioTime(recurringConflict.starts_at, studio.timezone)}–${studioTime(recurringConflict.ends_at, studio.timezone)}`;
+        throw new AppError(`Time slot not available on ${clash} (${studio.timezone})`, 409);
       }
 
       await applyWalletDelta(tx, wallet.id, -totalCost, 'debit', txLabel);

@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/auth.store';
 import { api } from '../lib/api';
+import { greetingName } from '../lib/greetingName';
 import ProfileEditDrawer from '../components/ProfileEditDrawer';
 import NotificationBell from '../components/NotificationBell';
 import { useToast } from '../components/Toast';
@@ -299,6 +300,7 @@ export default function DashboardPage() {
   // Prefer the live artist record returned with the Passport portfolio. The
   // persisted login snapshot can be stale after profile or avatar changes.
   const artist   = portfolioData?.artist ?? user?.artist;
+  const heroName = greetingName(artist);
   const passport = artist?.passport;
   // Wallet balance and profile strength come from context, which reads them from
   // the ledger and the full artist record. Falling back to the portfolio payload
@@ -445,7 +447,7 @@ export default function DashboardPage() {
               {fmtDate()}
             </p>
             <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 38, color: '#f2f0eb', fontWeight: 500, lineHeight: 1.08, letterSpacing: '-0.025em' }}>
-              {greeting()}, <span style={{ color: '#6aa9d2' }}>{artist?.alias ?? artist?.name ?? user?.email?.split('@')[0]}</span>
+              {greeting()}{heroName && <>, <span style={{ color: '#6aa9d2' }}>{heroName}</span></>}
             </h1>
             {(passport as any)?.bio && (
               <p style={{ marginTop: 10, fontSize: 13, color: '#999', maxWidth: 480, lineHeight: 1.6 }}>
