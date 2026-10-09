@@ -11,6 +11,7 @@ import { attachStudioScope } from '../middleware/studioScope.middleware';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
 import { broadcastToUser } from './notifications.routes';
+import { requireStudioCapability } from '../lib/staffPermission';
 
 export const facilitiesRouter = Router();
 facilitiesRouter.use(authenticate);
@@ -70,8 +71,12 @@ const CreateEquipmentSchema = z.object({
   serial: z.string().optional(),
   notes: z.string().optional(),
 });
+// Equipment is part of the studio's standing setup, like its rooms, so adding it takes
+// the same authority as rooms do (studio-setup.routes.ts): MANAGE_POLICIES, or the
+// legacy owner (C34). Reading equipment and issues stays open to the studio's staff.
 facilitiesRouter.post('/equipment', attachStudioScope, requireRole('STUDIO_ADMIN'), async (req: any, res, next) => {
   try {
+    await requireStudioCapability(req.userId, req.studioId, 'MANAGE_POLICIES', 'Only staff who manage the studio\'s standards can change its equipment');
     const data = CreateEquipmentSchema.parse(req.body);
     const equipment = await prisma.equipment.create({ data: { ...data, studio_id: req.studioId } });
     res.status(201).json(equipment);

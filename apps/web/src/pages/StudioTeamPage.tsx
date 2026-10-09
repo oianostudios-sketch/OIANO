@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, KeyRound, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react';
 import { api } from '../lib/api';
 import { useToast } from '../components/Toast';
+import { useStudioCapabilities } from '../hooks/useStudioCapabilities';
 
 const POSITION_PRESETS: Record<string,{role:'STUDIO_ADMIN'|'ENGINEER';capabilities:string[]}>={
   OWNER:{role:'STUDIO_ADMIN',capabilities:['MANAGE_BOOKINGS','MANAGE_CALENDAR','MANAGE_STAFF','MANAGE_POLICIES','VIEW_FINANCE','POLICY_OVERRIDE_ALL']},
@@ -17,10 +18,16 @@ type TeamData={studio:{id:string;name:string};capabilities:string[];members:any[
 export default function StudioTeamPage(){
   const qc=useQueryClient();const toast=useToast();const[email,setEmail]=useState('');const[position,setPosition]=useState('ENGINEER');
   const preset=useMemo(()=>POSITION_PRESETS[position]??POSITION_PRESETS.ENGINEER,[position]);
-  const{data,isLoading}=useQuery<TeamData>({queryKey:['studio-team'],queryFn:async()=>(await api.get('/studio/team')).data});
+  // The team is MANAGE_STAFF's (C34); anyone else is told so instead of shown a form the server refuses.
+  const caps=useStudioCapabilities();const canManageStaff=caps.can('MANAGE_STAFF');
+  const{data,isLoading}=useQuery<TeamData>({queryKey:['studio-team'],queryFn:async()=>(await api.get('/studio/team')).data,enabled:canManageStaff});
   const invite=useMutation({mutationFn:()=>api.post('/studio/team/invitations',{email,position,role:preset.role,capabilities:preset.capabilities}),onSuccess:()=>{setEmail('');qc.invalidateQueries({queryKey:['studio-team']});toast.success('Secure invitation created')},onError:(e:any)=>toast.error(e?.response?.data?.error??'Invitation failed')});
   const revokeInvite=useMutation({mutationFn:(id:string)=>api.delete(`/studio/team/invitations/${id}`),onSuccess:()=>qc.invalidateQueries({queryKey:['studio-team']})});
   const removeMember=useMutation({mutationFn:(id:string)=>api.delete(`/studio/team/${id}`),onSuccess:()=>{qc.invalidateQueries({queryKey:['studio-team']});toast.success('Studio access revoked')},onError:(e:any)=>toast.error(e?.response?.data?.error??'Access could not be revoked')});
+  if(!caps.isLoading&&!canManageStaff)return <main className="min-h-screen bg-studio-bg px-4 py-8 text-white md:px-8"><div className="mx-auto max-w-6xl">
+    <Link to="/admin" className="inline-flex items-center gap-2 text-[10px] text-zinc-600 hover:text-white"><ArrowLeft size={13}/>Operator dashboard</Link>
+    <h1 className="mt-8 font-display text-4xl">Studio team</h1><p role="alert" className="mt-4 max-w-xl text-xs leading-5 text-zinc-500">Managing the team needs the staff management permission at this studio. Ask an owner or manager to change your access.</p>
+  </div></main>;
   return <main className="min-h-screen bg-studio-bg px-4 py-8 text-white md:px-8"><div className="mx-auto max-w-6xl">
     <Link to="/admin" className="inline-flex items-center gap-2 text-[10px] text-zinc-600 hover:text-white"><ArrowLeft size={13}/>Operator dashboard</Link>
     <div className="mt-8 flex flex-wrap items-end justify-between gap-4"><div><p className="text-[9px] font-mono uppercase tracking-[.25em] text-dome">People & authority</p><h1 className="mt-3 font-display text-4xl">Studio team</h1><p className="mt-3 max-w-xl text-xs leading-5 text-zinc-500">Every person receives a studio-specific position and only the capabilities their work requires.</p></div><div className="rounded-full border border-emerald-500/15 px-3 py-1.5 text-[9px] text-emerald-400"><ShieldCheck size={11} className="mr-2 inline"/>Audited access</div></div>
