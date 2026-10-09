@@ -240,8 +240,6 @@ const mutation = useMutation({
 ```ts
 // .env
 VITE_API_URL=http://localhost:4000
-VITE_DEMO_ADMIN_EMAIL=admin@dreamzmusiclab.com
-VITE_DEMO_ADMIN_PASSWORD=admin123
 
 // Usage
 const API = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
@@ -312,10 +310,12 @@ export interface Booking {
 
 ---
 
-## Demo credentials (seed only — rotate before any staging deploy)
+## Demo accounts (local dev database only)
 
-- Admin:  `admin@dreamzmusiclab.com` / `admin123`
-- Artist: `demo@artist.com` / `artist123`
+`prisma/seed.ts` creates demo logins with built-in passwords only on the local dev
+database that `npm run dev:local` runs (`oiano_dev_test` on this machine). Seeding any
+other database requires every `SEED_*_PASSWORD` to be set to a strong value that is not
+a built-in default. Never put a password in this repository or in a `VITE_*` variable.
 
 ---
 

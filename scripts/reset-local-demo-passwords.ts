@@ -1,14 +1,18 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import 'dotenv/config';
+import { assertLocalTestDatabase } from '../apps/api/src/lib/seedCredentials';
+import { LOCAL_DEMO_PASSWORDS } from '../prisma/local-demo-passwords';
 
-if (process.env.NODE_ENV === 'production') throw new Error('Demo credential reset is disabled in production');
+// Puts the published demo passwords back, so it runs only against a local test
+// database such as npm run dev:local's oiano_dev_test, whatever NODE_ENV says.
+assertLocalTestDatabase(process.env, 'Demo credential reset');
 const prisma = new PrismaClient();
 const accounts = [
-  ['demo@artist.com', 'artist123'],
-  ['producer@dreamzmusiclab.com', 'producer123'],
-  ['engineer@dreamzmusiclab.com', 'engineer123'],
-  ['admin@dreamzmusiclab.com', 'admin123'],
+  ['demo@artist.com', LOCAL_DEMO_PASSWORDS.SEED_ARTIST_PASSWORD],
+  ['producer@dreamzmusiclab.com', LOCAL_DEMO_PASSWORDS.SEED_PRODUCER_PASSWORD],
+  ['engineer@dreamzmusiclab.com', LOCAL_DEMO_PASSWORDS.SEED_ENGINEER_PASSWORD],
+  ['admin@dreamzmusiclab.com', LOCAL_DEMO_PASSWORDS.SEED_ADMIN_PASSWORD],
   // maintenance@oiano.com intentionally omitted: once SEED_OIANO_ADMIN_EMAIL
   // points the platform-admin identity at a real address (see prisma/seed.ts),
   // this script must never reset that account back to the demo password.

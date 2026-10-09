@@ -10,10 +10,10 @@
 // controller calls on every real COMPLETED booking, not a hand-inserted row.
 //
 // SAFETY: refuses to run unless ALLOW_DEV_SEED=true is explicitly set, and
-// always refuses when NODE_ENV=production. This is a stronger guard than the
-// existing prisma/seed.ts (which only checks NODE_ENV) — deliberately, since
-// this script creates a much larger fictional population and is meant to be
-// re-run often during development, not once at project setup.
+// always refuses when NODE_ENV=production — deliberately, since this script
+// creates a much larger fictional population and is meant to be re-run often
+// during development, not once at project setup. Like prisma/seed.ts, it uses
+// its built-in password only on a local test database.
 //
 // Run:   npm run db:seed:ecosystem   (from repo root or apps/api)
 // Idempotent: every entity uses a stable fixture id/email and upsert, so
@@ -24,6 +24,8 @@ import bcrypt from 'bcryptjs';
 import { applyWalletDelta } from '../apps/api/src/lib/walletLedger';
 import { recordSeedWalletGrant } from '../apps/api/src/lib/financialLedger';
 import { syncStudioCircleMembership } from '../apps/api/src/services/studio-circle.service';
+import { resolveSeedPassword } from '../apps/api/src/lib/seedCredentials';
+import { KNOWN_DEMO_PASSWORDS, LOCAL_DEMO_PASSWORDS } from './local-demo-passwords';
 
 if (process.env.NODE_ENV === 'production') {
   throw new Error('seed-ecosystem.ts refuses to run when NODE_ENV=production');
@@ -38,7 +40,12 @@ if (process.env.ALLOW_DEV_SEED !== 'true') {
 }
 
 const prisma = new PrismaClient();
-const PASSWORD = process.env.SEED_ECOSYSTEM_PASSWORD ?? 'ecosystem123';
+// The built-in password only on a local test database; anywhere else
+// SEED_ECOSYSTEM_PASSWORD must be set, strong, and not a published default.
+const PASSWORD = resolveSeedPassword({
+  name: 'SEED_ECOSYSTEM_PASSWORD', env: process.env,
+  localFallback: LOCAL_DEMO_PASSWORDS.SEED_ECOSYSTEM_PASSWORD, knownDefaults: KNOWN_DEMO_PASSWORDS,
+});
 
 const DAY = 24 * 60 * 60 * 1000;
 const now = Date.now();
