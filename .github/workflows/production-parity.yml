@@ -1,0 +1,52 @@
+name: Production schema parity
+
+on:
+  # Privileged by design: execute ONLY trusted base-branch code. The helper
+  # fetches schema.prisma as data; it never checks out or executes PR code.
+  pull_request_target:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Open PR to recheck against production
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+  checks: write
+
+jobs:
+  compare:
+    # The repository is public: a pull request from a fork never reaches production,
+    # even read-only. Such a PR has no parity check and cannot merge a schema change.
+    if: >-
+      (github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name == github.repository)
+      || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: oiano-production-parity-${{ github.event.pull_request.number || inputs.pr_number }}
+      cancel-in-progress: false
+    # No reviewer needed: restrict this environment to main, use a dedicated
+    # read-only URL, and never put a Neon API key or write URL here.
+    environment: Production read-only
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Compare production with the exact PR schema
+        run: node scripts/production/check-pr.cjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+          PRODUCTION_READONLY_DATABASE_URL: ${{ secrets.PRODUCTION_READONLY_DATABASE_URL }}
+          NEON_PRODUCTION_HOST: ${{ vars.NEON_PRODUCTION_HOST }}
+          NEON_DATABASE_NAME: ${{ vars.NEON_DATABASE_NAME }}

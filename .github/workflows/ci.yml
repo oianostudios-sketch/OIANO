@@ -42,6 +42,9 @@ jobs:
       - name: Scan tracked files for secrets
         run: npm run security:secrets
 
+      - name: Production workflow safety tests (no credentials)
+        run: node --test scripts/production/safety.test.cjs
+
       - name: Validate Prisma schema
         run: npx prisma validate
 
@@ -146,6 +149,9 @@ jobs:
 
       - name: Database-backed platform integration tests
         run: npm run test:integration --workspace=apps/api
+
+      - name: Production check refuses write-capable roles
+        run: node --test scripts/production/readonly.database-test.cjs
 
       # The suite above imports the app in-process; it never proves the artifact
       # Render actually launches exists or starts. render.yaml's startCommand is
