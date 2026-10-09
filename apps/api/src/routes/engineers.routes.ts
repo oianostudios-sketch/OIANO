@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { AppError } from '../lib/errors';
@@ -7,6 +8,17 @@ import { resolveStaffStudio } from '../middleware/studioScope.middleware';
 import { studioDate, studioDateBounds } from '../lib/studioClock';
 
 export const engineersRouter = Router();
+
+// The rate a studio pays an engineer is the studio's own business: only its staff,
+// whose studio comes from their membership, read it. Anyone else names a studio and
+// gets the public profile, the same fields /studio/:id publishes. No booking is
+// priced from this rate; an artist pays the service's price.
+const publicEngineerSelect = {
+  id: true, name: true, bio: true, specialties: true, avatar_url: true,
+} satisfies Prisma.EngineerSelect;
+const staffEngineerSelect = { ...publicEngineerSelect, hourly_rate_usd: true } satisfies Prisma.EngineerSelect;
+const engineerSelectFor = (role: string) =>
+  role === 'STUDIO_ADMIN' || role === 'ENGINEER' ? staffEngineerSelect : publicEngineerSelect;
 
 // GET /api/engineers — list all engineers for this studio (auth required)
 engineersRouter.get('/', authenticate, async (req: Request, res: Response, next: NextFunction) => {
@@ -19,14 +31,7 @@ engineersRouter.get('/', authenticate, async (req: Request, res: Response, next:
     if (!studioId) throw new AppError('studio_id is required', 400);
     const engineers = await prisma.engineer.findMany({
       where: { studio_id: studioId },
-      select: {
-        id: true,
-        name: true,
-        bio: true,
-        specialties: true,
-        avatar_url: true,
-        hourly_rate_usd: true,
-      },
+      select: engineerSelectFor(role),
       orderBy: { name: 'asc' },
     });
     res.json(engineers);
@@ -77,14 +82,7 @@ engineersRouter.get('/:id', authenticate, async (req: Request, res: Response, ne
         id: req.params.id,
         studio_id: studioId,
       },
-      select: {
-        id: true,
-        name: true,
-        bio: true,
-        specialties: true,
-        avatar_url: true,
-        hourly_rate_usd: true,
-      },
+      select: engineerSelectFor(role),
     });
     if (!engineer) throw new AppError('Engineer not found', 404);
     res.json(engineer);

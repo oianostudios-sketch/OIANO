@@ -435,6 +435,15 @@ producerRouter.patch('/projects/:id', requireRole('PRODUCER'), async (req: any, 
     });
     if (!existing) throw new AppError('Project not found', 404);
 
+    // The sessions on a project are there by the named artist's attach. Renaming the
+    // artist would leave them with the producer while the artist loses sight of the
+    // project, so the artist takes them back first (DELETE /api/artist-projects/:id/
+    // bookings/:bookingId). Owner decision, 2026-10-09, until Agreement replaces this.
+    if (data.artist_id !== undefined && existing.artist_id && data.artist_id !== existing.artist_id) {
+      const attached = await db.booking.count({ where: { project_id: existing.id, artist_id: existing.artist_id } });
+      if (attached > 0) throw new AppError('The artist has sessions on this project. They must detach them before the project can name another artist', 409);
+    }
+
     const project = await db.project.update({
       where: { id: req.params.id },
       data: { ...data, updated_at: new Date() },
