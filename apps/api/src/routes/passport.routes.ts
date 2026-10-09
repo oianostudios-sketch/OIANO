@@ -4,6 +4,7 @@ import fs from 'fs';
 import { z } from 'zod';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { prisma } from '../lib/prisma';
+import { keepIdentityInStep } from '../lib/identity/backfill';
 import { AppError } from '../lib/errors';
 import { PERFORMED_SESSION_WHERE, summariseVerifiedWork } from '../lib/verifiedWork';
 import { portfolioBreakdown, portfolioScore } from '../lib/passportScore';
@@ -219,6 +220,7 @@ passportRouter.patch('/portfolio', async (req: any, res, next) => {
     const artist = await prisma.artist.findUnique({ where: { user_id: req.userId } });
     if (!artist) throw new AppError('Artist not found', 404);
     const updated = await prisma.artistPassport.update({ where: { artist_id: artist.id }, data });
+    await keepIdentityInStep({ legacyIds: [artist.id] });
     const score = await recalculatePortfolioScore(artist.id);
     res.json({ ...updated, profile_strength: score });
   } catch (err) { next(err); }
@@ -334,6 +336,7 @@ passportRouter.patch('/profile', async (req: any, res, next) => {
     if (Object.keys(artistFields).length > 0) {
       await prisma.artist.update({ where: { id: artist.id }, data: artistFields });
     }
+    await keepIdentityInStep({ legacyIds: [artist.id] });
     const updated = await prisma.artist.findUnique({
       where: { id: artist.id },
       include: { passport: true },
@@ -389,6 +392,7 @@ passportRouter.patch('/avatar', async (req: any, res, next) => {
         data: { avatar_url: publicUrl },
         include: { passport: true },
       });
+      await keepIdentityInStep({ legacyIds: [artist.id] });
 
       if (updated.passport) await recalculatePortfolioScore(artist.id);
 

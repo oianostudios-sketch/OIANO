@@ -145,6 +145,7 @@ model User {
   booking_messages            BookingMessage[]
   project_messages            ProjectMessage[]
   producer                    Producer?
+  person                      Person?
   engineer                    Engineer?
   locale                      String?           @default("en-US")
   mfa_secret_encrypted        String?
@@ -1422,4 +1423,62 @@ model CreatorInvitation {
   @@index([invited_by, status, created_at])
   @@index([email, status])
   @@map("creator_invitations")
+}
+
+// ─── Identity — canonical migration steps 1 and 2 ─────────────────────────
+// docs/OIANO_SCHEMA_REDESIGN.md §3.1 and §7. A Person is who someone is; a User is
+// only how they sign in, and an identity can exist before anyone claims it, so
+// user_id is nullable. A CreativeProfile is how a person presents one practice.
+//
+// Expand only: nothing reads or writes these yet except the backfill
+// (apps/api/src/lib/identity/backfill.ts). A profile backfilled from an Artist,
+// Producer or Engineer row takes that row's id, so every existing reference to it,
+// WeaveNode ids included, already names the profile.
+
+enum ProfileAvailability {
+  AVAILABLE
+  UNAVAILABLE
+}
+
+// Which legacy table a backfilled profile mirrors, while legacy readers remain. Null
+// for a profile created natively once writers move.
+enum LegacyProfileSource {
+  ARTIST
+  PRODUCER
+  ENGINEER
+}
+
+model Person {
+  id             String            @id @default(uuid())
+  user_id        String?           @unique
+  user           User?             @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  // Taken from the person's artist, producer or engineer record, never from an email
+  // address. Null when no record names them, as for a studio operator today.
+  display_name   String?
+  primary_locale String?
+  profiles       CreativeProfile[]
+  created_at     DateTime          @default(now())
+  updated_at     DateTime          @updatedAt
+
+  @@map("persons")
+}
+
+model CreativeProfile {
+  id            String               @id @default(uuid())
+  person_id     String
+  person        Person               @relation(fields: [person_id], references: [id], onDelete: Restrict)
+  legacy_source LegacyProfileSource?
+  handle        String               @unique
+  display_name  String
+  bio           String?
+  avatar_url    String?
+  city          String?
+  city_public   Boolean              @default(false)
+  availability  ProfileAvailability  @default(AVAILABLE)
+  open_to_work  Boolean              @default(true)
+  created_at    DateTime             @default(now())
+  updated_at    DateTime             @updatedAt
+
+  @@index([person_id])
+  @@map("creative_profiles")
 }

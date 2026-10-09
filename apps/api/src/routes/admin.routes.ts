@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { prisma } from '../lib/prisma';
+import { keepIdentityInStep } from '../lib/identity/backfill';
 import { AppError } from '../lib/errors';
 import { publishBookingUpdate, publishStudioAnnouncement } from '../services/liveUpdates';
 import { attachStudioScope } from '../middleware/studioScope.middleware';
@@ -336,6 +337,7 @@ adminRouter.post('/walkin', async (req, res, next) => {
     }).catch((error) => {
       throw isRoomClash(error) ? new AppError('That room is already booked for this time', 409) : error;
     });
+    await keepIdentityInStep({ userIds: [booking.artist.user_id] });
 
     await publishBookingUpdate(booking.id, booking.status);
 
