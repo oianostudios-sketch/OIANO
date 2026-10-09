@@ -64,6 +64,12 @@ CreativeProfile, with no route or reader changes. `OIANO_SCHEMA_REDESIGN.md` §3
   it failed, and the file was restored byte-identical. After the merge: integration 211 of
   211 on a fresh database, both typechecks pass, and the drift check reports no
   difference. These supersede the integration count above.
+- **Refreshed onto #16 again, 2026-10-09** (`639136c`: main through #49, and the readiness
+  report reading which canonical tables exist from `information_schema`). Merged with no
+  conflicts. The readiness report now finds `disciplines` and `person_disciplines`
+  present on this branch and its test passes. Integration 282 of 282 on a fresh database,
+  both typechecks pass, and the drift check reports no difference. These supersede the
+  counts above.
 - **Before merge.** PR #16 merges first and its migration is applied in production; then
   this migration is applied there by the owner, and `prisma/backfill-identity.ts` is run
   and reports parity.
