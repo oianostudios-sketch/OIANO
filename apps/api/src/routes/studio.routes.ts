@@ -6,6 +6,7 @@ import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { rateLimit } from '../middleware/rateLimit.middleware';
 import { AppError } from '../lib/errors';
 import { resolveStaffStudio } from '../middleware/studioScope.middleware';
+import { requireStudioCapability } from '../lib/staffPermission';
 import { studioDayBounds } from '../lib/studioClock';
 import { getNavigationRecommendation } from '../intelligence/intelligence.service';
 import { buildNavigationContext } from '../intelligence/context/context-builder';
@@ -141,10 +142,12 @@ const TeamRole = z.enum(['STUDIO_ADMIN','ENGINEER']);
 const TeamPosition = z.string().trim().min(2).max(60).transform(value => value.toUpperCase().replace(/[^A-Z0-9]+/g, '_'));
 const TeamCapabilities = z.array(z.enum(CAPABILITIES)).max(CAPABILITIES.length);
 
+// Any STUDIO_ADMIN membership used to pass here, so a receptionist could invite an
+// owner or raise their own capabilities. The team is MANAGE_STAFF's, or the legacy
+// owner's (lib/staffPermission.ts, C34).
 async function requireStaffManager(userId: string) {
   const studio = await resolveStaffStudio(userId);
-  const membership = await prisma.studioStaff.findUnique({ where: { user_id_studio_id: { user_id: userId, studio_id: studio.id } } });
-  if (!membership || (membership.role !== 'STUDIO_ADMIN' && !membership.capabilities.includes('MANAGE_STAFF'))) throw new AppError('Staff management permission required', 403);
+  const membership = await requireStudioCapability(userId, studio.id, 'MANAGE_STAFF', 'Staff management permission required');
   return { studio, membership };
 }
 

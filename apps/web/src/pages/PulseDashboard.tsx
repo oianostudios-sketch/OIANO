@@ -12,6 +12,7 @@ import OianoBrand from '../components/OianoBrand';
 import SessionCompletionModal from '../components/SessionCompletionModal';
 import { Activity, LayoutDashboard, Calendar, ClipboardList, DollarSign, Gauge, Wallet } from 'lucide-react';
 import { useToast } from '../components/Toast';
+import { useStudioCapabilities } from '../hooks/useStudioCapabilities';
 import ArtistAvatar, { initials } from '../components/ArtistAvatar';
 import { BookingStatus, STATUS_HEX } from '../lib/bookingStatus';
 import { studioDate, studioMinutes } from '../lib/fmt';
@@ -491,6 +492,8 @@ function CommandHubPanel({ todaySessions, utilizationPct, studioOnline, studioNa
 export default function PulseDashboard() {
   const navigate = useNavigate();
   const toast = useToast();
+  // Confirming, starting and assigning engineers are MANAGE_BOOKINGS (C34).
+  const canManageBookings = useStudioCapabilities().can('MANAGE_BOOKINGS');
   const [artists, setArtists]     = useState<Artist[]>([]);
   const [sessions, setSessions]   = useState<Session[]>([]);
   const [pulseData, setPulseData] = useState<PulseData | null>(null);
@@ -557,8 +560,8 @@ export default function PulseDashboard() {
       await api.patch(`/bookings/${booking.id}/status`, { status });
       await Promise.all([loadData(), loadPulse(), loadCurrentWork()]);
       toast.success(status === 'CONFIRMED' ? 'Booking confirmed' : status === 'IN_PROGRESS' ? 'Session started' : 'Session completed');
-    } catch {
-      toast.error('Could not update the session');
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error ?? 'Could not update the session');
     } finally {
       setUpdatingBooking(null);
     }
@@ -571,7 +574,7 @@ export default function PulseDashboard() {
       await loadData();
       toast.success(engineerId ? 'Engineer assigned' : 'Engineer assignment cleared');
       setAssigningBooking(null);
-    } catch { toast.error('Could not assign the engineer'); }
+    } catch (error: any) { toast.error(error?.response?.data?.error ?? 'Could not assign the engineer'); }
     finally { setUpdatingBooking(null); }
   }, [loadData, toast]);
 
@@ -1103,10 +1106,12 @@ export default function PulseDashboard() {
                         </div>
                         <div className="csr-right">
                           <span className="csr-amount">${Number(s.total_usd ?? 0).toFixed(0)}</span>
-                          <button className="pulse-engineer-trigger" onClick={event => { event.stopPropagation(); setAssigningBooking(assigningBooking === s.id ? null : s.id); }}>{s.engineer?.name ?? 'Assign engineer'}</button>
-                          {assigningBooking === s.id && <div className="pulse-engineer-menu" onClick={event => event.stopPropagation()}><button onClick={()=>assignEngineer(s,'')}>Unassigned</button>{(pulseData?.engineers ?? []).map(engineer=><button key={engineer.id} onClick={()=>assignEngineer(s,engineer.id)}>{engineer.name}</button>)}</div>}
-                          {s.status === 'PENDING' && <button disabled={updatingBooking === s.id} className="pulse-row-action confirm" onClick={event => { event.stopPropagation(); changeBookingStatus(s, 'CONFIRMED'); }}>{updatingBooking === s.id ? 'Saving…' : 'Confirm'}</button>}
-                          {s.status === 'CONFIRMED' && !isActive && <button disabled={updatingBooking === s.id} className="pulse-row-action start" onClick={event => { event.stopPropagation(); changeBookingStatus(s, 'IN_PROGRESS'); }}>{updatingBooking === s.id ? 'Starting…' : 'Start'}</button>}
+                          {canManageBookings
+                            ? <button className="pulse-engineer-trigger" onClick={event => { event.stopPropagation(); setAssigningBooking(assigningBooking === s.id ? null : s.id); }}>{s.engineer?.name ?? 'Assign engineer'}</button>
+                            : <span className="pulse-engineer-trigger">{s.engineer?.name ?? 'Unassigned'}</span>}
+                          {canManageBookings && assigningBooking === s.id && <div className="pulse-engineer-menu" onClick={event => event.stopPropagation()}><button onClick={()=>assignEngineer(s,'')}>Unassigned</button>{(pulseData?.engineers ?? []).map(engineer=><button key={engineer.id} onClick={()=>assignEngineer(s,engineer.id)}>{engineer.name}</button>)}</div>}
+                          {canManageBookings && s.status === 'PENDING' && <button disabled={updatingBooking === s.id} className="pulse-row-action confirm" onClick={event => { event.stopPropagation(); changeBookingStatus(s, 'CONFIRMED'); }}>{updatingBooking === s.id ? 'Saving…' : 'Confirm'}</button>}
+                          {canManageBookings && s.status === 'CONFIRMED' && !isActive && <button disabled={updatingBooking === s.id} className="pulse-row-action start" onClick={event => { event.stopPropagation(); changeBookingStatus(s, 'IN_PROGRESS'); }}>{updatingBooking === s.id ? 'Starting…' : 'Start'}</button>}
                           {(s.status === 'IN_PROGRESS' || isActive) && <button disabled={updatingBooking === s.id} className="pulse-row-action complete" onClick={event => { event.stopPropagation(); setCompletingSession(s); }}>Complete</button>}
                           <span className={`csr-pill ${isActive ? 'pill-live' : s.status === 'CONFIRMED' ? 'pill-green' : s.status === 'PENDING' ? 'pill-gold' : 'pill-grey'}`}>
                             {isActive ? '● LIVE' : s.status?.toLowerCase()}

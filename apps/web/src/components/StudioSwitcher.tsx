@@ -2,18 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Building2, ChevronDown } from 'lucide-react';
 import { api } from '../lib/api';
 import { useToast } from './Toast';
-
-type Membership = {
-  studio: { id: string; name: string; slug: string; logo_url?: string | null };
-  role: string;
-  position: string;
-  capabilities: string[];
-};
-
-type MembershipResponse = {
-  active_studio_id: string | null;
-  memberships: Membership[];
-};
+import type { MembershipResponse } from '../lib/studioCapabilities';
 
 export default function StudioSwitcher({ onSwitched }: { onSwitched?: () => void } = {}) {
   const queryClient = useQueryClient();
