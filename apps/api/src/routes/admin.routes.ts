@@ -11,6 +11,7 @@ import { transitionBookingStatus } from '../lib/bookingTransitions';
 import { writeAdminAudit } from '../lib/adminAudit';
 import { addCalendarDays, studioDate, studioDateBounds } from '../lib/studioClock';
 import { findRoomClash, isRoomClash } from '../lib/roomSchedule';
+import { requireStudioCapability } from '../lib/staffPermission';
 export const adminRouter = Router();
 
 // Artist-facing routes, mounted before adminRouter, whose role check would refuse
@@ -250,6 +251,8 @@ adminRouter.get('/runsheet', async (req, res, next) => {
 // guest User+Artist (no password — password_hash stays null, so login is
 // impossible for this account) and attach the booking to it. Payment is
 // recorded as "cash" / UNPAID since walk-ins pay at the desk, not via wallet.
+// Permission: MANAGE_BOOKINGS on the studio membership, or the legacy owner
+// (lib/staffPermission.ts); the account role alone is not enough (C34).
 const WalkInSchema = z.object({
   name:              z.string().min(1).max(120),
   phone:             z.string().max(40).optional(),
@@ -266,6 +269,7 @@ adminRouter.post('/walkin', async (req, res, next) => {
     const data = WalkInSchema.parse(req.body);
 
     const studio = (req as any).studio;
+    await requireStudioCapability((req as any).userId, studio.id, 'MANAGE_BOOKINGS', 'Booking management permission required');
 
     const room = await prisma.room.findFirst({ where: { id: data.room_id, studio_id: studio.id } });
     if (!room) throw new AppError('Room not found', 404);
@@ -350,7 +354,8 @@ adminRouter.post('/walkin', async (req, res, next) => {
 //
 // Permission: the studio membership's MANAGE_BOOKINGS capability, or a
 // STUDIO_ADMIN membership with no capabilities at all (the legacy owner, as in
-// studio-policy.routes.ts). VIEW_FINANCE reads money; it does not record it.
+// studio-policy.routes.ts; lib/staffPermission.ts). VIEW_FINANCE reads money; it
+// does not record it.
 const CashPaymentSchema = z.object({}).strict();
 const PAYABLE_IN_CASH = new Set(['UNPAID']);
 
@@ -361,10 +366,7 @@ adminRouter.post('/bookings/:id/cash-payment', async (req, res, next) => {
     const userId = (req as any).userId as string;
     const studio = (req as any).studio;
 
-    const membership = await prisma.studioStaff.findUnique({ where: { user_id_studio_id: { user_id: userId, studio_id: studio.id } } });
-    const mayRecord = !!membership && (membership.capabilities.includes('MANAGE_BOOKINGS')
-      || (membership.capabilities.length === 0 && membership.role === 'STUDIO_ADMIN'));
-    if (!mayRecord) throw new AppError('Booking management permission required', 403);
+    await requireStudioCapability(userId, studio.id, 'MANAGE_BOOKINGS', 'Booking management permission required');
 
     const result = await prisma.$transaction(async (tx) => {
       // The booking row is locked first, so two recordings of the same payment take
