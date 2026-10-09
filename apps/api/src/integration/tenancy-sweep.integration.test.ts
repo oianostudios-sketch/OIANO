@@ -290,18 +290,28 @@ test('records stay with the studio or person they belong to', async (t) => {
     assert.equal(asStudio.body.artist.user.email, y.user.email);
   });
 
-  // Not fixed here: a producer may name any artist on a project (POST/PATCH
-  // /api/producer/projects take artist_id unchecked), and that one-sided link is then
-  // trusted to list the artist's unlinked bookings at every studio and to attach them to
-  // the producer's project, which opens the booking, its thread and its deliverables to
-  // the producer. Closing it needs the artist's agreement to the project, which the
-  // schema does not record; that is an owner decision (status record, "Deferred").
-  await t.test('a producer cannot reach the bookings of an artist who never joined their project', { todo: 'needs the artist\'s agreement to a project naming them; owner decision' }, async () => {
+  // A producer may still name any artist on a project (POST/PATCH /api/producer/projects
+  // take artist_id unchecked), but the name no longer opens anything of the artist's: the
+  // routes that listed the named artist's sessions and attached one to the producer's
+  // project are gone, and only the artist attaches a session (owner decision 2026-10-09,
+  // docs/status/2026-10-09-artist-links-bookings.md).
+  await t.test('a producer cannot reach the bookings of an artist who never joined their project', async () => {
     const strangerProject = await request('POST', '/producer/projects', producerUser, { title: unique('claim'), artist_id: x.artist.id });
     assert.equal(strangerProject.status, 201);
     const sessions = await request('GET', `/producer/projects/${strangerProject.body.id}/available-sessions`, producerUser);
-    assert.ok(!sessions.text.includes(x.booking.id), 'artist X\'s bookings are not listed to a stranger');
+    assert.equal(sessions.status, 404);
+    assert.ok(!sessions.text.includes(x.booking.id), "artist X's bookings are not listed to a stranger");
     const linked = await request('POST', `/producer/projects/${strangerProject.body.id}/link-booking`, producerUser, { booking_id: x.booking.id });
     assert.equal(linked.status, 404, linked.text);
+    const stored = await prisma.booking.findUniqueOrThrow({ where: { id: x.booking.id }, select: { project_id: true } });
+    assert.equal(stored.project_id, null, "artist X's booking stays off the producer's project");
+    assert.equal((await request('GET', `/bookings/${x.booking.id}`, producerUser)).status, 404);
+    const list = await request('GET', '/bookings', producerUser);
+    assert.equal(list.status, 200);
+    assert.ok(!list.text.includes(x.booking.id), "nor in the producer's booking list");
+
+    // Not even on the producer's own project with artist Y, whose session Y put there.
+    assert.equal((await request('GET', `/producer/projects/${projectY.id}/available-sessions`, producerUser)).status, 404);
+    assert.equal((await request('POST', `/producer/projects/${projectY.id}/link-booking`, producerUser, { booking_id: y.booking.id })).status, 404);
   });
 });
