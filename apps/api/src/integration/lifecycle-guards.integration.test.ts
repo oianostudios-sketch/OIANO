@@ -198,6 +198,8 @@ test('status lifecycles apply each answer once, even under concurrency', async (
 
   await t.test('facility issue: open issues still skip, step back and reassign', async () => {
     const other = await prisma.user.create({ data: { email: email('tech'), role: 'STUDIO_ADMIN' } });
+    // Issues are assigned within the studio's staff (feedback-and-equipment-scope).
+    await prisma.studioStaff.create({ data: { user_id: other.id, studio_id: studio.id, role: 'STUDIO_ADMIN' } });
     const skipped = await facilityIssue();
     assert.equal((await advance(skipped.id, { status: 'RESTORED' })).status, 200, 'REPORTED straight to RESTORED');
 
