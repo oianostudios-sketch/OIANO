@@ -1,5 +1,6 @@
 // apps/api/src/routes/studio.routes.ts
 import { Router } from 'express';
+import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
@@ -15,15 +16,37 @@ import { sendStudioInvitationEmail } from '../services/email.service';
 
 export const studioRouter = Router();
 
-// Spreading the studio row published every column on it. GET /api/studio is
-// unauthenticated, so that put commercial terms (platform_fee_bps) and the Stripe
-// Connect account id on a public endpoint — harmless only for as long as
-// stripe_account_id stayed null, which payouts change. Strip both here and let
-// the studio's own operators read their rate from /current instead.
+// What anyone may read about a studio and its rooms, engineers and services: GET /:id
+// and the passport are unauthenticated, and /current answers any artist who has booked
+// there. Fields are listed here rather than inherited from the row. Whole rows published
+// the Connect account id, commercial terms (platform_fee_bps), the passport mint counter,
+// the studio's private phone and email, each engineer's login (user_id) and the rate the
+// studio pays them (hourly_rate_usd, which no booking charges; the artist pays the
+// service's price). Operators read their fee from /current and manage engineers and
+// rates through /studio-setup.
+const publicStudioSelect = {
+  id: true, slug: true, name: true, timezone: true, currency: true,
+  operating_open_hour: true, operating_close_hour: true,
+  address: true, logo_url: true, hero_image_url: true, amenities: true,
+} satisfies Prisma.StudioSelect;
+const publicRoomSelect = {
+  id: true, name: true, capacity: true, description: true, image_url: true, amenities: true, hourly_rate: true,
+} satisfies Prisma.RoomSelect;
+const publicEngineerSelect = {
+  id: true, name: true, specialties: true, bio: true, avatar_url: true,
+} satisfies Prisma.EngineerSelect;
+const publicServiceSelect = {
+  id: true, category: true, name: true, description: true, min_price_usd: true, unit: true,
+} satisfies Prisma.ServiceOfferingSelect;
+const publicStudioDetailSelect = {
+  ...publicStudioSelect,
+  rooms: { select: publicRoomSelect },
+  engineers: { select: publicEngineerSelect },
+  services: { select: publicServiceSelect },
+} satisfies Prisma.StudioSelect;
+
 function presentStudio<T extends { hero_image_url?: string | null }>(studio: T) {
-  const { stripe_account_id: _connectAccount, platform_fee_bps: _fee, ...safe } =
-    studio as T & { stripe_account_id?: string | null; platform_fee_bps?: number };
-  return { ...safe, image_url: studio.hero_image_url ?? '' };
+  return { ...studio, image_url: studio.hero_image_url ?? '' };
 }
 
 // There is no default studio. GET /api/studio answered with one studio named in code, a
@@ -119,16 +142,17 @@ studioRouter.get('/current', authenticate, async (req: any, res, next) => {
     if (!studio) return res.json(null);
     const detailed = await prisma.studio.findUnique({
       where: { id: studio.id },
-      include: { rooms: true, engineers: true, services: true },
+      select: { ...publicStudioDetailSelect, platform_fee_bps: true },
     });
     if (!detailed) return res.json(null);
     // A studio's own operators must be able to see what OIANO charges them.
     // Nobody else does — an artist resolving this studio gets the same shape
     // without the commercial terms.
     const isOwnOperator = req.userRole === 'STUDIO_ADMIN' || req.userRole === 'ENGINEER';
+    const { platform_fee_bps, ...publicFields } = detailed;
     res.json({
-      ...presentStudio(detailed),
-      ...(isOwnOperator ? { platform_fee_bps: detailed.platform_fee_bps } : {}),
+      ...presentStudio(publicFields),
+      ...(isOwnOperator ? { platform_fee_bps } : {}),
     });
   } catch (error) { next(error); }
 });
@@ -259,10 +283,8 @@ studioRouter.get('/passport/:slug', async (req, res, next) => {
   try {
     const studio = await prisma.studio.findUnique({
       where: { slug: req.params.slug },
-      include: {
-        rooms: true,
-        engineers: { select: { id: true, name: true, specialties: true, bio: true, avatar_url: true } },
-        services: true,
+      select: {
+        ...publicStudioDetailSelect,
         circle_members: {
           where: { consent_status: 'ACCEPTED', visibility: { not: 'HIDDEN' } },
           include: { artist: { select: { id: true, name: true, alias: true, avatar_url: true, passport: { select: { passport_code: true } } } } },
@@ -281,7 +303,8 @@ studioRouter.get('/passport/:slug', async (req, res, next) => {
         _avg: { artist_rating: true }, _count: { artist_rating: true },
       }),
     ]);
-    const presented = presentStudio(studio);
+    const { circle_members: _members, ...profile } = studio;
+    const presented = presentStudio(profile);
     res.json({
       ...presented,
       proof: {
@@ -309,7 +332,7 @@ studioRouter.get('/:id', async (req, res, next) => {
   try {
     const studio = await prisma.studio.findUnique({
       where: { id: req.params.id },
-      include: { rooms: true, engineers: true, services: true },
+      select: publicStudioDetailSelect,
     });
     if (!studio) return res.status(404).json({ error: 'Studio not found' });
     res.json(presentStudio(studio));
