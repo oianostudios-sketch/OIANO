@@ -1457,6 +1457,7 @@ model Person {
   display_name   String?
   primary_locale String?
   profiles       CreativeProfile[]
+  disciplines    PersonDiscipline[]
   created_at     DateTime          @default(now())
   updated_at     DateTime          @updatedAt
 
@@ -1481,4 +1482,29 @@ model CreativeProfile {
 
   @@index([person_id])
   @@map("creative_profiles")
+}
+
+// Canonical migration step 3. A discipline is what a person says they do; what they did
+// on a particular Work is a Contribution role. The reference rows are seeded by the
+// migration that creates the table.
+model Discipline {
+  code    String             @id
+  label   String
+  family  String // MUSIC | VISUAL | FILM | WRITING
+  persons PersonDiscipline[]
+
+  @@map("disciplines")
+}
+
+model PersonDiscipline {
+  person_id       String
+  person          Person     @relation(fields: [person_id], references: [id], onDelete: Cascade)
+  discipline_code String
+  discipline      Discipline @relation(fields: [discipline_code], references: [code], onDelete: Restrict)
+  is_primary      Boolean    @default(false)
+  created_at      DateTime   @default(now())
+
+  @@id([person_id, discipline_code])
+  @@index([discipline_code])
+  @@map("person_disciplines")
 }

@@ -1,9 +1,10 @@
 // prisma/backfill-identity.ts
-// Canonical migration steps 1 and 2: Person and CreativeProfile.
+// Canonical migration steps 1 to 3: Person, CreativeProfile and PersonDiscipline.
 //   npx ts-node -r tsconfig-paths/register prisma/backfill-identity.ts            backfill, then verify
 //   npx ts-node -r tsconfig-paths/register prisma/backfill-identity.ts --verify   verify only, writes nothing
 //
-// Run after migration 20261005120000_identity_person_profile is applied. Idempotent: a
+// Run after migrations 20261005120000_identity_person_profile and
+// 20261008120000_identity_discipline are applied. Idempotent: a
 // second run creates nothing. The logic and its tests live in
 // apps/api/src/lib/identity/backfill.ts; this file is only the command-line entry point.
 // Exits non-zero if any legacy identity fails to resolve.
@@ -17,11 +18,11 @@ async function main() {
   if (!verifyOnly) {
     console.log('Identity backfill starting...');
     const result = await backfillIdentity(prisma);
-    console.log(`Created ${result.personsCreated} persons and ${result.profilesCreated} creative profiles.`);
+    console.log(`Created ${result.personsCreated} persons and ${result.profilesCreated} creative profiles, and linked ${result.disciplinesCreated} disciplines.`);
   }
   const parity = await identityParity(prisma);
   const c = parity.counts;
-  console.log(`users=${c.users} persons=${c.persons} artists=${c.artists} producers=${c.producers} engineers=${c.engineers} creative_profiles=${c.profiles}`);
+  console.log(`users=${c.users} persons=${c.persons} artists=${c.artists} producers=${c.producers} engineers=${c.engineers} creative_profiles=${c.profiles} person_disciplines=${c.personDisciplines}`);
   if (parity.mismatches.length) {
     console.error(`Parity: ${parity.mismatches.length} mismatch(es)`);
     for (const line of parity.mismatches.slice(0, 50)) console.error(`  ${line}`);

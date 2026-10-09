@@ -80,6 +80,22 @@ test('routes that write an identity keep its person and profile in step', async 
     await clean('after producer edits');
   });
 
+  await t.test('a professional who changes their disciplines holds the new ones at once', async () => {
+    const held = async (userId: string) => (await prisma.personDiscipline.findMany({
+      where: { person: { user_id: userId } }, orderBy: { discipline_code: 'asc' },
+    })).map((d) => [d.discipline_code, d.is_primary]);
+    const login = await send('POST', '/auth/signup', null, {
+      email: email('disciplines'), password, name: 'Yaa Writer', role: 'PRODUCER', primary_discipline: 'SONGWRITER', disciplines: ['SONGWRITER', 'VOCALIST'],
+    });
+    assert.equal(login.status, 201);
+    const userId = login.body.user.id as string;
+    assert.deepEqual(await held(userId), [['SONGWRITER', true], ['VOCALIST', false]]);
+    const changed = await send('PATCH', '/producer/me', login.body.token, { primary_discipline: 'PRODUCER', disciplines: ['PRODUCER', 'SONGWRITER'] });
+    assert.equal(changed.status, 200);
+    assert.deepEqual(await held(userId), [['PRODUCER', true], ['SONGWRITER', false]], 'VOCALIST dropped, PRODUCER added and primary');
+    await clean('after a change of disciplines');
+  });
+
   await t.test('a studio\'s listed engineers are listed, renamed and removed as identities', async () => {
     const owner = await send('POST', '/auth/signup', null, { email: email('owner'), password, name: 'Owner', role: 'STUDIO_ADMIN', studio_name: `Engineer Rooms ${runId}`, studio_timezone: 'Europe/London' });
     const token = owner.body.token as string;
