@@ -121,8 +121,8 @@ export async function getBookings(req: Request, res: Response, next: NextFunctio
         prisma.booking.count({ where }),
       ]);
     } else if (role === 'PRODUCER') {
-      // A Producer has no bookings of their own — only bookings linked to a
-      // project they own (see producer.routes.ts's link-booking endpoint).
+      // A Producer has no bookings of their own — only bookings the artist
+      // attached to a project they own (artist-projects.routes.ts).
       const producer = await prisma.producer.findUnique({ where: { user_id: userId } });
       if (!producer) throw new AppError('Producer profile not found', 404);
       const where = { project: { producer_id: producer.id }, ...dateRange };

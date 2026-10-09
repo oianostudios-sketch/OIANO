@@ -98,3 +98,18 @@ describe('contribution invitation links on the project page', () => {
     expect(linkShownFor('Ada Writer')).toBe('http://localhost:5173/accept-contribution?token=replacement');
   });
 });
+
+describe('sessions on the project page', () => {
+  it('offers the producer no way to list or link the artist\'s sessions, and says the artist attaches them', async () => {
+    const named = { ...project, artist_id: 'artist-1', artist: { id: 'artist-1', name: 'Rae Singer', alias: null, avatar_url: null } };
+    vi.mocked(api.get).mockImplementation(async (url: string) => ({
+      data: url === '/producer/projects' ? [named] : url === '/producer/me' ? { id: 'producer-1', name: 'Project Lead', alias: null, passport: null } : [],
+    }) as never);
+    await render();
+
+    expect(host.textContent).toContain('Rae Singer attaches their own sessions to this project from their Projects page.');
+    expect(buttons('+ Link a session')).toHaveLength(0);
+    const urls = [...vi.mocked(api.get).mock.calls, ...vi.mocked(api.post).mock.calls].map(([url]) => String(url));
+    expect(urls.filter(url => url.includes('available-sessions') || url.includes('link-booking'))).toEqual([]);
+  });
+});
