@@ -69,6 +69,25 @@ describe('attaching a session from the artist\'s side', () => {
     expect(api.post).toHaveBeenCalledWith('/artist-projects/project-1/bookings', { booking_id: 'booking-1' });
   });
 
+  it('detaches an attached session only after the artist confirms', async () => {
+    const attached = { ...session, id: 'booking-2', room: { name: 'A' } };
+    vi.mocked(api.get).mockImplementation(async (url: string) => ({
+      data: url === '/artist-projects' ? [{ ...project, bookings: [attached] }] : [],
+    }) as never);
+    vi.mocked(api.delete).mockResolvedValue({ data: undefined } as never);
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    await render();
+
+    await click(buttons('Detach')[0]);
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(api.delete).not.toHaveBeenCalled();
+
+    confirm.mockReturnValue(true);
+    await click(buttons('Detach')[0]);
+    expect(api.delete).toHaveBeenCalledWith('/artist-projects/project-1/bookings/booking-2');
+    confirm.mockRestore();
+  });
+
   it('offers no attach on an archived project', async () => {
     vi.mocked(api.get).mockImplementation(async (url: string) => ({
       data: url === '/artist-projects' ? [{ ...project, is_active: false, phase: 'DELIVERED' }] : [],
