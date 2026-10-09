@@ -140,6 +140,30 @@ artistProjectsRouter.post('/:id/bookings', async (req: any, res, next) => {
   } catch (error) { next(error); }
 });
 
+// The artist takes their session back off a project. Clearing booking.project_id is the
+// whole of what an attach opened: the producer reaches the booking, its thread and its
+// deliverables only through it, so the producer loses all three, exactly as if it had
+// never been attached. This also covers sessions a producer linked before the artist
+// attached their own (the retired link-booking route). Only the booking has to be the
+// caller's: the project need not be active, so archiving cannot keep a session the artist
+// withdrew, and need not still name them, so renaming the artist cannot either. Credits
+// and rights agreements a studio's completion wrote to the project stay: they are the
+// parties' own records, not the booking. Anyone else's booking is 404.
+artistProjectsRouter.delete('/:id/bookings/:bookingId', async (req: any, res, next) => {
+  try {
+    const params = z.object({ id: z.string().uuid(), bookingId: z.string().uuid() }).safeParse(req.params);
+    if (!params.success) throw new AppError('Booking not found', 404);
+    const artist = await prisma.artist.findUnique({ where: { user_id: req.userId }, select: { id: true } });
+    if (!artist) throw new AppError('Artist not found', 404);
+    const detached = await prisma.booking.updateMany({
+      where: { id: params.data.bookingId, artist_id: artist.id, project_id: params.data.id },
+      data: { project_id: null },
+    });
+    if (detached.count !== 1) throw new AppError('Booking not found', 404);
+    res.status(204).end();
+  } catch (error) { next(error); }
+});
+
 artistProjectsRouter.patch('/:id/promotional-consents/:consentId', async (req: any, res, next) => {
   try {
     const { action } = z.object({ action: z.enum(['APPROVE', 'DECLINE', 'WITHDRAW']) }).parse(req.body);
