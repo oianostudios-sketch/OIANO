@@ -5,10 +5,25 @@ import { PrismaClient, UserRole, ServiceCategory } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { applyWalletDelta } from '../apps/api/src/lib/walletLedger';
 import { recordSeedWalletGrant } from '../apps/api/src/lib/financialLedger';
+import { resolveSeedPassword } from '../apps/api/src/lib/seedCredentials';
+import { KNOWN_DEMO_PASSWORDS, LOCAL_DEMO_PASSWORDS } from './local-demo-passwords';
 
 const prisma = new PrismaClient();
 
 async function main() {
+  // Resolved before any write, so a refused password leaves the database untouched.
+  // Built-in demo passwords only on a local test database; anywhere else every
+  // SEED_*_PASSWORD must be set, strong, and not a published default.
+  const seedPassword = (name: keyof typeof LOCAL_DEMO_PASSWORDS) => resolveSeedPassword({
+    name, env: process.env, localFallback: LOCAL_DEMO_PASSWORDS[name], knownDefaults: KNOWN_DEMO_PASSWORDS,
+  });
+
+  const ADMIN_PASSWORD       = seedPassword('SEED_ADMIN_PASSWORD');
+  const ARTIST_PASSWORD      = seedPassword('SEED_ARTIST_PASSWORD');
+  const ENGINEER_PASSWORD    = seedPassword('SEED_ENGINEER_PASSWORD');
+  const PRODUCER_PASSWORD    = seedPassword('SEED_PRODUCER_PASSWORD');
+  const OIANO_ADMIN_PASSWORD = seedPassword('SEED_OIANO_ADMIN_PASSWORD');
+
   console.log('🌱 Seeding Dreamz Music Lab...');
 
   // ── Studio ──────────────────────────────────────────────────────────────────
@@ -239,20 +254,6 @@ async function main() {
   ]);
   console.log('Second test studio created:', secondStudio.name);
 
-  const seedPassword = (name: string, developmentFallback: string) => {
-    const configured = process.env[name];
-    if (configured) return configured;
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error(`${name} is required when seeding a production environment`);
-    }
-    return developmentFallback;
-  };
-
-  const ADMIN_PASSWORD       = seedPassword('SEED_ADMIN_PASSWORD', 'admin123');
-  const ARTIST_PASSWORD      = seedPassword('SEED_ARTIST_PASSWORD', 'artist123');
-  const ENGINEER_PASSWORD    = seedPassword('SEED_ENGINEER_PASSWORD', 'engineer123');
-  const PRODUCER_PASSWORD    = seedPassword('SEED_PRODUCER_PASSWORD', 'producer123');
-  const OIANO_ADMIN_PASSWORD = seedPassword('SEED_OIANO_ADMIN_PASSWORD', 'maintenance123');
   // Configurable so re-seeding a real environment updates the actual admin
   // identity in place instead of creating a stray second demo account once
   // that identity has been rotated off the maintenance@oiano.com default.

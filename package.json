@@ -11,7 +11,7 @@
     "dev:web": "npm run dev --workspace=apps/web",
     "dev:local": "node scripts/local-db.js dev",
     "build": "npm run build --workspace=packages/shared && npm run build --workspace=apps/api && npm run build --workspace=apps/web",
-    "test": "npm run test:security --workspace=apps/api && npm run test:intelligence --workspace=apps/api && npm run test --workspace=apps/web",
+    "test": "node --test scripts/check-repository-secrets.test.js && npm run test:security --workspace=apps/api && npm run test:intelligence --workspace=apps/api && npm run test --workspace=apps/web",
     "test:integration:local": "node scripts/local-db.js test",
     "db:local:start": "node scripts/local-db.js start",
     "db:local:stop": "node scripts/local-db.js stop",

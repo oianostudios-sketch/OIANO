@@ -94,7 +94,7 @@ Engineers get their own runsheet view (their sessions only), can log session not
 
 ## 5. How To Use It
 
-**Local development:** `npm run dev` from the repo root starts both the API (port 4000) and the web app (port 5173, proxied to the API) concurrently. `start-all.bat` does the same thing plus port-clearing, for a one-click Windows launch. Demo credentials exist for both an admin (`admin@dreamzmusiclab.com`) and an artist (`demo@artist.com`) via the seed script — rotate them before anything touches a real deployment.
+**Local development:** `npm run dev` from the repo root starts both the API (port 4000) and the web app (port 5173, proxied to the API) concurrently. `start-all.bat` does the same thing plus port-clearing, for a one-click Windows launch. Demo logins for an admin (`admin@dreamzmusiclab.com`) and an artist (`demo@artist.com`) get built-in passwords only on the local dev database (`npm run dev:local`); seeding any other database requires strong `SEED_*_PASSWORD` values.
 
 **Day to day, as the studio:** log bookings from the calendar or let artists self-serve; check SmartClock and Pulse each morning for a 10-second situational read; use the Runsheet each day for room/engineer logistics; credit wallets and post announcements from the admin dashboard as needed.
 
