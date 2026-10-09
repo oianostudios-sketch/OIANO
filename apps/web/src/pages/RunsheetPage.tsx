@@ -7,6 +7,7 @@ import { fmtTime } from '../lib/fmt';
 import OianoBrand from '../components/OianoBrand';
 import SessionCompletionModal from '../components/SessionCompletionModal';
 import { BookingStatus, STATUS_HEX } from '../lib/bookingStatus';
+import { useStudioCapabilities } from '../hooks/useStudioCapabilities';
 
 interface RunsheetBooking {
   id: string;
@@ -108,6 +109,9 @@ export default function RunsheetPage() {
   const user = useAuthStore(s => s.user);
   const isAdmin = user?.role === 'STUDIO_ADMIN';
   const isEngineer = user?.role === 'ENGINEER';
+  // Confirming, no-shows and cash are MANAGE_BOOKINGS (C34); the runsheet itself is
+  // open to every member of the studio's staff.
+  const canManageBookings = useStudioCapabilities().can('MANAGE_BOOKINGS');
 
   // With no date named, the server answers for today at the studio, in the
   // studio's zone (C29). The browser's own date, or the UTC date, can be a
@@ -134,6 +138,9 @@ export default function RunsheetPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['runsheet'] });
       qc.invalidateQueries({ queryKey: ['bookings'] });
+    },
+    onError: (error: any) => {
+      window.alert(error?.response?.data?.error ?? 'The booking status could not be changed.');
     },
   });
 
@@ -187,7 +194,7 @@ export default function RunsheetPage() {
       fontFamily: "'JetBrains Mono', monospace", opacity: pending ? 0.5 : 1,
     };
 
-    if (b.status === 'PENDING') return (
+    if (b.status === 'PENDING' && canManageBookings) return (
       <div style={{ marginTop: 2 }}>
         <button className="no-print" onClick={() => updateStatus.mutate({ id: b.id, status: 'CONFIRMED' })}
           style={{ ...btnBase, color: '#16a34a', borderColor: '#16a34a44' }}>✓ Confirm</button>
@@ -198,8 +205,8 @@ export default function RunsheetPage() {
       <div style={{ marginTop: 2 }}>
         <button className="no-print" onClick={() => setCompletingBooking(b)}
           style={{ ...btnBase, color: '#6b7280', borderColor: '#6b728044' }}>✓ Done</button>
-        <button className="no-print" onClick={() => updateStatus.mutate({ id: b.id, status: 'NO_SHOW' })}
-          style={{ ...btnBase, color: '#ef4444', borderColor: '#ef444444' }}>✗ No-show</button>
+        {canManageBookings && <button className="no-print" onClick={() => updateStatus.mutate({ id: b.id, status: 'NO_SHOW' })}
+          style={{ ...btnBase, color: '#ef4444', borderColor: '#ef444444' }}>✗ No-show</button>}
       </div>
     );
 
@@ -262,7 +269,7 @@ export default function RunsheetPage() {
           </td>
           <td style={{ padding: '10px 8px' }}>
             <Pill label={b.payment_status} color={PAY_COLOR[b.payment_status] ?? '#6b7280'} />
-            {isAdmin && b.payment_status === 'UNPAID' && b.status !== 'CANCELLED' && b.status !== 'NO_SHOW' && b.total_usd > 0 && (
+            {isAdmin && canManageBookings && b.payment_status === 'UNPAID' && b.status !== 'CANCELLED' && b.status !== 'NO_SHOW' && b.total_usd > 0 && (
               <div style={{ marginTop: 2 }}>
                 <button className="no-print" disabled={recordCash.isPending}
                   onClick={() => { if (window.confirm(`Record ${usd(b.total_usd)} received in cash from ${b.artist_name}?`)) recordCash.mutate(b.id); }}

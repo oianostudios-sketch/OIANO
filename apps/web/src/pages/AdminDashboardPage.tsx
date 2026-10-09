@@ -13,6 +13,7 @@ import NetworkExchangePanel from '../components/NetworkExchangePanel';
 import NotificationBell from '../components/NotificationBell';
 import SessionCompletionModal from '../components/SessionCompletionModal';
 import StudioSwitcher from '../components/StudioSwitcher';
+import { useStudioCapabilities } from '../hooks/useStudioCapabilities';
 
 // ── Engagement badge ──────────────────────────────────────────────────────────
 function engagementLevel(lastDate: string | null): 'HOT' | 'WARM' | 'COLD' | null {
@@ -93,6 +94,11 @@ export default function AdminDashboardPage() {
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [completingBooking, setCompletingBooking] = useState<any>(null);
 
+  // Actions the caller's membership cannot perform are not offered (C34).
+  const { can } = useStudioCapabilities();
+  const canManageBookings = can('MANAGE_BOOKINGS');
+  const canManageStaff = can('MANAGE_STAFF');
+
   // Walk-in state
   const [showAnnounce, setShowAnnounce] = useState(false);
   const [announceTitle, setAnnounceTitle] = useState('');
@@ -146,7 +152,8 @@ export default function AdminDashboardPage() {
       };
       toast.success(`Booking ${labels[vars.status] ?? vars.status.toLowerCase()}`);
     },
-    onError: () => { setPendingAction(null); toast.error('Failed to update status'); },
+    // A member without MANAGE_BOOKINGS is refused by the server; say why.
+    onError: (error: any) => { setPendingAction(null); toast.error(error?.response?.data?.error ?? 'Failed to update status'); },
   });
 
   const mutate = useCallback((id: string, status: string) => {
@@ -174,7 +181,8 @@ export default function AdminDashboardPage() {
       setWiDate(todayStr(tz)); setWiTime(nowTimeStr(tz));
       setWiDuration(120); setWiNotes('');
     },
-    onError: () => toast.error('Walk-in booking failed'),
+    // A member without MANAGE_BOOKINGS is refused by the server; say why.
+    onError: (error: any) => toast.error(error?.response?.data?.error ?? 'Walk-in booking failed'),
   });
 
   const broadcast = useMutation({
@@ -238,7 +246,7 @@ export default function AdminDashboardPage() {
             { to: '/calendar',  label: 'Calendar',     icon: Calendar },
             { to: '/runsheet',  label: 'Runsheet',      icon: ClipboardList },
             { to: '/facilities', label: 'Facilities', icon: Zap },
-            { to: '/admin/team', label: 'Team', icon: Users },
+            ...(canManageStaff ? [{ to: '/admin/team', label: 'Team', icon: Users }] : []),
           ].map(({ to, label, icon: Icon }) => (
             <Link
               key={to}
@@ -278,9 +286,9 @@ export default function AdminDashboardPage() {
         </section>
 
         <section aria-label="Operator shortcuts" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
-          <button onClick={()=>{ setWiDate(todayStr(tz)); setWiTime(nowTimeStr(tz)); setShowWalkIn(true); }} className="group flex items-center gap-3 rounded-xl border border-dome/20 bg-dome/[.055] p-4 text-left hover:bg-dome/[.09]"><span className="grid h-9 w-9 place-items-center rounded-lg bg-dome/10 text-dome"><Plus size={16}/></span><span><b className="block text-xs">Add walk-in</b><small className="text-[9px] text-zinc-600">Fast booking</small></span><ArrowRight size={13} className="ml-auto text-zinc-700 group-hover:text-dome"/></button>
+          {canManageBookings && <button onClick={()=>{ setWiDate(todayStr(tz)); setWiTime(nowTimeStr(tz)); setShowWalkIn(true); }} className="group flex items-center gap-3 rounded-xl border border-dome/20 bg-dome/[.055] p-4 text-left hover:bg-dome/[.09]"><span className="grid h-9 w-9 place-items-center rounded-lg bg-dome/10 text-dome"><Plus size={16}/></span><span><b className="block text-xs">Add walk-in</b><small className="text-[9px] text-zinc-600">Fast booking</small></span><ArrowRight size={13} className="ml-auto text-zinc-700 group-hover:text-dome"/></button>}
           <Link to="/calendar" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-studio-surface p-4 hover:border-white/[.12]"><Calendar size={16} className="text-blue-400"/><span><b className="block text-xs">Calendar</b><small className="text-[9px] text-zinc-600">Capacity & conflicts</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
-          <Link to="/admin/team" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-studio-surface p-4 hover:border-white/[.12]"><Users size={16} className="text-violet-400"/><span><b className="block text-xs">Team access</b><small className="text-[9px] text-zinc-600">People & permissions</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
+          {canManageStaff && <Link to="/admin/team" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-studio-surface p-4 hover:border-white/[.12]"><Users size={16} className="text-violet-400"/><span><b className="block text-xs">Team access</b><small className="text-[9px] text-zinc-600">People & permissions</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>}
           <Link to="/runsheet" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-studio-surface p-4 hover:border-white/[.12]"><ClipboardList size={16} className="text-emerald-400"/><span><b className="block text-xs">Session records</b><small className="text-[9px] text-zinc-600">Execution history</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
           <Link to="/admin/policies" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-studio-surface p-4 hover:border-white/[.12]"><ShieldCheck size={16} className="text-dome"/><span><b className="block text-xs">Standards</b><small className="text-[9px] text-zinc-600">Rules & exceptions</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
           <Link to="/admin/setup" className="flex items-center gap-3 rounded-xl border border-white/[.065] bg-studio-surface p-4 hover:border-white/[.12]"><DoorOpen size={16} className="text-dome"/><span><b className="block text-xs">Rooms & services</b><small className="text-[9px] text-zinc-600">What artists can book</small></span><ArrowRight size={13} className="ml-auto text-zinc-700"/></Link>
@@ -371,12 +379,14 @@ export default function AdminDashboardPage() {
               <p className="label-mono">
                 Roster · {loadingArtists ? '…' : (artists as any[]).length} artists
               </p>
-              <button
-                onClick={() => { setWiDate(todayStr(tz)); setWiTime(nowTimeStr(tz)); setShowWalkIn(true); }}
-                className="flex items-center gap-2 bg-dome/10 border border-dome/30 text-dome text-xs px-3 py-1.5 rounded-lg hover:bg-dome/20 transition-colors font-medium"
-              >
-                + Walk-in
-              </button>
+              {canManageBookings && (
+                <button
+                  onClick={() => { setWiDate(todayStr(tz)); setWiTime(nowTimeStr(tz)); setShowWalkIn(true); }}
+                  className="flex items-center gap-2 bg-dome/10 border border-dome/30 text-dome text-xs px-3 py-1.5 rounded-lg hover:bg-dome/20 transition-colors font-medium"
+                >
+                  + Walk-in
+                </button>
+              )}
             </div>
               <input
                 type="text"
@@ -500,7 +510,7 @@ export default function AdminDashboardPage() {
                       <span className="text-xs text-zinc-500 font-mono animate-pulse px-2">saving…</span>
                     ) : (
                       <>
-                        {b.status === 'PENDING' && (
+                        {b.status === 'PENDING' && canManageBookings && (
                           <>
                             <button onClick={() => mutate(b.id, 'CONFIRMED')}
                               className="text-xs bg-green-900/20 border border-green-800 text-green-400 px-2.5 py-1 rounded-lg hover:bg-green-900/40 transition-colors">Confirm</button>
@@ -512,10 +522,14 @@ export default function AdminDashboardPage() {
                           <>
                             <button onClick={() => setCompletingBooking(b)}
                               className="text-xs bg-zinc-800 border border-zinc-700 text-zinc-300 px-2.5 py-1 rounded-lg hover:bg-zinc-700 transition-colors">Complete</button>
-                            <button onClick={() => mutate(b.id, 'NO_SHOW')}
-                              className="text-xs bg-orange-900/20 border border-orange-800 text-orange-400 px-2.5 py-1 rounded-lg hover:bg-orange-900/30 transition-colors">No show</button>
-                            <button onClick={() => mutate(b.id, 'CANCELLED')}
-                              className="text-xs bg-red-900/20 border border-red-800 text-red-400 px-2.5 py-1 rounded-lg hover:bg-red-900/30 transition-colors">Cancel</button>
+                            {canManageBookings && (
+                              <>
+                                <button onClick={() => mutate(b.id, 'NO_SHOW')}
+                                  className="text-xs bg-orange-900/20 border border-orange-800 text-orange-400 px-2.5 py-1 rounded-lg hover:bg-orange-900/30 transition-colors">No show</button>
+                                <button onClick={() => mutate(b.id, 'CANCELLED')}
+                                  className="text-xs bg-red-900/20 border border-red-800 text-red-400 px-2.5 py-1 rounded-lg hover:bg-red-900/30 transition-colors">Cancel</button>
+                              </>
+                            )}
                           </>
                         )}
                       </>
@@ -536,7 +550,7 @@ export default function AdminDashboardPage() {
       </footer>
 
       {/* ── Walk-in modal ──────────────────────────────────────────────────────── */}
-      {showWalkIn && (
+      {showWalkIn && canManageBookings && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,0.8)' }}

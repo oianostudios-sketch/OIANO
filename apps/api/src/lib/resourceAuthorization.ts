@@ -7,9 +7,9 @@ export type BookingMessageAccessInput = {
   actorStudioId?: string | null;
   // The user_id of the Producer who owns this booking's linked project (if
   // any). A Producer isn't a party to a booking directly -- they only ever
-  // reach one through a project they own (see producer.routes.ts's
-  // link-booking endpoint) -- so this is the only way a Producer can
-  // legitimately access the thread.
+  // reach one through a project they own, once the artist has attached the
+  // booking to it (artist-projects.routes.ts, POST /:id/bookings) -- so this
+  // is the only way a Producer can legitimately access the thread.
   projectProducerUserId?: string | null;
 };
 

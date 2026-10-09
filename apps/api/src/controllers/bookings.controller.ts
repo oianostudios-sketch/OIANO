@@ -13,6 +13,7 @@ import {
 } from '../services/email.service';
 import { createNotification } from '../routes/notifications.routes';
 import { resolveStaffStudio } from '../middleware/studioScope.middleware';
+import { requireStudioCapability } from '../lib/staffPermission';
 import { recordBookingCompleted } from '../lib/bookingCompletion';
 import { requireTransition, transitionBookingStatus } from '../lib/bookingTransitions';
 import { upsertSessionLog } from '../lib/sessionLog';
@@ -55,6 +56,8 @@ export async function assignBookingEngineer(req: Request, res: Response, next: N
   try {
     const { engineer_id } = AssignEngineerSchema.parse(req.body);
     const studio = await resolveStaffStudio((req as any).userId);
+    // Placing staff on a booking is managing it (C34): the membership decides, not the role.
+    await requireStudioCapability((req as any).userId, studio.id, 'MANAGE_BOOKINGS', 'Booking management permission required');
     const booking = await prisma.booking.findFirst({ where: { id: req.params.id, studio_id: studio.id } });
     if (!booking) throw new AppError('Booking not found', 404);
     if (['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(booking.status)) throw new AppError('Engineer assignment is closed for this booking', 409);
@@ -118,8 +121,8 @@ export async function getBookings(req: Request, res: Response, next: NextFunctio
         prisma.booking.count({ where }),
       ]);
     } else if (role === 'PRODUCER') {
-      // A Producer has no bookings of their own — only bookings linked to a
-      // project they own (see producer.routes.ts's link-booking endpoint).
+      // A Producer has no bookings of their own — only bookings the artist
+      // attached to a project they own (artist-projects.routes.ts).
       const producer = await prisma.producer.findUnique({ where: { user_id: userId } });
       if (!producer) throw new AppError('Producer profile not found', 404);
       const where = { project: { producer_id: producer.id }, ...dateRange };
@@ -197,6 +200,12 @@ export async function getBookingById(req: Request, res: Response, next: NextFunc
     // account could read any booking by id.
     if (userRole === 'PRODUCER' && booking.project?.producer?.user_id !== userId) {
       throw new AppError('Booking not found', 404);
+    }
+    // The project makes a producer a party to the work, not to the artist's account:
+    // the artist's email stays with the artist and the studio they booked.
+    if (userRole === 'PRODUCER') {
+      const { user: _account, ...artist } = booking.artist;
+      return res.json({ ...booking, artist });
     }
 
     res.json(booking);
@@ -524,6 +533,8 @@ export async function updateBookingStatus(req: Request, res: Response, next: Nex
   try {
     const { status } = UpdateStatusSchema.parse(req.body);
     const studio = await resolveStaffStudio((req as any).userId);
+    // Confirming, cancelling or closing a booking needs MANAGE_BOOKINGS on the membership (C34).
+    await requireStudioCapability((req as any).userId, studio.id, 'MANAGE_BOOKINGS', 'Booking management permission required');
 
     // Scope to studio slug — prevents cross-studio mutations
     const existing = await prisma.booking.findFirst({

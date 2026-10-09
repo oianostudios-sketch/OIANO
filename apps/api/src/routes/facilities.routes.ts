@@ -7,10 +7,11 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
-import { attachStudioScope } from '../middleware/studioScope.middleware';
+import { attachStudioScope, resolveStaffStudio } from '../middleware/studioScope.middleware';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
 import { broadcastToUser } from './notifications.routes';
+import { requireStudioCapability } from '../lib/staffPermission';
 
 export const facilitiesRouter = Router();
 facilitiesRouter.use(authenticate);
@@ -26,6 +27,19 @@ function deriveReadiness(openIssues: OpenIssue[]): 'READY' | 'LIMITED' | 'OUT_OF
 }
 
 const managerOnly = [attachStudioScope, requireRole('STUDIO_ADMIN', 'ENGINEER')];
+
+// Ids a caller names are looked up inside the studio the write belongs to, so one
+// studio can never reach another's rooms or equipment by knowing their ids.
+async function roomInStudio(roomId: string, studioId: string) {
+  const room = await prisma.room.findFirst({ where: { id: roomId, studio_id: studioId }, select: { id: true } });
+  if (!room) throw new AppError('Room not found', 404);
+  return room;
+}
+async function equipmentInStudio(equipmentId: string, studioId: string) {
+  const equipment = await prisma.equipment.findFirst({ where: { id: equipmentId, studio_id: studioId }, select: { id: true, room_id: true } });
+  if (!equipment) throw new AppError('Equipment not found', 404);
+  return equipment;
+}
 
 facilitiesRouter.get('/rooms', ...managerOnly, async (req: any, res, next) => {
   try {
@@ -70,9 +84,15 @@ const CreateEquipmentSchema = z.object({
   serial: z.string().optional(),
   notes: z.string().optional(),
 });
+// Equipment is part of the studio's standing setup, like its rooms, so adding it takes
+// the same authority as rooms do (studio-setup.routes.ts): MANAGE_POLICIES, or the
+// legacy owner (C34). Reading equipment and issues stays open to the studio's staff.
 facilitiesRouter.post('/equipment', attachStudioScope, requireRole('STUDIO_ADMIN'), async (req: any, res, next) => {
   try {
+    await requireStudioCapability(req.userId, req.studioId, 'MANAGE_POLICIES', 'Only staff who manage the studio\'s standards can change its equipment');
     const data = CreateEquipmentSchema.parse(req.body);
+    // The room has to be one of this studio's own; another studio's room is not found.
+    if (data.room_id) await roomInStudio(data.room_id, req.studioId);
     const equipment = await prisma.equipment.create({ data: { ...data, studio_id: req.studioId } });
     res.status(201).json(equipment);
   } catch (error) { next(error); }
@@ -120,28 +140,29 @@ facilitiesRouter.post('/issues', requireRole('ARTIST', 'ENGINEER', 'STUDIO_ADMIN
       });
       if (!booking) throw new AppError('Booking not found', 404);
       const isReporterOnBooking = booking.artist.user_id === req.userId || booking.engineer?.user_id === req.userId;
-      if (!isReporterOnBooking && req.userRole !== 'STUDIO_ADMIN') throw new AppError('Not part of this booking', 403);
+      // Staff who are not on the booking report for it only at the booking's own studio.
+      const isStaffOfBookingStudio = req.userRole === 'STUDIO_ADMIN' && Boolean(await prisma.studioStaff.findUnique({
+        where: { user_id_studio_id: { user_id: req.userId, studio_id: booking.studio_id } }, select: { id: true },
+      }));
+      if (!isReporterOnBooking && !isStaffOfBookingStudio) throw new AppError('Not part of this booking', 403);
       studioId = booking.studio_id;
       roomId = roomId ?? booking.room_id;
     } else {
       // No booking context — only studio staff can report directly against
-      // a room/asset (an artist/engineer always has a booking to anchor to).
+      // a room/asset (an artist/engineer always has a booking to anchor to),
+      // and only against their own studio's.
       if (req.userRole !== 'STUDIO_ADMIN' && req.userRole !== 'ENGINEER') {
         throw new AppError('Reporting without a booking requires studio staff access', 403);
       }
-      if (data.equipment_id) {
-        const equipment = await prisma.equipment.findUnique({ where: { id: data.equipment_id }, select: { studio_id: true, room_id: true } });
-        if (!equipment) throw new AppError('Equipment not found', 404);
-        studioId = equipment.studio_id;
-        roomId = roomId ?? equipment.room_id;
-      } else if (roomId) {
-        const room = await prisma.room.findUnique({ where: { id: roomId }, select: { studio_id: true } });
-        if (!room) throw new AppError('Room not found', 404);
-        studioId = room.studio_id;
-      } else {
-        throw new AppError('room_id, equipment_id, or booking_id is required', 400);
-      }
+      if (!data.equipment_id && !roomId) throw new AppError('room_id, equipment_id, or booking_id is required', 400);
+      studioId = (await resolveStaffStudio(req.userId)).id;
     }
+    // Whatever room or equipment the report names must be in the same studio.
+    if (data.equipment_id) {
+      const equipment = await equipmentInStudio(data.equipment_id, studioId);
+      roomId = roomId ?? equipment.room_id;
+    }
+    if (roomId) await roomInStudio(roomId, studioId);
 
     const issue = await prisma.maintenanceIssue.create({
       data: {
@@ -190,6 +211,14 @@ facilitiesRouter.patch('/issues/:id', attachStudioScope, requireRole('STUDIO_ADM
       && Boolean(data.assigned_to) && data.assigned_to !== existing.assigned_to;
     if (data.status === existing.status && !reassigning) {
       throw new AppError(`This issue is already ${existing.status.toLowerCase()}`, 409);
+    }
+    // An issue is assigned within the studio's own staff; the console then shows the
+    // assignee's email, so an outside id would also disclose that person's address.
+    if (data.status === 'ASSIGNED' && data.assigned_to) {
+      const assignee = await prisma.studioStaff.findUnique({
+        where: { user_id_studio_id: { user_id: data.assigned_to, studio_id: req.studioId } }, select: { id: true },
+      });
+      if (!assignee) throw new AppError('Assign the issue to someone on this studio\'s staff', 400);
     }
 
     const claimed = await prisma.maintenanceIssue.updateMany({

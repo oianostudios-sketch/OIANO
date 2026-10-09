@@ -90,6 +90,56 @@ artistProjectsRouter.get('/:id', async (req: any, res, next) => {
   } catch (error) { next(error); }
 });
 
+// The artist attaches their own session to a project that names them. Attaching opens
+// the booking, its thread and its deliverables to the project's producer, so only the
+// artist starts it: a producer names the artist on their own, and the artist never agrees
+// to that name (owner decision, 2026-10-09, until Work, Contribution and Agreement replace
+// projects). Both the project and the booking are found through the caller's own artist
+// record, so anyone else's is 404.
+async function ownActiveProject(userId: string, projectId: string) {
+  const artist = await prisma.artist.findUnique({ where: { user_id: userId }, select: { id: true } });
+  if (!artist) throw new AppError('Artist not found', 404);
+  const project = await prisma.project.findFirst({ where: { id: projectId, artist_id: artist.id, is_active: true }, select: { id: true } });
+  if (!project) throw new AppError('Project not found', 404);
+  return { artistId: artist.id, projectId: project.id };
+}
+
+// The caller's sessions not yet on any project, for the attach picker.
+artistProjectsRouter.get('/:id/available-sessions', async (req: any, res, next) => {
+  try {
+    const { artistId } = await ownActiveProject(req.userId, req.params.id);
+    const bookings = await prisma.booking.findMany({
+      where: { artist_id: artistId, project_id: null },
+      include: { studio: { select: { id: true, name: true, timezone: true } }, room: { select: { name: true } }, service: { select: { name: true } } },
+      orderBy: { starts_at: 'desc' },
+      take: 20,
+    });
+    res.json(bookings);
+  } catch (error) { next(error); }
+});
+
+artistProjectsRouter.post('/:id/bookings', async (req: any, res, next) => {
+  try {
+    const { booking_id } = z.object({ booking_id: z.string().uuid() }).parse(req.body);
+    const { artistId, projectId } = await ownActiveProject(req.userId, req.params.id);
+    const booking = await prisma.booking.findFirst({ where: { id: booking_id, artist_id: artistId }, select: { id: true, project_id: true } });
+    if (!booking) throw new AppError('Booking not found', 404);
+    if (booking.project_id && booking.project_id !== projectId) throw new AppError('This session is already on another project', 409);
+    // Guarded on the booking still being unattached (or already here), so two attaches
+    // racing each other cannot move a session from one project to another.
+    const attached = await prisma.booking.updateMany({
+      where: { id: booking.id, artist_id: artistId, OR: [{ project_id: null }, { project_id: projectId }] },
+      data: { project_id: projectId },
+    });
+    if (attached.count !== 1) throw new AppError('This session is already on another project', 409);
+    const updated = await prisma.booking.findUniqueOrThrow({
+      where: { id: booking.id },
+      include: { studio: { select: { id: true, name: true, timezone: true } }, room: { select: { name: true } }, service: { select: { name: true } } },
+    });
+    res.json(updated);
+  } catch (error) { next(error); }
+});
+
 artistProjectsRouter.patch('/:id/promotional-consents/:consentId', async (req: any, res, next) => {
   try {
     const { action } = z.object({ action: z.enum(['APPROVE', 'DECLINE', 'WITHDRAW']) }).parse(req.body);

@@ -26,8 +26,10 @@ feedbackRouter.post('/', async (req: Request, res: Response, next: NextFunction)
   } catch (err) { next(err); }
 });
 
-// GET /api/feedback — studio/network admins only, so reports don't vanish into a black hole
-feedbackRouter.get('/', requireRole('STUDIO_ADMIN', 'OIANO_ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
+// GET /api/feedback — platform operators only. Feedback is sent to OIANO, not to a
+// studio, from every account on the network, and each row carries the reporter's email;
+// a studio account has no business reading other people's reports.
+feedbackRouter.get('/', requireRole('OIANO_ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const take = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? '50'))));
     const feedback = await prisma.feedback.findMany({
@@ -39,9 +41,9 @@ feedbackRouter.get('/', requireRole('STUDIO_ADMIN', 'OIANO_ADMIN'), async (req: 
   } catch (err) { next(err); }
 });
 
-// PATCH /api/feedback/:id — admins mark reports reviewed/resolved
+// PATCH /api/feedback/:id — platform operators mark reports reviewed/resolved
 const StatusBody = z.object({ status: z.enum(['OPEN', 'REVIEWED', 'RESOLVED']) });
-feedbackRouter.patch('/:id', requireRole('STUDIO_ADMIN', 'OIANO_ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
+feedbackRouter.patch('/:id', requireRole('OIANO_ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { status } = StatusBody.parse(req.body);
     const feedback = await prisma.feedback.update({ where: { id: req.params.id }, data: { status } });
