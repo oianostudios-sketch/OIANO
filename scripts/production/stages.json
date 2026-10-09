@@ -1,0 +1,11 @@
+{
+  "schema-check": { "migrations": [], "identityBackfill": false },
+  "identity-person-profile": {
+    "migrations": ["20261005120000_identity_person_profile"],
+    "identityBackfill": true
+  },
+  "identity-discipline": {
+    "migrations": ["20261008120000_identity_discipline"],
+    "identityBackfill": true
+  }
+}

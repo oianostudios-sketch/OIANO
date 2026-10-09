@@ -1,0 +1,197 @@
+name: Production migration
+run-name: "Production ${{ inputs.stage }} for PR #${{ inputs.pr_number }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Same-repository PR targeting main (CI must be green)
+        required: true
+        type: string
+      stage:
+        description: Approved migration stage (schema-check makes no changes)
+        required: true
+        type: choice
+        options: [schema-check, identity-person-profile, identity-discipline]
+
+permissions:
+  contents: read
+
+# Serialize the ENTIRE run, including the approval wait. Never cancel an apply.
+concurrency:
+  group: oiano-production-migration
+  cancel-in-progress: false
+
+env:
+  NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+  NEON_PRODUCTION_BRANCH_ID: ${{ vars.NEON_PRODUCTION_BRANCH_ID }}
+  NEON_PRODUCTION_HOST: ${{ vars.NEON_PRODUCTION_HOST }}
+  NEON_DATABASE_NAME: ${{ vars.NEON_DATABASE_NAME }}
+  NEON_DATABASE_ROLE: ${{ vars.NEON_DATABASE_ROLE }}
+  PR_NUMBER: ${{ inputs.pr_number }}
+  MIGRATION_STAGE: ${{ inputs.stage }}
+
+jobs:
+  resolve:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: read
+      actions: read
+    outputs:
+      sha: ${{ steps.guard.outputs.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - id: guard
+        run: node scripts/production/guard.cjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  rehearse:
+    needs: resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Store NEON_API_KEY only here. Restrict this environment to main.
+    environment: Migration rehearsal
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          path: control
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: control
+      # This is the last step in this job that receives an API key. No candidate
+      # code runs until after all inherited database role passwords are rotated.
+      - name: Create and isolate disposable production copy
+        run: node control/scripts/production/neon.cjs create
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          path: candidate
+          persist-credentials: false
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: candidate
+      - name: Generate candidate client and build shared package
+        working-directory: candidate
+        env:
+          DATABASE_URL: ${{ env.REHEARSAL_DATABASE_URL }}
+          NODE_ENV: test
+        run: |
+          node node_modules/prisma/build/index.js generate
+          npm run build --workspace=packages/shared
+      - name: Rehearse migration, backfill and parity
+        run: node control/scripts/production/run-stage.cjs
+        env:
+          CANDIDATE_ROOT: ${{ github.workspace }}/candidate
+          MIGRATION_MODE: rehearsal
+
+  cleanup:
+    needs: [resolve, rehearse]
+    if: always() && needs.resolve.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: Migration rehearsal
+    steps:
+      # Separate runner: candidate code never sees the API key used for deletion.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - name: Delete only this run's disposable child branch
+        run: node scripts/production/neon.cjs cleanup
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+
+  apply:
+    needs: [resolve, rehearse, cleanup]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: Production
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: read
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          path: control
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - name: Reject changed PR, baseline, CI or approval configuration
+        run: node control/scripts/production/guard.cjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ needs.resolve.outputs.sha }}
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: control
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          path: candidate
+          persist-credentials: false
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: candidate
+      - name: Generate client and build shared package without production credentials
+        working-directory: candidate
+        env:
+          DATABASE_URL: postgresql://127.0.0.1:5432/validate_only
+          NODE_ENV: test
+        run: |
+          node node_modules/prisma/build/index.js generate
+          npm run build --workspace=packages/shared
+      - name: Recheck baseline, apply approved migration, backfill and verify
+        run: node control/scripts/production/run-stage.cjs
+        env:
+          CANDIDATE_ROOT: ${{ github.workspace }}/candidate
+          MIGRATION_MODE: production
+          PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+
+  verify-production:
+    needs: [resolve, apply]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: oiano-production-parity-${{ inputs.pr_number }}
+      cancel-in-progress: false
+    environment: Production read-only
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Refresh the required PR check after apply
+        run: node scripts/production/check-pr.cjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ needs.resolve.outputs.sha }}
+          PRODUCTION_READONLY_DATABASE_URL: ${{ secrets.PRODUCTION_READONLY_DATABASE_URL }}
