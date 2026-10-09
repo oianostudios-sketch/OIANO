@@ -32,8 +32,9 @@ export async function rescheduleBooking(req: Request, res: Response, next: NextF
         room: true,
       },
     });
-    if (!booking) throw new AppError('Booking not found', 404);
-    if (booking.artist?.user_id !== userId) throw new AppError('Not authorised', 403);
+    // Another artist's booking is not found, the same answer as one that does not exist,
+    // so a booking id cannot be probed through this route.
+    if (!booking || booking.artist?.user_id !== userId) throw new AppError('Booking not found', 404);
     if (!['PENDING', 'CONFIRMED'].includes(booking.status)) {
       throw new AppError(`Cannot reschedule a ${booking.status} booking`, 409);
     }

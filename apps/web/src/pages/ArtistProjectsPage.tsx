@@ -59,6 +59,41 @@ export default function ArtistProjectsPage() {
     onError: (error: any) => toast.error(error?.response?.data?.error ?? 'Rights response failed'),
   });
 
+  // Only the artist attaches a session to a project: the producer naming them on it is not
+  // their agreement to share bookings (owner decision, 2026-10-09).
+  const [attachOpen, setAttachOpen] = useState(false);
+  useEffect(() => { setAttachOpen(false); }, [selected?.id]);
+  const { data: availableSessions } = useQuery<any[]>({
+    queryKey: ['artist-project-sessions', selected?.id],
+    queryFn: async () => (await api.get(`/artist-projects/${selected!.id}/available-sessions`)).data,
+    enabled: Boolean(selected?.id && selected?.is_active && attachOpen),
+  });
+  const attachSession = useMutation({
+    mutationFn: ({ projectId, bookingId }: { projectId: string; bookingId: string }) => api.post(`/artist-projects/${projectId}/bookings`, { booking_id: bookingId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['artist-projects'] });
+      queryClient.invalidateQueries({ queryKey: ['artist-project-sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['availability'] });
+      setAttachOpen(false);
+      toast.success('Session attached to project');
+    },
+    onError: (error: any) => toast.error(error?.response?.data?.error ?? 'Session could not be attached'),
+  });
+  // Detaching takes the session back: the producer loses the booking, its thread and its
+  // deliverables, including sessions a producer linked before the artist decided.
+  const detachSession = useMutation({
+    mutationFn: ({ projectId, bookingId }: { projectId: string; bookingId: string }) => api.delete(`/artist-projects/${projectId}/bookings/${bookingId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['artist-projects'] });
+      queryClient.invalidateQueries({ queryKey: ['artist-project-sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['availability'] });
+      toast.success('Session detached from project');
+    },
+    onError: (error: any) => toast.error(error?.response?.data?.error ?? 'Session could not be detached'),
+  });
+
   useEffect(() => {
     if (!selectedId && filtered[0]) setParams({ project: filtered[0].id }, { replace: true });
   }, [selectedId, filtered, setParams]);
@@ -138,7 +173,7 @@ export default function ArtistProjectsPage() {
 
               <div className="grid gap-6 lg:grid-cols-2">
                 <div><h3 className="flex items-center gap-2 text-sm"><Users size={15} className="text-dome"/> Collaborators</h3><div className="mt-3 space-y-2">{selected.collaborators.length ? selected.collaborators.map((person: any) => <div key={`${person.role}-${person.id}`} className="flex items-center gap-3 rounded-lg border border-white/[.05] px-3 py-2.5"><ArtistAvatar src={person.avatar_url} name={person.name} size={32} /><div><p className="text-xs text-zinc-300">{person.name}</p><p className="text-[9px] text-zinc-600">{person.role}</p></div></div>) : <p className="text-xs text-zinc-700">Collaborators will appear when sessions are connected.</p>}</div></div>
-                <div><h3 className="flex items-center gap-2 text-sm"><Clock3 size={15} className="text-dome"/> Linked sessions</h3><div className="mt-3 space-y-2">{selected.bookings.length ? selected.bookings.slice(0,3).map((booking: any) => <Link key={booking.id} to={`/bookings/${booking.id}`} className="block rounded-lg border border-white/[.05] px-3 py-2.5 hover:border-dome/20"><p className="text-xs text-zinc-300">{booking.service?.name ?? 'Studio session'}</p><p className="mt-1 text-[9px] text-zinc-600">{new Date(booking.starts_at).toLocaleDateString(undefined, { timeZone: booking.studio?.timezone })} · {booking.room?.name}</p></Link>) : <p className="text-xs text-zinc-700">No studio sessions linked yet.</p>}</div></div>
+                <div><div className="flex items-center justify-between gap-3"><h3 className="flex items-center gap-2 text-sm"><Clock3 size={15} className="text-dome"/> Linked sessions</h3>{selected.is_active && <button onClick={() => setAttachOpen(open => !open)} className="text-[10px] text-dome">{attachOpen ? 'Cancel' : '+ Attach a session'}</button>}</div>{attachOpen && selected.is_active && <div className="mt-3 rounded-lg border border-dome/15 bg-dome/[.03] p-3"><p className="text-[9px] leading-4 text-zinc-600">Attaching shares the session, its messages and its deliverables with this project’s producer.</p><div className="mt-2 space-y-1.5">{availableSessions === undefined ? <p className="text-[10px] text-zinc-600">Loading your sessions…</p> : availableSessions.length === 0 ? <p className="text-[10px] text-zinc-600">All your sessions are already on a project.</p> : availableSessions.map((booking: any) => <div key={booking.id} className="flex items-center justify-between gap-3 rounded-md border border-white/[.05] px-3 py-2"><p className="text-[10px] text-zinc-400">{new Date(booking.starts_at).toLocaleDateString(undefined, { timeZone: booking.studio?.timezone })} · {booking.service?.name ?? 'Studio session'} · {booking.studio?.name}</p><button onClick={() => attachSession.mutate({ projectId: selected.id, bookingId: booking.id })} disabled={attachSession.isPending} className="rounded-md border border-dome/25 px-2.5 py-1 text-[10px] text-dome disabled:opacity-40">Attach</button></div>)}</div></div>}<div className="mt-3 space-y-2">{selected.bookings.length ? selected.bookings.map((booking: any) => <div key={booking.id} className="flex items-center gap-2"><Link to={`/bookings/${booking.id}`} className="block flex-1 rounded-lg border border-white/[.05] px-3 py-2.5 hover:border-dome/20"><p className="text-xs text-zinc-300">{booking.service?.name ?? 'Studio session'}</p><p className="mt-1 text-[9px] text-zinc-600">{new Date(booking.starts_at).toLocaleDateString(undefined, { timeZone: booking.studio?.timezone })} · {booking.room?.name}</p></Link><button onClick={() => window.confirm('Detach this session? The producer will no longer see it, its messages or its deliverables.') && detachSession.mutate({ projectId: selected.id, bookingId: booking.id })} disabled={detachSession.isPending} className="rounded-md border border-white/[.08] px-2.5 py-1 text-[10px] text-zinc-500 hover:text-red-400 disabled:opacity-40">Detach</button></div>) : <p className="text-xs text-zinc-700">No studio sessions linked yet.</p>}</div></div>
                 <div><h3 className="flex items-center gap-2 text-sm"><FileAudio size={15} className="text-gold"/> Project files</h3><div className="mt-3 space-y-2">{selected.files.length ? selected.files.slice(0,4).map((file: any) => <button key={file.id} onClick={() => openFile(file.id)} className="flex w-full items-center justify-between rounded-lg border border-white/[.05] px-3 py-2.5 text-left"><span className="truncate text-xs text-zinc-400">{file.name}</span><span className="text-[9px] text-zinc-700">OPEN</span></button>) : <p className="text-xs text-zinc-700">Files saved inside a folder matching this project will appear here.</p>}</div></div>
                 <div><h3 className="flex items-center gap-2 text-sm"><MessageSquareText size={15} className="text-gold"/> Creative notes</h3><div className="mt-3 space-y-2">{selected.feedback.length ? selected.feedback.slice(0,3).map((item: any) => <div key={item.id} className="rounded-lg border border-white/[.05] px-3 py-2.5"><p className="line-clamp-2 text-xs leading-5 text-zinc-400">“{item.body}”</p><p className="mt-1 text-[9px] text-zinc-700">{item.source}</p></div>) : <p className="text-xs text-zinc-700">Session notes and collaborator feedback will appear here.</p>}</div></div>
                 <div className="lg:col-span-2"><h3 className="flex items-center gap-2 text-sm"><FileAudio size={15} className="text-dome"/> Project credit sheet</h3><p className="mt-1 text-[9px] text-zinc-700">Credits record contribution, not rights or ownership.</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{selected.credits?.length ? selected.credits.map((credit: any) => <div key={credit.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/[.05] px-3 py-2.5"><div><p className="text-xs text-zinc-300">{credit.credited_name}</p><p className="mt-1 text-[9px] text-zinc-600">{credit.role.replaceAll('_',' ')} · {credit.scope || 'Whole project'}</p></div><span className={`rounded-full border px-2 py-1 text-[8px] font-mono ${credit.status === 'CONFIRMED' ? 'border-emerald-500/15 text-emerald-500' : credit.status === 'DISPUTED' ? 'border-red-500/15 text-red-400' : 'border-white/[.07] text-zinc-600'}`}>{credit.status}</span></div>) : <p className="text-xs text-zinc-700">The producer has not added structured credits yet.</p>}</div></div>

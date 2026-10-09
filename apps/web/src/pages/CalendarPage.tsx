@@ -12,6 +12,7 @@ import { studioDate, studioWallClock } from '../lib/fmt';
 import ArtistEmptyState from '../components/ArtistEmptyState';
 import { CalendarPlus2 } from 'lucide-react';
 import { BookingStatus, STATUS_HEX, hexAlpha } from '../lib/bookingStatus';
+import { useStudioCapabilities } from '../hooks/useStudioCapabilities';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const HOUR_START  = 8;
@@ -105,8 +106,8 @@ function bookingColor(b: any, mode: ColorMode, rooms: any[]) {
 }
 
 // ── Booking tooltip card ───────────────────────────────────────────────────────
-function BookingCard({ b, onConfirm, onView, isAdmin }:
-  { b: any; onConfirm: ()=>void; onView: ()=>void; isAdmin: boolean }) {
+function BookingCard({ b, onConfirm, onView, isAdmin, canConfirm }:
+  { b: any; onConfirm: ()=>void; onView: ()=>void; isAdmin: boolean; canConfirm: boolean }) {
   return (
     <div style={{
       position:'absolute', zIndex:100, top:'calc(100% + 4px)', left:0, minWidth:200,
@@ -121,7 +122,7 @@ function BookingCard({ b, onConfirm, onView, isAdmin }:
       {b.service?.name && <div style={{color:'#666', fontSize:11}}>{b.service.name}</div>}
       {isAdmin && (
         <div style={{display:'flex', gap:6, marginTop:8}}>
-          {b.status === 'PENDING' && (
+          {b.status === 'PENDING' && canConfirm && (
             <button onClick={e=>{e.stopPropagation();onConfirm();}} style={{
               fontSize:10, padding:'3px 8px', borderRadius:4, cursor:'pointer',
               background:'#14532d', border:'1px solid #166534', color:'#86efac',
@@ -145,6 +146,8 @@ export default function CalendarPage() {
   const isAdmin   = user?.role === 'STUDIO_ADMIN';
   const isEngineer = user?.role === 'ENGINEER';
   const isArtist  = user?.role === 'ARTIST';
+  // Confirming a booking is MANAGE_BOOKINGS on the membership (C34).
+  const canManageBookings = useStudioCapabilities().can('MANAGE_BOOKINGS');
 
   // Week view's 7-day grid needs ~700px and has no way to shrink further,
   // so it overflows a phone screen with no hint that it's scrollable.
@@ -389,7 +392,7 @@ export default function CalendarPage() {
                         <BookingCard b={b}
                           onConfirm={() => confirmMutation.mutate(b.id)}
                           onView={() => navigate(`/bookings/${b.id}`)}
-                          isAdmin={isAdmin}
+                          isAdmin={isAdmin} canConfirm={canManageBookings}
                         />
                       )}
                     </div>
@@ -506,7 +509,7 @@ export default function CalendarPage() {
                               <BookingCard b={b}
                                 onConfirm={()=>confirmMutation.mutate(b.id)}
                                 onView={()=>navigate(`/bookings/${b.id}`)}
-                                isAdmin={isAdmin}
+                                isAdmin={isAdmin} canConfirm={canManageBookings}
                               />
                             )}
                           </div>

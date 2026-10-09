@@ -51,7 +51,10 @@ studioCircleRouter.get('/current-work', requireRole('STUDIO_ADMIN'), attachStudi
     const [projects, unlinkedBookings] = await Promise.all([
       prisma.project.findMany({
         where: { is_active: true, bookings: { some: { studio_id: studioId, status: { notIn: ['CANCELLED', 'NO_SHOW'] } } } },
-        include: {
+        // Only what the Circle screen renders. The whole Project row carried the
+        // producer's private notes to every studio the project had booked.
+        select: {
+          id: true, title: true, phase: true, last_session_at: true,
           artist: { select: { id: true, name: true, alias: true, avatar_url: true } },
           producer: { select: { id: true, name: true, alias: true, avatar_url: true } },
           bookings: {
@@ -67,7 +70,8 @@ studioCircleRouter.get('/current-work', requireRole('STUDIO_ADMIN'), attachStudi
       prisma.booking.findMany({
         where: { studio_id: studioId, project_id: null, ends_at: { gte: recentCutoff }, status: { in: ['PENDING', 'CONFIRMED', 'IN_PROGRESS'] } },
         orderBy: { starts_at: 'asc' },
-        include: {
+        select: {
+          id: true, starts_at: true, ends_at: true, status: true,
           artist: { select: { id: true, name: true, alias: true, avatar_url: true } },
           engineer: { select: { id: true, name: true, avatar_url: true } },
           room: { select: { name: true } },

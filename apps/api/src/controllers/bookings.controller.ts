@@ -1,6 +1,7 @@
 // apps/api/src/controllers/bookings.controller.ts
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
 import { emitActivityEvent } from '../lib/activityEvents';
@@ -13,6 +14,7 @@ import {
 } from '../services/email.service';
 import { createNotification } from '../routes/notifications.routes';
 import { resolveStaffStudio } from '../middleware/studioScope.middleware';
+import { requireStudioCapability } from '../lib/staffPermission';
 import { recordBookingCompleted } from '../lib/bookingCompletion';
 import { requireTransition, transitionBookingStatus } from '../lib/bookingTransitions';
 import { upsertSessionLog } from '../lib/sessionLog';
@@ -55,6 +57,8 @@ export async function assignBookingEngineer(req: Request, res: Response, next: N
   try {
     const { engineer_id } = AssignEngineerSchema.parse(req.body);
     const studio = await resolveStaffStudio((req as any).userId);
+    // Placing staff on a booking is managing it (C34): the membership decides, not the role.
+    await requireStudioCapability((req as any).userId, studio.id, 'MANAGE_BOOKINGS', 'Booking management permission required');
     const booking = await prisma.booking.findFirst({ where: { id: req.params.id, studio_id: studio.id } });
     if (!booking) throw new AppError('Booking not found', 404);
     if (['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(booking.status)) throw new AppError('Engineer assignment is closed for this booking', 409);
@@ -79,6 +83,36 @@ export async function assignBookingEngineer(req: Request, res: Response, next: N
     res.json(updated);
   } catch (error) { next(error); }
 }
+
+// What a producer reads of a session on their project: when and where it is, who
+// works it, and the artist's public name. Not the artist's account, the artist's
+// booking notes, the engineer's login or rate, the studio's internals, or the
+// payment record. The calendar and the status bar read only these.
+const producerBookingSelect = {
+  id: true, studio_id: true, artist_id: true, room_id: true, engineer_id: true, service_id: true,
+  project_id: true, starts_at: true, ends_at: true, status: true,
+  artist: { select: { id: true, name: true, alias: true, avatar_url: true } },
+  studio: { select: { id: true, name: true, timezone: true } },
+  room: { select: { id: true, name: true } },
+  engineer: { select: { id: true, name: true } },
+  service: { select: { id: true, name: true } },
+  project: { select: { id: true, title: true, phase: true } },
+} satisfies Prisma.BookingSelect;
+
+// The single session adds what BookingDetailPage shows every viewer: the total and
+// payment status, the engineer's session log of the work, the project's producer and
+// the deliverables the artist's attach opened to the producer.
+const producerBookingDetailSelect = {
+  ...producerBookingSelect,
+  total_usd: true,
+  payment: { select: { status: true } },
+  session_log: { select: { notes: true, tracks_worked: true } },
+  project: { select: { id: true, title: true, phase: true, producer: { select: { id: true, name: true, alias: true } } } },
+  deliverables: {
+    include: { versions: { orderBy: { version_number: 'desc' } }, reviews: { orderBy: { created_at: 'desc' } } },
+    orderBy: { created_at: 'desc' },
+  },
+} satisfies Prisma.BookingSelect;
 
 // GET /api/bookings
 export async function getBookings(req: Request, res: Response, next: NextFunction) {
@@ -118,13 +152,13 @@ export async function getBookings(req: Request, res: Response, next: NextFunctio
         prisma.booking.count({ where }),
       ]);
     } else if (role === 'PRODUCER') {
-      // A Producer has no bookings of their own — only bookings linked to a
-      // project they own (see producer.routes.ts's link-booking endpoint).
+      // A Producer has no bookings of their own — only bookings the artist
+      // attached to a project they own (artist-projects.routes.ts).
       const producer = await prisma.producer.findUnique({ where: { user_id: userId } });
       if (!producer) throw new AppError('Producer profile not found', 404);
       const where = { project: { producer_id: producer.id }, ...dateRange };
       [bookings, total] = await Promise.all([
-        prisma.booking.findMany({ where, include: staffInclude, orderBy: { starts_at: 'asc' }, take, skip }),
+        prisma.booking.findMany({ where, select: producerBookingSelect, orderBy: { starts_at: 'asc' }, take, skip }),
         prisma.booking.count({ where }),
       ]);
     } else if (role === 'OIANO_ADMIN') {
@@ -197,6 +231,12 @@ export async function getBookingById(req: Request, res: Response, next: NextFunc
     // account could read any booking by id.
     if (userRole === 'PRODUCER' && booking.project?.producer?.user_id !== userId) {
       throw new AppError('Booking not found', 404);
+    }
+    // The project makes a producer a party to the work, not to the artist's account:
+    // the artist's email and account, their booking notes and the studio's internals
+    // stay with the artist and the studio they booked.
+    if (userRole === 'PRODUCER') {
+      return res.json(await prisma.booking.findUnique({ where: { id: booking.id }, select: producerBookingDetailSelect }));
     }
 
     res.json(booking);
@@ -524,6 +564,8 @@ export async function updateBookingStatus(req: Request, res: Response, next: Nex
   try {
     const { status } = UpdateStatusSchema.parse(req.body);
     const studio = await resolveStaffStudio((req as any).userId);
+    // Confirming, cancelling or closing a booking needs MANAGE_BOOKINGS on the membership (C34).
+    await requireStudioCapability((req as any).userId, studio.id, 'MANAGE_BOOKINGS', 'Booking management permission required');
 
     // Scope to studio slug — prevents cross-studio mutations
     const existing = await prisma.booking.findFirst({

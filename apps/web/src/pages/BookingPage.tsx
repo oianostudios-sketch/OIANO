@@ -531,12 +531,8 @@ export default function BookingPage() {
                           </div>
                         </div>
                         <div className="text-right flex-shrink-0">
-                          {e.hourly_rate_usd && (
-                            <>
-                              <p className="text-zinc-300 text-sm font-semibold">${e.hourly_rate_usd}</p>
-                              <p className="text-zinc-600 text-xs">/ hr</p>
-                            </>
-                          )}
+                          {/* No engineer rate: the studio's pay rate is not public,
+                              and the artist pays the service's price. */}
                           {selected.engineer_id === e.id && (
                             <span className="text-dome text-xs mt-1 block">✓ Selected</span>
                           )}
