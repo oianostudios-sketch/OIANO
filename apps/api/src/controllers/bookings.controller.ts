@@ -201,6 +201,12 @@ export async function getBookingById(req: Request, res: Response, next: NextFunc
     if (userRole === 'PRODUCER' && booking.project?.producer?.user_id !== userId) {
       throw new AppError('Booking not found', 404);
     }
+    // The project makes a producer a party to the work, not to the artist's account:
+    // the artist's email stays with the artist and the studio they booked.
+    if (userRole === 'PRODUCER') {
+      const { user: _account, ...artist } = booking.artist;
+      return res.json({ ...booking, artist });
+    }
 
     res.json(booking);
   } catch (err) {

@@ -17,16 +17,19 @@ const ReviewBody = z.object({
 artistReviewRouter.patch('/', async (req: any, res: Response, next: NextFunction) => {
   try {
     const { artist_rating, artist_testimonial } = ReviewBody.parse(req.body);
-    if (req.user.role !== 'ARTIST') throw new AppError('Only artists can submit reviews', 403);
+    // authenticate sets userId and userRole. This route read req.user, which nothing
+    // sets, so every review ended in a server error.
+    if (req.userRole !== 'ARTIST') throw new AppError('Only artists can submit reviews', 403);
 
-    const booking = await prisma.booking.findUnique({
-      where: { id: req.params.id },
+    // Looked up through the caller's own artist record: another artist's booking is
+    // not found, the same answer as one that does not exist.
+    const booking = await prisma.booking.findFirst({
+      where: { id: req.params.id, artist: { user_id: req.userId } },
       // id and starts_at come along so the session log's identity and start
       // time are derived from the booking rather than left unset here.
       select: { id: true, artist_id: true, starts_at: true, status: true, engineer_id: true },
     });
     if (!booking) throw new AppError('Booking not found', 404);
-    if (req.user.artistId !== booking.artist_id) throw new AppError('Forbidden', 403);
     if (booking.status !== 'COMPLETED') throw new AppError('Can only review a completed session', 400);
     if (!booking.engineer_id) throw new AppError('No engineer on this booking', 400);
 
