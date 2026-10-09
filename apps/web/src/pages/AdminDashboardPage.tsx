@@ -174,7 +174,8 @@ export default function AdminDashboardPage() {
       setWiDate(todayStr(tz)); setWiTime(nowTimeStr(tz));
       setWiDuration(120); setWiNotes('');
     },
-    onError: () => toast.error('Walk-in booking failed'),
+    // A member without MANAGE_BOOKINGS is refused by the server; say why.
+    onError: (error: any) => toast.error(error?.response?.data?.error ?? 'Walk-in booking failed'),
   });
 
   const broadcast = useMutation({

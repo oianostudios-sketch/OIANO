@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { resolveStaffStudio } from '../middleware/studioScope.middleware';
+import { requireStudioCapability } from '../lib/staffPermission';
 import {
   PAYABLE_CURRENCY,
   studioPayable,
@@ -17,8 +18,19 @@ import {
 // Every route here is scoped to the caller's own studio via resolveStaffStudio —
 // a studio admin can only see and settle their own balance, never another
 // studio's, and the studio id is never taken from the request.
+//
+// The account role is not enough (C34): the caller's membership of that studio must
+// hold VIEW_FINANCE, or be the legacy owner (lib/staffPermission.ts). No capability
+// names paying out; VIEW_FINANCE is the only finance one, and the owner and manager
+// presets carry it while reception does not.
 export const payoutsRouter = Router();
 payoutsRouter.use(authenticate);
+
+async function financeStudio(userId: string) {
+  const studio = await resolveStaffStudio(userId);
+  await requireStudioCapability(userId, studio.id, 'VIEW_FINANCE', 'Finance permission required');
+  return studio;
+}
 
 function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY;
@@ -30,7 +42,7 @@ function getStripe() {
 // it can be received yet. Read straight from the ledger; nothing is cached.
 payoutsRouter.get('/balance', requireRole('STUDIO_ADMIN'), async (req: any, res, next) => {
   try {
-    const studio = await resolveStaffStudio(req.userId);
+    const studio = await financeStudio(req.userId);
     const [payable, pending] = await Promise.all([
       studioPayable(studio.id),
       prisma.studioPayout.count({ where: { studio_id: studio.id, status: 'PENDING' } }),
@@ -51,7 +63,7 @@ payoutsRouter.get('/balance', requireRole('STUDIO_ADMIN'), async (req: any, res,
 // GET /api/payouts — this studio's settlement history.
 payoutsRouter.get('/', requireRole('STUDIO_ADMIN'), async (req: any, res, next) => {
   try {
-    const studio = await resolveStaffStudio(req.userId);
+    const studio = await financeStudio(req.userId);
     const payouts = await prisma.studioPayout.findMany({
       where: { studio_id: studio.id },
       orderBy: { created_at: 'desc' },
@@ -66,7 +78,7 @@ payoutsRouter.get('/', requireRole('STUDIO_ADMIN'), async (req: any, res, next) 
 // only becomes usable once Stripe reports the account as payout-ready.
 payoutsRouter.post('/connect', requireRole('STUDIO_ADMIN'), async (req: any, res, next) => {
   try {
-    const studio = await resolveStaffStudio(req.userId);
+    const studio = await financeStudio(req.userId);
     const stripe = getStripe();
 
     let accountId = studio.stripe_account_id;
@@ -99,7 +111,7 @@ payoutsRouter.post('/connect', requireRole('STUDIO_ADMIN'), async (req: any, res
 // (transferReservedPayout).
 payoutsRouter.post('/', requireRole('STUDIO_ADMIN'), async (req: any, res, next) => {
   try {
-    const studio = await resolveStaffStudio(req.userId);
+    const studio = await financeStudio(req.userId);
     if (!studio.stripe_account_id) {
       throw new AppError('Connect a payout account before requesting a payout', 409);
     }
