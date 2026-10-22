@@ -43,7 +43,25 @@ jobs:
           node-version: 24
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Compare production with the exact PR schema
-        run: node scripts/production/check-pr.cjs
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const required = [
+            'PRODUCTION_READONLY_DATABASE_URL',
+            'NEON_PRODUCTION_HOST',
+            'NEON_DATABASE_NAME',
+          ];
+          const missing = required.filter(name => !process.env[name]?.trim());
+          if (missing.length) {
+            console.error(`::error title=Missing production parity configuration::Missing or empty: ${missing.join(', ')}. Configure these in the Production read-only environment or repository settings. No schema comparison was performed.`);
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+              `## Production schema parity: configuration missing\n\n` +
+              missing.map(name => `- \`${name}\``).join('\n') +
+              `\n\nConfigure these in the **Production read-only** environment or repository settings. No schema comparison was performed.\n`);
+            process.exit(1);
+          }
+          NODE
+          node scripts/production/check-pr.cjs
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
