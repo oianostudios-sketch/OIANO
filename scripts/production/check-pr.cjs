@@ -43,8 +43,18 @@ async function checkPr(env = process.env) {
     details_url: `${env.GITHUB_SERVER_URL}/${env.GITHUB_REPOSITORY}/actions/runs/${env.GITHUB_RUN_ID}`,
   } });
   let passed = false;
+  let configurationFailure;
   let folder;
   try {
+    // Publish only names from this fixed allowlist, never environment values or
+    // raw errors. Collect every missing input before parsing a URL or connecting.
+    const missing = ['PRODUCTION_READONLY_DATABASE_URL', 'NEON_PRODUCTION_HOST', 'NEON_DATABASE_NAME']
+      .filter(name => !env[name]?.trim());
+    if (missing.length) {
+      configurationFailure = `Missing required configuration: ${missing.join(', ')}. Configure the Production read-only environment secret and repository Actions variables listed in docs/PRODUCTION_MIGRATION_WORKFLOW.md. No database connection was attempted.`;
+      console.error(`::error::${configurationFailure}`);
+      throw new Error(configurationFailure);
+    }
     const database = requireValue(env, 'PRODUCTION_READONLY_DATABASE_URL');
     const parsed = databaseUrl(database, requireValue(env, 'NEON_PRODUCTION_HOST'));
     if (decodeURIComponent(parsed.pathname.slice(1)) !== requireValue(env, 'NEON_DATABASE_NAME')) throw new Error('Unexpected production database.');
@@ -65,12 +75,12 @@ async function checkPr(env = process.env) {
   } finally {
     if (folder) fs.rmSync(folder, { recursive: true, force: true });
     const message = passed ? 'Production matches this exact PR schema. This does not certify a data backfill; use the approved migration workflow for that.'
-      : 'Production comparison failed or is not configured. Check the read-only role, environment secrets, endpoint, and schema drift. No database rows or raw errors are published.';
+      : configurationFailure || 'Production comparison failed or is not configured. Check the read-only role, environment secrets, endpoint, and schema drift. No database rows or raw errors are published.';
+    summary(`**Production schema parity: ${passed ? 'passed' : 'failed'}** for PR #${number}, commit \`${sha}\`.\n\n${message}`);
     await github(`check-runs/${check.id}`, { method: 'PATCH', body: {
       status: 'completed', conclusion: passed ? 'success' : 'failure',
       output: { title: passed ? 'Production schema matches' : 'Production schema not verified', summary: message },
     } });
-    summary(`**Production schema parity: ${passed ? 'passed' : 'failed'}** for PR #${number}, commit \`${sha}\`.\n\n${message}`);
   }
 }
 
