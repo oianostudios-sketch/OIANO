@@ -3,6 +3,46 @@
 Read README.md first. This file is the current checkpoint; the audit checkpoint it
 replaced is preserved at the end.
 
+## Creative identity and current-work UI journey - 2026-10-27
+
+Branch: `chore/reviewed-local-checkpoint`. This frontend-only batch extends the
+workspace checkpoint `b7cb8d0`; PR #54 and its original branch remain preserved.
+No push, deployment, merge or production action.
+
+The Artist path now connects Home's person-first identity and real current-work
+list to the exact selected project and its existing conversation/decisions/
+people/files, then to the private Passport and existing profile editor. Bio and
+collaboration interests use actual persisted fields, not fabricated canonical
+disciplines. Passport toolbar overlap, profile control labels and narrow
+project-picker sizing are corrected. Existing access, rights/consent, financial,
+booking/cache invalidation, message and private-file mechanisms are preserved.
+
+Evidence: 11 new journey tests passed in the final targeted rerun, plus 16
+existing header/workspace/message regressions. The final combined run had a
+journey worker-startup timeout; it is not reported as a passing combined run.
+Web `tsc`/Vite build, editor diagnostics, secrets and diff checks passed.
+Destination and CSS mutations reproduced their regressions. Real local desktop
+navigation and 390px profile save-failure/draft/retry/persistence passed, as did
+current-work read retry, mocked empty, keyboard navigation and anonymous 401.
+Normal and long-content matrices each passed 15 combinations at 320-1440px.
+Eight synthetic before/after screenshots are retained in the
+[UI experience report](UI_EXPERIENCE_REPORT.md).
+
+No migrations or seeds ran. Guarded session-only launch code used this
+checkout's existing database with `NODE_ENV=test` and external services
+disabled. Synthetic project archived; two accounts invalidated; old Artist
+token refused; manifest/browser auth/profile removed. Task-owned previews
+stopped; checkout PostgreSQL kept. Unrelated local settings, document edits
+and the architecture proposal were left alone.
+
+Next bounded UI work: Contributions list -> accepted contribution workspace,
+using existing contracts and contextual responsibilities. Physical-phone
+evidence, other browser engines, full accessibility audit and public sharing/
+printing/visibility interactions are not claimed. Pilot operator inventory and
+participant go/no-go remain blocked as described below; this is not permission
+to provision or deploy.
+See the [dated evidence](../status/2026-10-27-creative-identity-work-journey.md).
+
 ## Isolated pilot environment direction - 2026-10-27
 
 The owner chose an isolated staging/pilot environment, authorized repository-only

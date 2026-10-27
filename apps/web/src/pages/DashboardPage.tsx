@@ -3,7 +3,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/auth.store';
 import { api } from '../lib/api';
-import { greetingName } from '../lib/greetingName';
 import ProfileEditDrawer from '../components/ProfileEditDrawer';
 import NotificationBell from '../components/NotificationBell';
 import { useToast } from '../components/Toast';
@@ -13,12 +12,13 @@ import OianoBrand from '../components/OianoBrand';
 import ArtistStatusToggle from '../components/ArtistStatusToggle';
 import { fmtStudioRange, fmtStudioTime, fmtDateShort as _fmtDateShort } from '../lib/fmt';
 import { FolderKanban, Compass, Handshake, Pencil, Wallet } from 'lucide-react';
-import ArtistAvatar from '../components/ArtistAvatar';
 import { STATUS_HEX } from '../lib/bookingStatus';
 import MySignal from '../components/MySignal';
 import MyOrbit from '../components/MyOrbit';
 import OianoNow from '../components/OianoNow';
 import NextAction from '../components/NextAction';
+import CreativeIdentity from '../components/CreativeIdentity';
+import CurrentWork from '../components/CurrentWork';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -28,11 +28,6 @@ function greeting() {
   if (h < 17) return 'Good afternoon';
   return 'Good evening';
 }
-
-function fmtDate() {
-  return new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-}
-
 // Session times read in the studio's zone, labelled when the viewer is elsewhere.
 const fmtTime = (iso: string, tz?: string) => fmtStudioTime(iso, tz);
 const fmtDateShort = (iso: string, tz?: string) => _fmtDateShort(iso, tz);
@@ -300,7 +295,6 @@ export default function DashboardPage() {
   // Prefer the live artist record returned with the Passport portfolio. The
   // persisted login snapshot can be stale after profile or avatar changes.
   const artist   = portfolioData?.artist ?? user?.artist;
-  const heroName = greetingName(artist);
   const passport = artist?.passport;
   // Wallet balance and profile strength come from context, which reads them from
   // the ledger and the full artist record. Falling back to the portfolio payload
@@ -440,22 +434,15 @@ export default function DashboardPage() {
 
         {/* ── Welcome hero ── */}
         <div className="db-fade db-hero" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <ArtistAvatar src={(artist as any)?.avatar_url} name={artist?.alias ?? artist?.name ?? 'Artist'} size={58} shape="portrait" />
-            <div>
-            <p style={{ fontSize: 10, color: '#6a6a6a', fontFamily: 'monospace', letterSpacing: '0.14em', marginBottom: 9, textTransform: 'uppercase' }}>
-              {fmtDate()}
-            </p>
-            <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 38, color: '#f2f0eb', fontWeight: 500, lineHeight: 1.08, letterSpacing: '-0.025em' }}>
-              {greeting()}{heroName && <>, <span style={{ color: '#6aa9d2' }}>{heroName}</span></>}
-            </h1>
-            {(passport as any)?.bio && (
-              <p style={{ marginTop: 10, fontSize: 13, color: '#999', maxWidth: 480, lineHeight: 1.6 }}>
-                {(passport as any).bio.slice(0, 120)}{(passport as any).bio.length > 120 ? '…' : ''}
-              </p>
-            )}
-            </div>
-          </div>
+          <CreativeIdentity
+            name={artist?.name ?? 'Your workspace'}
+            alias={artist?.alias}
+            bio={artist?.bio}
+            avatarUrl={artist?.avatar_url}
+            interests={passport?.collaboration_interests ?? []}
+            greeting={greeting()}
+            actions={<><Link className="creative-button" to="/artist/passport">View your Passport</Link><button className="creative-text-link" type="button" onClick={() => setEditOpen(true)}>Edit profile</button></>}
+          />
 
           {/* Micro stats */}
           <div className="db-hero-stats" style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
@@ -475,6 +462,7 @@ export default function DashboardPage() {
         </div>
 
         <NextAction />
+        <CurrentWork />
 
         {/* Existing project and session context, below pending decisions. */}
         <section className="db-fade db-fade-1" aria-labelledby="today-heading">

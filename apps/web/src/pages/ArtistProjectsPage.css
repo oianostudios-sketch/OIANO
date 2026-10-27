@@ -55,6 +55,7 @@
 }
 
 .project-workspace-picker > button {
+  min-width: 0;
   min-height: 108px;
 }
 
