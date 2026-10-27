@@ -3,6 +3,25 @@
 Read README.md first. This file is the current checkpoint; the audit checkpoint it
 replaced is preserved at the end.
 
+## Current Git and validation checkpoint - 2026-10-27
+
+The owner authorized checking and committing aligned pending work. The 22 messaging,
+rollout and intake paths in this checkout matched `claude/creative-intake` exactly;
+that branch's existing commits were reused rather than duplicated. The current branch
+is `chore/reviewed-local-checkpoint`, based on `claude/creative-intake`. The
+`fix/production-parity-config-diagnostics` branch and PR #54 were left unchanged.
+
+The remaining agent-guidance changes were reviewed and committed. Local schema parity
+passes with 21 migrations, both typechecks pass, and a fresh local integration run
+passes 264/264. Production parity remains unverified; the inspected PR #54 comparison
+run had missing configuration. Nothing was pushed, deployed or run against production.
+See [the checkpoint record](../status/2026-10-27-reviewed-local-checkpoint.md) for
+verification limits and deliberately uncommitted paths.
+
+Next actions: owner sends the existing questionnaire to the first five participants;
+authorize and configure the production parity check separately. Browser/phone rehearsal
+remains outstanding. Do not treat this local checkpoint as migration or pilot approval.
+
 ## Latest — creative intake kit (Claude Code, 2026-10-27)
 
 The owner asked to work towards the creative intake (T01). Documentation only; no

@@ -1,5 +1,29 @@
 # OIANO — stabilization gate
 
+## Current checkpoint - 2026-10-27
+
+**Local schema parity passes; canonical migration remains blocked on production
+parity and a complete gate sign-off.** The failed schema-drift result below is the
+historical 2026-09-13 measurement, not today's local result.
+
+On `chore/reviewed-local-checkpoint`, all 21 tracked migrations applied to a fresh,
+isolated local database. Comparing that database with `prisma/schema.prisma` returned
+exit 0, "No difference detected". A separate fresh local database passed all 264
+integration tests; both API and web typechecks passed.
+
+PR #54's reported checks were inspected, not rerun: verify and integration passed,
+but production schema parity and its comparison job failed. The inspected comparison
+run had empty `PRODUCTION_READONLY_DATABASE_URL`, `NEON_PRODUCTION_HOST` and
+`NEON_DATABASE_NAME` inputs. This is not evidence that production matches the schema.
+No production connection or GitHub configuration change was made.
+
+The owner must authorize and configure the documented read-only production check,
+obtain a passing comparison for the exact proposed PR head, and complete the gate
+review before any canonical migration starts. Local success does not waive that step.
+See the [checkpoint evidence](status/2026-10-27-reviewed-local-checkpoint.md).
+
+## Historical measurement - 2026-09-13
+
 Session 5 of the stabilization track in [implementation status](OIANO_IMPLEMENTATION_STATUS.md).
 Measured on 2026-09-13 at `109c4d9`, plus the cast removals described under gate 4. The
 [frozen architecture](OIANO_FROZEN_ARCHITECTURE.md) lets the canonical migration begin only
