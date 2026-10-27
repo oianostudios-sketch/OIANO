@@ -67,8 +67,13 @@ export function useSSE() {
         // The stream has no replay cursor, so anything that happened while it
         // was down is simply missed. A reconnection is therefore the moment the
         // client is least entitled to trust what it is showing — re-read rather
-        // than wait for the next event to arrive.
-        if (hasConnectedRef.current) refreshWorkContext();
+        // than wait for the next event to arrive. Conversations included: their
+        // only other refresh is the message event that was just missed.
+        if (hasConnectedRef.current) {
+          refreshWorkContext();
+          qc.invalidateQueries({ queryKey: ['project-messages'] });
+          qc.invalidateQueries({ queryKey: ['booking-messages'] });
+        }
         hasConnectedRef.current = true;
       };
 
