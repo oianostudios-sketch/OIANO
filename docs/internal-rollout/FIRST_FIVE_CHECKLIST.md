@@ -129,8 +129,8 @@ database-backed health before starting a rehearsal, not just a Vite page/banner.
 
 | Gate | Required evidence | Current status |
 |---|---|---|
-| Intended deployment | Owner-approved HTTPS address, deployed commit, front-end/API pairing, support/recovery owner | Not supplied; local commits are unpushed |
-| Browser and mobile journeys | Completed section 4 with failures recorded and resolved | T09 onboarding and contributor messages/reconnect/retry/removal rehearsed locally in separate sessions, including prior 390px onboarding; real phone, multi-studio and booking journeys remain pending |
+| Intended deployment | Owner-approved HTTPS address, deployed commit, front-end/API pairing, support/recovery owner | Owner selected isolated staging/pilot; [Render setup plan](PILOT_ENVIRONMENT_PLAN.md) prepared. Actual inventory, addresses, revision and owner not supplied; no provisioning/deployment authorized |
+| Browser and mobile journeys | Completed section 4 with failures recorded and resolved | T09 onboarding, contributor messages/reconnect/retry/removal, studio scope, booking retries and artist attach/detach rehearsed locally; prior 390px onboarding is not a phone test. Real phone, booking live-recipient/reconnect and pilot-environment acceptance remain pending |
 | Storage | Authorized upload/download on the intended environment; realistic sizes; private access and recovery verified | Not verified; artist-file cap is 200 MiB and contributors cannot upload |
 | Recovery | Successful isolated backup restore, restore date, owner and procedure | Not demonstrated here |
 | Mail | Approved invitation delivery and password-reset delivery tested with controlled accounts | Not verified; contribution links are returned to the producer to share |

@@ -3,6 +3,27 @@
 Read README.md first. This file is the current checkpoint; the audit checkpoint it
 replaced is preserved at the end.
 
+## Isolated pilot environment direction - 2026-10-27
+
+The owner chose an isolated staging/pilot environment, authorized repository-only
+configuration inspection, then requested a setup plan using the existing Render
+stack. [The plan](PILOT_ENVIRONMENT_PLAN.md) is documentation only, not permission
+to provision, deploy, access production or contact participants.
+
+The repository defines one API/static-web pair, not a separate pilot pair;
+`NODE_ENV=staging` does not prove isolation and skips production-only runtime
+readiness checks. Actual cloud inventory and deployed addresses are still
+unknown. CI's disposable database and the production-data migration rehearsal
+must not be treated as participant environments.
+
+Next prerequisite: owner-authorized operator inventory, or an operator-supplied
+non-secret inventory plus a designated operator/recovery owner. The plan
+requires dedicated services/data/credentials/storage/mail, exact revision
+pairing and real recovery evidence before participant go/no-go. Payment scope
+remains undecided, and physical phone remains deferred. No infrastructure,
+product, workflow or environment-file changes were made.
+See [inspection/plan evidence](../status/2026-10-27-isolated-pilot-environment-plan.md).
+
 ## T04 studio/booking rehearsal and startup diagnosis - 2026-10-27
 
 The local readiness blocker is cleared. Instrumented startup took approximately
