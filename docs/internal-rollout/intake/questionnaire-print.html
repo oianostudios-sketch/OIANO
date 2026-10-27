@@ -1,0 +1,161 @@
+<!doctype html>
+<!-- Branded print version of QUESTIONNAIRE.md. Keep the two in step.
+     Render: msedge --headless --print-to-pdf=<out.pdf> --no-pdf-header-footer <this file> -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OIANO — How do you actually work?</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+  :root { --gold: #C9A84C; --gold-light: #E2C97E; --bg: #0a0a0a; --surface: #141414; --border: #1e1e1e; --muted: #2a2a2a; }
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body { margin: 0; background: var(--bg); color: #d4d4d8; font-family: 'DM Sans', sans-serif; font-weight: 300; }
+  .page { width: 210mm; min-height: 297mm; padding: 18mm 20mm 16mm; background: var(--bg); }
+  .cover { display: flex; flex-direction: column; }
+  .wordmark { width: 52mm; display: block; }
+  .kicker { margin-top: 5mm; font-family: 'JetBrains Mono', monospace; font-size: 7.5pt; letter-spacing: .35em; text-transform: uppercase; color: #71717a; }
+  h1 { margin: 16mm 0 0; font-family: 'Playfair Display', serif; font-weight: 400; font-size: 34pt; line-height: 1.1; color: #fff; }
+  h1 em { color: var(--gold-light); }
+  .lede { margin-top: 7mm; font-size: 11.5pt; line-height: 1.65; color: #d4d4d8; max-width: 150mm; }
+  .lede p { margin: 0 0 3.5mm; }
+  .lede strong { color: #fff; font-weight: 500; }
+  .privacy { margin-top: 7mm; padding: 5mm 6mm; border: 1px solid rgba(201,168,76,.28); border-radius: 3mm; background: rgba(201,168,76,.04); font-size: 9.5pt; line-height: 1.6; color: #a1a1aa; }
+  .privacy b { display: block; margin-bottom: 1.5mm; color: var(--gold); font-weight: 500; font-size: 8pt; letter-spacing: .18em; text-transform: uppercase; }
+  .contents { margin-top: auto; padding-top: 10mm; display: grid; grid-template-columns: repeat(4, 1fr); gap: 2mm 4mm; border-top: 1px solid var(--muted); font-size: 8.5pt; color: #71717a; }
+  .contents span { font-family: 'JetBrains Mono', monospace; color: var(--gold); margin-right: 1.5mm; }
+  section { break-inside: avoid; margin-bottom: 9mm; }
+  h2 { display: flex; align-items: baseline; gap: 4mm; margin: 0 0 4mm; padding-bottom: 2.5mm; border-bottom: 1px solid var(--muted); font-family: 'Playfair Display', serif; font-weight: 400; font-size: 17pt; color: #fff; }
+  h2 span { font-family: 'JetBrains Mono', monospace; font-size: 8pt; color: var(--gold); letter-spacing: .15em; }
+  ol { list-style: none; margin: 0; padding: 0; }
+  li { display: grid; grid-template-columns: 9mm 1fr; padding: 2.4mm 0; font-size: 10.5pt; line-height: 1.55; color: #e4e4e7; }
+  li .n { font-family: 'JetBrains Mono', monospace; font-size: 8.5pt; color: var(--gold); padding-top: .6mm; }
+  li small { display: block; margin-top: 1mm; color: #71717a; font-size: 9pt; }
+  li strong { color: #fff; font-weight: 500; }
+  .page { break-after: page; }
+  .page:last-child { break-after: auto; }
+  .back { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  .back .ask { margin: 0; font-size: 10.5pt; color: #a1a1aa; }
+  .thanks { margin: 14mm 0 0; font-family: 'Playfair Display', serif; font-style: italic; font-size: 26pt; line-height: 1.35; color: var(--gold-light); }
+  .back .wordmark { width: 40mm; margin-top: 26mm; }
+  .foot { margin-top: 6mm; font-family: 'JetBrains Mono', monospace; font-size: 7pt; letter-spacing: .3em; text-transform: uppercase; color: #52525b; }
+</style>
+</head>
+<body>
+
+<div class="page cover">
+  <img class="wordmark" src="../../../apps/web/public/brand/oiano-wordmark-master-v7.png" alt="OIANO">
+  <div class="kicker">The creative work network</div>
+
+  <h1>How do you<br><em>actually</em> work?</h1>
+
+  <div class="lede">
+    <p>We're starting to use OIANO for real work with the people we already make things with. Before we change anything, we want to understand how <em>you</em> work, in your own words, rather than guess from your job title.</p>
+    <p><strong>Pick one real piece of work you did recently</strong> and answer about that one. A concrete example is far more useful than a general description. If your work looks very different from project to project, you can do this twice.</p>
+    <p>It takes about 30 minutes. Write, send voice notes, or answer in conversation, whatever is easiest. Skip anything that doesn't apply. There are no wrong answers, and "it depends" is a fine answer if you tell us what it depends on. Reply to whoever sent you this, using the question numbers.</p>
+  </div>
+
+  <div class="privacy">
+    <b>What happens to your answers</b>
+    They are kept privately by the OIANO team and are not published or shared with other participants. Before we build anything based on them, we'll show you how we understood your work and ask you to confirm or correct it. You can ask us to change or delete your answers at any time. Please don't include passwords, private files, or other people's personal details.
+  </div>
+
+  <div class="contents">
+    <div><span>01</span>You and the work</div>
+    <div><span>02</span>Before you start</div>
+    <div><span>03</span>Doing the work</div>
+    <div><span>04</span>What you deliver</div>
+    <div><span>05</span>Review and finishing</div>
+    <div><span>06</span>Credit, permission, payment</div>
+    <div><span>07</span>Privacy and changes</div>
+    <div><span>08</span>What would help</div>
+  </div>
+</div>
+
+<div class="page">
+  <section>
+    <h2><span>01</span>You and the work</h2>
+    <ol>
+      <li><span class="n">1</span><div>What do you call what you do?</div></li>
+      <li><span class="n">2</span><div>What was this piece of work, in a sentence or two? Who was it for?</div></li>
+      <li><span class="n">3</span><div>What was your part in it, and what was <em>not</em> your part?</div></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span>02</span>Before you start</h2>
+    <ol>
+      <li><span class="n">4</span><div>What do you need before you can begin?<small>For example: a brief, references, a script, music, a location, people, equipment, a budget, a decision from someone.</small></div></li>
+      <li><span class="n">5</span><div>Who gives you those things, and how do they usually reach you?</div></li>
+      <li><span class="n">6</span><div>What usually goes wrong or arrives late at this stage?</div></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span>03</span>Doing the work</h2>
+    <ol>
+      <li><span class="n">7</span><div>Walk us through the steps, in your own words, from start to finish.</div></li>
+      <li><span class="n">8</span><div>Where do you hand something to someone else, or wait for someone? What exactly gets passed along?</div></li>
+      <li><span class="n">9</span><div>What do you need to arrange: times, places, rooms, people, equipment? How far ahead?</div></li>
+      <li><span class="n">10</span><div>Who else works alongside you, and who do you need to stay in touch with?</div></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span>04</span>What you deliver</h2>
+    <ol>
+      <li><span class="n">11</span><div>What do you hand over at the end?<small>Files, a performance, a text, prints, something else. Roughly how big are the files, if any?</small></div></li>
+      <li><span class="n">12</span><div>Do you deliver drafts or versions along the way? What do you call them?</div></li>
+      <li><span class="n">13</span><div>Who should be able to see each thing you deliver, and when?</div></li>
+    </ol>
+  </section>
+</div>
+
+<div class="page">
+  <section>
+    <h2><span>05</span>Review and finishing</h2>
+    <ol>
+      <li><span class="n">14</span><div>Who looks at your work and says yes or asks for changes? How do they ask?</div></li>
+      <li><span class="n">15</span><div>How many rounds of changes are normal? When do you push back?</div></li>
+      <li><span class="n">16</span><div>How do you know the work is <em>finished</em>? Who decides?</div></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span>06</span>Credit, permission and payment</h2>
+    <ol>
+      <li><span class="n">17</span><div>How do you want to be credited? Exactly what words?</div></li>
+      <li><span class="n">18</span><div>What needs to be agreed before or during the work: fee, usage, ownership, where it can be shown, for how long? Who has to agree?</div></li>
+      <li><span class="n">19</span><div>If the work shows you (your face, body, voice or name), what permission do you want to give, and to whom? What would you want to be able to take back?</div></li>
+      <li><span class="n">20</span><div>How and when do you expect to be paid, if at all?</div></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span>07</span>Privacy and changes</h2>
+    <ol>
+      <li><span class="n">21</span><div>What about this work should stay private, and from whom?</div></li>
+      <li><span class="n">22</span><div>If you left the work partway, or someone else did, what should happen?</div></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span>08</span>What would help</h2>
+    <ol>
+      <li><span class="n">23</span><div>What should a tool like OIANO remind you about?</div></li>
+      <li><span class="n">24</span><div>What decisions should it <strong>never</strong> make for you?</div></li>
+      <li><span class="n">25</span><div>What wastes your time today?</div></li>
+      <li><span class="n">26</span><div>If one thing improved this week, what would make OIANO worth using for you?</div></li>
+    </ol>
+  </section>
+</div>
+
+<div class="page back">
+  <p class="ask">Anything we didn't ask that we should have? Tell us.</p>
+  <p class="thanks">Thank you.<br>Work creates evidence,<br>and this is where yours starts.</p>
+  <img class="wordmark" src="../../../apps/web/public/brand/oiano-wordmark-master-v7.png" alt="OIANO">
+  <div class="foot">The creative work network · Private questionnaire</div>
+</div>
+
+</body>
+</html>
