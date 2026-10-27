@@ -22,7 +22,9 @@ api.interceptors.response.use(
   (err) => {
     if (err.response?.status === 401) {
       useAuthStore.getState().logout();
-      window.location.href = '/login';
+      // Entry handles rejected credentials/MFA itself; reloading it loses next
+      // and the pending MFA challenge before its error can be shown.
+      if (window.location.pathname !== '/enter') window.location.href = '/login';
     }
     // studioScope.middleware.ts throws exactly this 409 when a staff member
     // belongs to 2+ studios with none active — every studio-scoped request

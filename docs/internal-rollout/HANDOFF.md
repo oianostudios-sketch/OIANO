@@ -3,6 +3,35 @@
 Read README.md first. This file is the current checkpoint; the audit checkpoint it
 replaced is preserved at the end.
 
+## T09 invitation return continuity - 2026-10-27
+
+The owner authorized T09 after the preflight checkpoint below. It is now
+implemented locally: validated internal destinations survive sign-in for every
+role and both signup onboarding paths. Entry-page 401 errors no longer discard
+the destination or MFA challenge; authentication is still cleared and the error
+is rethrown. Outside entry, the existing expired-session redirect is unchanged.
+Route roles, API authorization, studio scope, schema and financial behavior were
+not changed.
+
+The complete web suite passes 180 tests; web typecheck and build pass. Separate
+local browser contexts exercised professional signup/onboarding, returning
+sign-in with a bad-password retry, Artist signup/onboarding at 390px, and actual
+platform MFA setup plus returning verification with an invalid-code retry. A separate local
+staff session also returned to the original invitation and retained it on reload.
+Claims and profile completion persisted after reload. Anonymous, unowned-project,
+not-yet-accepted-workspace, invalid-token and role-boundary refusals remain intact.
+
+**Still pending:** a physical-phone check (touch emulation timed out; the successful
+390px run used mouse input), the rest of T04, and
+all production/operational release gates. The local runner embeds a localhost
+API URL, so opening its LAN web URL on a phone alone is not a valid rehearsal.
+Do not expose an API or change the runner for phone access without agreeing the
+local-only connection setup. No production service or participant was contacted.
+
+See [T09 evidence](../status/2026-10-27-invitation-return-continuity.md).
+This supersedes the invitation-routing blocker in the previous checkpoint,
+not its other readiness limitations.
+
 ## Production preflight and first-five preparation - 2026-10-27
 
 Continued on `chore/reviewed-local-checkpoint` without repeating the completed local

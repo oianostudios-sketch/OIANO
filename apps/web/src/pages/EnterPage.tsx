@@ -9,6 +9,7 @@ import OianoBrand from '../components/OianoBrand';
 import EnterBrandLockup from '../components/EnterBrandLockup';
 import { ACCOUNT_PROFILES, homePathForRole } from '../lib/accountArchitecture';
 import { CREATIVE_DISCIPLINES, type CreativeDiscipline } from '../lib/creativeDisciplines';
+import { safeReturnDestination } from '../lib/returnDestination';
 
 function UniverseFallback() {
   return <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle at 48% 42%, rgba(58,111,142,.18), transparent 24%), radial-gradient(circle at 52% 48%, rgba(201,168,76,.08), transparent 44%), #020304' }} />;
@@ -49,9 +50,8 @@ export default function EnterPage() {
   const [disciplines, setDisciplines] = useState<CreativeDiscipline[]>([]);
   const [mfa, setMfa] = useState<{challenge:string;setup:boolean;secret?:string;uri?:string}|null>(null);
   const [mfaCode, setMfaCode] = useState('');
-  const requestedNext = searchParams.get('next');
-  const returningToBooking = requestedNext?.startsWith('/book') || requestedNext?.startsWith('/calendar');
-  const safeNext = requestedNext?.startsWith('/') && !requestedNext.startsWith('//') ? requestedNext : null;
+  const safeNext = safeReturnDestination(searchParams.get('next'));
+  const returningToBooking = safeNext?.startsWith('/book') || safeNext?.startsWith('/calendar');
 
   async function handleEnter() {
     setLoading(true); setError('');
@@ -80,10 +80,8 @@ export default function EnterPage() {
       setConverging(true);
       setTimeout(() => {
         if (mode === 'signup' && data.user.role === 'ARTIST') navigate(`/onboarding${safeNext ? `?next=${encodeURIComponent(safeNext)}` : ''}`);
-        else if (mode === 'signup' && data.user.role === 'PRODUCER') navigate('/professional/onboarding');
-        else if (data.user.role === 'ARTIST' && safeNext) navigate(safeNext);
-        else if (data.user.role === 'ARTIST') navigate('/dashboard');
-        else navigate(homePathForRole(data.user.role));
+        else if (mode === 'signup' && data.user.role === 'PRODUCER') navigate(`/professional/onboarding${safeNext ? `?next=${encodeURIComponent(safeNext)}` : ''}`);
+        else navigate(safeNext ?? homePathForRole(data.user.role));
       }, 850);
   }
 

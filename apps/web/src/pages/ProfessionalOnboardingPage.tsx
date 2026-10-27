@@ -1,15 +1,18 @@
 import { useState } from 'react';
 import { ArrowRight, Check, MapPin, Sparkles } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { CREATIVE_DISCIPLINES, type CreativeDiscipline } from '../lib/creativeDisciplines';
 import { useAuthStore } from '../store/auth.store';
 import { isSignupPlaceholderName } from '../../../../packages/shared/src/placeholderNames';
+import { safeReturnDestination } from '../lib/returnDestination';
 
 const COMMON_SERVICES = ['Production', 'Recording', 'Editing', 'Mixing', 'Mastering', 'Songwriting', 'Composition', 'Session performance', 'Creative direction'];
 
 export default function ProfessionalOnboardingPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const destination = safeReturnDestination(searchParams.get('next')) ?? '/producer';
   const { user, token, setAuth } = useAuthStore();
   const existing = (user?.producer?.disciplines ?? ['PRODUCER']) as CreativeDiscipline[];
   // Signup without a name gives a neutral placeholder; ask for the real one here.
@@ -46,7 +49,7 @@ export default function ProfessionalOnboardingPage() {
       });
       const refreshed = await api.get('/auth/me');
       if (token) setAuth(token, refreshed.data);
-      navigate('/producer', { replace: true });
+      navigate(destination, { replace: true });
     } catch (err: any) {
       setError(err?.response?.data?.error ?? 'Your professional profile could not be saved.');
     } finally { setSaving(false); }

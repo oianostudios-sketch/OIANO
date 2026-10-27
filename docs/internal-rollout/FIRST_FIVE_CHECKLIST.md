@@ -50,7 +50,7 @@ project invitation token belongs in the committed draft.
 | Producer lead | `/enter`, Creative professional account; `/professional/onboarding`, then project creation | The account uses the legacy `PRODUCER` role. Confirm this person genuinely leads the work; do not make someone a project lead just to bypass today's permissions. Confirm the saved name/disciplines after reload. |
 | Poet | Private intake first; project contribution can be claimed by an authenticated account | There is no Poet/Writer discipline, and the project role list offers `OTHER`. Do not choose an inaccurate discipline for them. The person must confirm an acceptable current account/label choice or remain intake-only until a supported path is agreed. |
 | Cinematographer | Private intake, then approved account and contribution invitation | No exact Cinematographer discipline. Videographer is an available label, not an automatic equivalence. Contributor uploads and independent deliverable review are not supported; check real file sizes before agreeing a trial. |
-| Studio manager | Existing authorized studio account, MFA, `/admin/team`, and correct active studio | Public `/enter` signup offers Artist/Creative professional, not studio staff provisioning. A creative account accepting a studio membership does not gain studio tools. If no suitable authorized account exists, stop for the operator's approved onboarding process; do not create a duplicate studio or upgrade roles in the database. |
+| Studio manager | Existing authorized studio account, any required MFA, `/admin/team`, and correct active studio | Public `/enter` signup offers Artist/Creative professional, not studio staff provisioning. A creative account accepting a studio membership does not gain studio tools. If no suitable authorized account exists, stop for the operator's approved onboarding process; do not create a duplicate studio or upgrade roles in the database. |
 | Artist across studios | `/enter`, Artist account, `/onboarding`; select the actual studio when booking | No default studio membership. Confirm only their own bookings/outputs are visible and staff cannot read another studio's private records. Booking and payment readiness are separate gates. |
 
 Source anchors:
@@ -64,19 +64,22 @@ Source anchors:
 [staff acceptance](../../apps/web/src/pages/AcceptStudioInvitePage.tsx), and
 [staff invitations](../../apps/api/src/routes/studio.routes.ts).
 
-### Invitation continuity blocker - observed in source, not browser-verified
+### Invitation continuity - T09 implemented locally, not deployed
 
-The protected route sends a signed-out person to `/enter?next=...`, but
-`EnterPage.completeLogin` honors `next` only for Artist accounts. A returning
-Creative professional or studio staff member goes to their role's home instead.
-New Creative professionals also lose `next` when entering and completing
-professional onboarding. The invitation is not thereby accepted or consumed, but
-the person can appear to have lost it.
+Sign-in now honors a validated internal `next` for every account role. New Artist
+and Creative professional accounts carry it through their respective onboarding.
+Rejected credentials or MFA codes stay on the entry page with their error, rather
+than reloading and losing the destination or pending MFA challenge. Unsafe or
+absent destinations retain the previous home/onboarding fallbacks.
 
-Until fixed and rehearsed: sign in with the intended account, finish any required
-onboarding, then reopen the original private invitation link. Do not regenerate
-or share tokens in a support report. This is a supervised navigation workaround,
-not a completed onboarding fix.
+Separate local browser sessions exercised professional and Artist signup,
+onboarding, claiming, reload persistence, returning sign-in, and platform MFA
+setup/verification. Existing role and API access boundaries still refuse access.
+See the [T09 evidence and remaining limits](../status/2026-10-27-invitation-return-continuity.md).
+The 390px Artist rehearsal was mouse-driven browser emulation, not a physical
+phone test. Do not treat this local fix as deployed or the wider section 4
+checklist as complete. On an older deployment, the supervised workaround remains:
+finish sign-in/onboarding, then reopen the original private link.
 
 ## 4. Supervised onboarding rehearsal - local data before real accounts
 
@@ -113,7 +116,7 @@ browser or phone result.
 | Gate | Required evidence | Current status |
 |---|---|---|
 | Intended deployment | Owner-approved HTTPS address, deployed commit, front-end/API pairing, support/recovery owner | Not supplied; local commits are unpushed |
-| Browser and mobile journeys | Completed section 4 with failures recorded and resolved | Not performed in this checkpoint |
+| Browser and mobile journeys | Completed section 4 with failures recorded and resolved | T09 onboarding rehearsed locally in separate sessions, including a 390px viewport; real phone and wider section 4 scenarios remain pending |
 | Storage | Authorized upload/download on the intended environment; realistic sizes; private access and recovery verified | Not verified; artist-file cap is 200 MiB and contributors cannot upload |
 | Recovery | Successful isolated backup restore, restore date, owner and procedure | Not demonstrated here |
 | Mail | Approved invitation delivery and password-reset delivery tested with controlled accounts | Not verified; contribution links are returned to the producer to share |

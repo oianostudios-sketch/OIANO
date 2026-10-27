@@ -19,6 +19,7 @@ import { useAuthStore } from '../store/auth.store';
 import { refreshMe } from '../lib/refreshMe';
 import { useToast } from '../components/Toast';
 import { initials } from '../components/ArtistAvatar';
+import { safeReturnDestination } from '../lib/returnDestination';
 
 // Dome (Aegean blue) is the everyday primary — selection states, confirm
 // actions. Sunset (warm amber, matches --amber/--live-accent) is reserved for
@@ -402,9 +403,8 @@ function FormationStep({ state, onDone }: { state: SharedState; onDone: () => vo
 export default function OnboardingSequencePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const requestedNext = searchParams.get('next');
   // Home, not a studio calendar: a new artist has no studio yet.
-  const safeNext = requestedNext?.startsWith('/') && !requestedNext.startsWith('//') ? requestedNext : '/dashboard';
+  const safeNext = safeReturnDestination(searchParams.get('next')) ?? '/dashboard';
   const user = useAuthStore((s) => s.user);
   const [step, setStep] = useState<Step>('identity');
   const [state, setState] = useState<SharedState>({

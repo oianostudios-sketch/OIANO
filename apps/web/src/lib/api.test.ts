@@ -56,6 +56,17 @@ describe('shared api instance', () => {
     expect(assigned).toContain('/login');
   });
 
+  it('keeps sign-in and MFA failures on /enter so the caller can show the error without losing next', async () => {
+    useAuthStore.setState({ token: 'stale-session', user: null });
+    const assigned = setLocation('/enter');
+    const error = { response: { status: 401, data: { error: 'Invalid authenticator code' } } };
+
+    await expect(responseRejected(error)).rejects.toBe(error);
+
+    expect(useAuthStore.getState().token).toBeNull();
+    expect(assigned).toEqual([]);
+  });
+
   it('redirects to studio selection only for that specific 409', async () => {
     const assigned = setLocation('/dashboard');
     await reject({ response: { status: 409, data: { error: 'Active studio selection required' } } });
