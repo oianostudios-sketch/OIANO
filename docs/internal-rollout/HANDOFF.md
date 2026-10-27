@@ -19,8 +19,14 @@ Status record: `docs/status/2026-10-27-creative-intake-kit.md`. Committed on loc
 **Privacy rule:** the repository is public. Participants' answers, names and records
 stay in a private place the owner chooses, never in the repository.
 
+**Private records location (owner's choice, 2026-10-27):** a folder in the owner's
+OneDrive, `Documents\OIANO Intake - Private`, so it is on the machine and in the owner's
+own online storage, shared with nobody. It has `responses\`, `records\` (with
+`_TEMPLATE.md`), `KEY.md` (the only place names are linked to record ids) and a copy of
+the questionnaire. Nothing from it is committed here.
+
 **Next action:** the owner sends the questionnaire to the first five people listed in
-`intake/README.md` and chooses where private records live. When a transcript is shared
+`intake/README.md`. When a transcript is shared
 in a session, an agent fills a private record (told, then today), drafts proposals for
 the person to confirm, and updates only `SYNTHESIS.md` in the repository, by record id.
 Batch 1's next actions below still stand (PR decision, browser rehearsal).
