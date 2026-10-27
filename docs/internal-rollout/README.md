@@ -11,7 +11,7 @@ Recommendation: proceed with a supervised rehearsal, then a limited real-work pi
 - [Audit](AUDIT.md): evidence, findings, readiness and verification limits.
 - [Backlog](BACKLOG.md): bounded tasks and acceptance criteria.
 - [Decisions](DECISIONS.md): confirmed direction versus proposals.
-- [Creative intake](CREATIVE_INTAKE.md): collect each person's actual work primitives.
+- [Creative intake](intake/README.md): how to run the intake round, the questionnaire to send, private records and synthesis. ([Original outline](CREATIVE_INTAKE.md).)
 - [Handoff](HANDOFF.md): current checkpoint and next action.
 - [Implementation report](IMPLEMENTATION_REPORT.md): batch 1 (IR-01, IR-02) results, pilot blockers and the next-step plan.
 

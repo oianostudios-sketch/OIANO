@@ -1,5 +1,7 @@
 # Creative work primitives intake
 
+> 2026-10-27: the working method is now [intake/](intake/README.md), with a participant questionnaire, a private record template, a check of current support and a synthesis sheet. This page stays as the original outline.
+
 Complete one copy per person, using one recent real piece of work. A person may have several disciplines and different responsibilities on different projects. Their answers are authoritative statements of need; proposed system mappings require their confirmation.
 
 1. What do you call your practice, and what are you making in this example?

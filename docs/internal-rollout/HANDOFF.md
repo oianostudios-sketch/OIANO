@@ -3,7 +3,29 @@
 Read README.md first. This file is the current checkpoint; the audit checkpoint it
 replaced is preserved at the end.
 
-## Current checkpoint — implementation batch 1 (Claude Code, 2026-10-27)
+## Latest — creative intake kit (Claude Code, 2026-10-27)
+
+The owner asked to work towards the creative intake (T01). Documentation only; no
+product code. Added `docs/internal-rollout/intake/`:
+- `README.md`: how to run the round, privacy, who to ask first, and when it's done.
+- `QUESTIONNAIRE.md`: for participants; plain language, not music-specific.
+- `RECORD_TEMPLATE.md`: keeps told, today, proposed and confirmed separate.
+- `CURRENT_SUPPORT.md`: what OIANO does today per primitive, checked against the code.
+- `SYNTHESIS.md`: empty until records are confirmed.
+
+Status record: `docs/status/2026-10-27-creative-intake-kit.md`. Committed on local branch
+`claude/creative-intake`, stacked on `claude/conversation-reliability`; not pushed.
+
+**Privacy rule:** the repository is public. Participants' answers, names and records
+stay in a private place the owner chooses, never in the repository.
+
+**Next action:** the owner sends the questionnaire to the first five people listed in
+`intake/README.md` and chooses where private records live. When a transcript is shared
+in a session, an agent fills a private record (told, then today), drafts proposals for
+the person to confirm, and updates only `SYNTHESIS.md` in the repository, by record id.
+Batch 1's next actions below still stand (PR decision, browser rehearsal).
+
+## Checkpoint — implementation batch 1 (Claude Code, 2026-10-27)
 
 ### Authorization
 
