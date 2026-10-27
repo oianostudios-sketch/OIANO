@@ -88,6 +88,14 @@ database. Use synthetic identities and non-sensitive files; do not reuse real
 participant passwords, tokens or media. Existing automated evidence is not a
 browser or phone result.
 
+Local evidence now covers T09 invitation return and the contributor-message
+subset below; these unchecked items remain the checklist for the intended pilot
+environment and participants, not a claim that the pilot has been accepted.
+See [contributor-browser evidence](../status/2026-10-27-contributor-browser-rehearsal.md)
+for live messages, forced reconnect, injected GET/POST failure recovery and
+removal/unrelated refusal. Multi-studio/booking journeys and physical phone
+remain pending.
+
 - [ ] Start with the intended account signed out. Open a contribution invitation;
   verify sign-in/signup, onboarding and return to the exact invitation. Include
   Artist and Creative professional accounts and a returning staff account.
@@ -116,7 +124,7 @@ browser or phone result.
 | Gate | Required evidence | Current status |
 |---|---|---|
 | Intended deployment | Owner-approved HTTPS address, deployed commit, front-end/API pairing, support/recovery owner | Not supplied; local commits are unpushed |
-| Browser and mobile journeys | Completed section 4 with failures recorded and resolved | T09 onboarding rehearsed locally in separate sessions, including a 390px viewport; real phone and wider section 4 scenarios remain pending |
+| Browser and mobile journeys | Completed section 4 with failures recorded and resolved | T09 onboarding and contributor messages/reconnect/retry/removal rehearsed locally in separate sessions, including prior 390px onboarding; real phone, multi-studio and booking journeys remain pending |
 | Storage | Authorized upload/download on the intended environment; realistic sizes; private access and recovery verified | Not verified; artist-file cap is 200 MiB and contributors cannot upload |
 | Recovery | Successful isolated backup restore, restore date, owner and procedure | Not demonstrated here |
 | Mail | Approved invitation delivery and password-reset delivery tested with controlled accounts | Not verified; contribution links are returned to the producer to share |

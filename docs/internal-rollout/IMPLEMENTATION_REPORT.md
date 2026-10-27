@@ -2,6 +2,14 @@
 
 2026-10-27 · Claude Code, continuing from the Codex readiness audit · for the owner
 
+**Later evidence:** the historical browser gap described below is now partially
+superseded by [T09 onboarding](../status/2026-10-27-invitation-return-continuity.md)
+and [T04 contributor-browser rehearsal](../status/2026-10-27-contributor-browser-rehearsal.md).
+Project-message live exchange, forced reconnect, GET/POST failure recovery and
+removal/unrelated refusal were exercised in separate local browser contexts.
+Phone, booking-thread and wider studio-scope/attachment rehearsal remain open.
+The original batch results below are preserved as history.
+
 ## 1. Outcome
 
 Project conversations now behave the way a team relies on them to:

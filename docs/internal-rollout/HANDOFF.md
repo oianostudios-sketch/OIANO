@@ -3,6 +3,30 @@
 Read README.md first. This file is the current checkpoint; the audit checkpoint it
 replaced is preserved at the end.
 
+## T04 contributor browser rehearsal - 2026-10-27
+
+Continued from `bf8caf2` without rerunning the completed full suites. Three
+separate-account local Playwright scenarios verified bidirectional live project
+messages, reload persistence, forced-disconnect recovery, explicit initial/cached
+GET errors and retry, and retained-draft POST retry with one persisted copy.
+Removed and unrelated users were refused fresh reads/writes/workspace access;
+their open streams received no new project-message event during the bounded
+observation. Anonymous message reads returned 401.
+
+No product defect was reproduced; no product, permission, schema or financial
+change was needed. The synthetic project was archived, browser credentials
+cleared, contexts closed and task-owned API/web processes stopped. PostgreSQL,
+local settings, unrelated proposals and PR #54's original branch were preserved.
+No push, deployment, production access or participant contact occurred.
+
+**T04 is still partial:** physical-phone verification remains deferred by the
+owner; booking-message, multi-studio scope and booking attach/detach browser
+journeys remain outstanding, as do the operator and intake gates.
+These were interactive browser assertions, not a CLI E2E suite with an exit code.
+See [browser evidence and limitations](../status/2026-10-27-contributor-browser-rehearsal.md).
+Next safe local work is the artist/staff studio-scope and attachment rehearsal,
+not speculative optimization or canonical migration.
+
 ## T09 invitation return continuity - 2026-10-27
 
 The owner authorized T09 after the preflight checkpoint below. It is now
