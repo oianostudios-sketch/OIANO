@@ -5,9 +5,15 @@
 **Later evidence:** the historical browser gap described below is now partially
 superseded by [T09 onboarding](../status/2026-10-27-invitation-return-continuity.md)
 and [T04 contributor-browser rehearsal](../status/2026-10-27-contributor-browser-rehearsal.md).
+The later [studio/booking rehearsal](../status/2026-10-27-studio-booking-browser-rehearsal.md)
+also verifies studio selection/scoped lists, booking GET/POST retry and artist
+attachment/detachment with producer access granted then revoked, after actual
+database-backed health cleared the local startup blocker.
 Project-message live exchange, forced reconnect, GET/POST failure recovery and
 removal/unrelated refusal were exercised in separate local browser contexts.
-Phone, booking-thread and wider studio-scope/attachment rehearsal remain open.
+Phone, booking live-recipient/reconnect behavior and actual pilot acceptance
+remain open. Startup remains slow; instrumented timings are not production
+benchmarks and no speculative product optimization was made.
 The original batch results below are preserved as history.
 
 ## 1. Outcome

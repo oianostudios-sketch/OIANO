@@ -3,7 +3,36 @@
 Read README.md first. This file is the current checkpoint; the audit checkpoint it
 replaced is preserved at the end.
 
-## T04 studio/booking attempt - 2026-10-27
+## T04 studio/booking rehearsal and startup diagnosis - 2026-10-27
+
+The local readiness blocker is cleared. Instrumented startup took approximately
+189 seconds from local-runner start to listening (135.3 seconds in the API child).
+The initial observer expired too early; actual health subsequently returned 200
+with the database connected. Most startup time was synchronous module loading,
+including 62.2 seconds importing Sentry despite its disabled local configuration.
+These are nested, instrumented wall times, not production benchmarks; the
+machine-level cause is not established. No product optimization was made.
+Use a bounded 300-second launch budget and require actual health, not Vite/banner.
+
+Three final interactive Playwright scenario groups passed against the real
+checkout-local API/database: staff studio selection and scoped lists with
+forbidden access, booking GET/POST failure recovery with one persisted message,
+and artist attach/detach with producer access granted then revoked. Artist lists
+included their own bookings across studios and excluded another artist's booking.
+No permissions or financial behavior changed.
+
+Fixtures were archived/detached, five passwords and auth versions invalidated,
+and all five old tokens plus the old artist password were confirmed refused.
+Browser contexts/credentials and task-owned API/web processes were cleaned up;
+PostgreSQL and unrelated work were preserved. No push, deploy or production action.
+
+T04 remains partial: phone is owner-deferred; booking live-recipient/reconnect
+behavior and pilot-environment/participant acceptance remain unverified. These
+are interactive assertions, not a CLI E2E run. Next: owner-sent intake and
+authorized operational evidence (T01/T05), with remaining rehearsal gaps explicit.
+See [current evidence](../status/2026-10-27-studio-booking-browser-rehearsal.md).
+
+## Earlier T04 studio/booking attempt - 2026-10-27 (superseded above)
 
 The next local studio/booking rehearsal did not reach API readiness within two
 bounded checks, so none of its browser journeys ran. Vite rendered the entry page;

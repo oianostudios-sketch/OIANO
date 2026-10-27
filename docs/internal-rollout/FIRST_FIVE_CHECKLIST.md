@@ -88,13 +88,19 @@ database. Use synthetic identities and non-sensitive files; do not reuse real
 participant passwords, tokens or media. Existing automated evidence is not a
 browser or phone result.
 
-Local evidence now covers T09 invitation return and the contributor-message
-subset below; these unchecked items remain the checklist for the intended pilot
+Local evidence now covers T09 invitation return, contributor messages, studio
+selection/scoped lists, artist booking attachment/detachment and booking-message
+failure recovery; these unchecked items remain the checklist for the intended pilot
 environment and participants, not a claim that the pilot has been accepted.
 See [contributor-browser evidence](../status/2026-10-27-contributor-browser-rehearsal.md)
 for live messages, forced reconnect, injected GET/POST failure recovery and
-removal/unrelated refusal. Multi-studio/booking journeys and physical phone
-remain pending.
+removal/unrelated refusal. See [studio/booking evidence](../status/2026-10-27-studio-booking-browser-rehearsal.md)
+for persisted studio selection, booking access boundaries, artist attach/detach
+and booking GET/POST retry with retained draft and one saved copy. Physical phone,
+booking live-recipient/reconnect behavior and actual pilot acceptance remain
+pending. The local API required approximately 189 seconds to listen in one
+instrumented run: allow a bounded 300-second launch budget and require real
+database-backed health before starting a rehearsal, not just a Vite page/banner.
 
 - [ ] Start with the intended account signed out. Open a contribution invitation;
   verify sign-in/signup, onboarding and return to the exact invitation. Include
