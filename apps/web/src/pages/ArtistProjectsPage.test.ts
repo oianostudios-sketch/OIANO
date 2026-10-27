@@ -55,6 +55,49 @@ async function click(element: Element | null | undefined) {
 }
 
 describe('attaching a session from the artist\'s side', () => {
+  it('renders the live workspace and resolves each section shortcut without simulated actions', async () => {
+    await render();
+    expect(host.querySelector('.project-workspace-hero h2')?.textContent).toBe('Night Drive');
+    expect(host.querySelector('[aria-current="step"]')?.textContent).toBe('Tracking');
+    expect(host.textContent).toContain('No outstanding decisions');
+    for (const link of host.querySelectorAll('.project-workspace-sections a')) {
+      expect(host.querySelector(link.getAttribute('href')!)).not.toBeNull();
+    }
+    expect(host.querySelector('a[href="/artist/passport"]')).not.toBeNull();
+    expect(host.querySelector('a[href="/book"]')).not.toBeNull();
+    expect(host.textContent).not.toMatch(/Simulate failure|Fictional|Future direction|DIYAA|GTGHV3/);
+  });
+
+  it('still obtains a private file ticket before opening content', async () => {
+    useAuthStore.setState({ user: { id: 'artist-user', email: 'artist@example.test', role: 'ARTIST', artist: { id: 'artist-1', name: 'Artist' } } });
+    vi.mocked(api.get).mockImplementation(async (url: string) => ({
+      data: url === '/artist-projects' ? [{ ...project, files: [{ id: 'file-1', name: 'Private reference' }] }] : [],
+    }) as never);
+    vi.mocked(api.post).mockResolvedValue({ data: { ticket: 'file-scoped-ticket' } } as never);
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    try {
+      await render();
+      await click([...host.querySelectorAll('button')].find(button => button.textContent?.includes('Private reference')));
+      expect(api.post).toHaveBeenCalledWith('/artists/artist-1/files/file-1/access-ticket');
+      expect(open).toHaveBeenCalledWith(
+        expect.stringContaining('/api/artists/artist-1/files/file-1/content?ticket=file-scoped-ticket'),
+        '_blank', 'noreferrer',
+      );
+    } finally {
+      open.mockRestore();
+    }
+  });
+
+  it('shows a project read failure with a retry instead of an empty workspace', async () => {
+    vi.mocked(api.get).mockRejectedValue(new Error('Unavailable'));
+    await render();
+    expect(host.textContent).toContain('Projects could not be loaded.');
+    expect(host.querySelector('.project-workspace-hero')).toBeNull();
+    vi.mocked(api.get).mockImplementation(async (url: string) => ({ data: url === '/artist-projects' ? [project] : [] }) as never);
+    await click(buttons('Try again')[0]);
+    expect(host.querySelector('.project-workspace-hero h2')?.textContent).toBe('Night Drive');
+  });
+
   it('lists the artist\'s own unattached sessions and attaches the one chosen to the project', async () => {
     vi.mocked(api.post).mockResolvedValue({ data: { id: 'booking-1', project_id: 'project-1' } } as never);
     await render();

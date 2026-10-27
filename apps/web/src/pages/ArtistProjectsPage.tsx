@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
-import { CalendarDays, CheckCircle2, Clock3, FileAudio, FolderKanban, MessageSquareText, Users } from 'lucide-react';
+import { CheckCircle2, Clock3, FileAudio, FolderKanban, MessageSquareText, Users } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
 import ArtistAvatar from '../components/ArtistAvatar';
@@ -9,9 +9,9 @@ import ArtistAvatar from '../components/ArtistAvatar';
 import { useToast } from '../components/Toast';
 import MessageThread from '../components/MessageThread';
 import ProjectActionPanel from '../components/ProjectActionPanel';
+import ProjectWorkspaceHeader, { PHASE_LABELS } from '../components/ProjectWorkspaceHeader';
+import './ArtistProjectsPage.css';
 
-const PHASES = ['PRE_PRODUCTION', 'TRACKING', 'EDITING', 'MIXING', 'MASTERING', 'DELIVERED'];
-const PHASE_LABELS: Record<string, string> = { PRE_PRODUCTION: 'Pre-production', TRACKING: 'Tracking', EDITING: 'Editing', MIXING: 'Mixing', MASTERING: 'Mastering', DELIVERED: 'Delivered' };
 const PHASE_COLORS: Record<string, string> = { PRE_PRODUCTION: '#6aa9d2', TRACKING: '#4fa98a', EDITING: '#9878c7', MIXING: '#df8b4d', MASTERING: '#d3b35c', DELIVERED: '#7d8589' };
 
 function relativeDate(value: string) {
@@ -99,15 +99,15 @@ export default function ArtistProjectsPage() {
   }, [selectedId, filtered, setParams]);
 
   return (
-    <div className="min-h-screen text-zinc-100 pb-28">
+    <div className="artist-workspace min-h-screen text-zinc-100 pb-28">
       <header className="sticky top-0 z-20 border-b border-white/[.07] px-5 py-4">
         <div className="mx-auto flex max-w-6xl items-center gap-4">
           <Link to="/dashboard" className="text-xs text-zinc-500 hover:text-white">← Home</Link>
           <div>
-            <p className="text-[9px] font-mono uppercase tracking-[.18em] text-dome">Your projects and collaborators</p>
+            <p className="text-[9px] font-mono uppercase tracking-[.18em] text-gold">Your projects and collaborators</p>
             <h1 className="text-xl font-medium">Projects</h1>
           </div>
-          <Link to="/book" className="ml-auto rounded-lg border border-dome/25 bg-dome/10 px-3 py-2 text-xs font-semibold text-dome">Plan next session</Link>
+          <Link to="/book" className="ml-auto inline-flex items-center rounded-lg border border-gold/30 bg-gold/10 px-3 py-2 text-xs font-semibold text-gold hover:bg-gold/20">Plan next session</Link>
         </div>
       </header>
 
@@ -118,7 +118,7 @@ export default function ArtistProjectsPage() {
             <p className="mt-2 max-w-xl text-sm text-zinc-500">Keep each project’s sessions, collaborators, files, and feedback together through production and delivery.</p>
           </div>
           <div className="flex rounded-xl border border-white/[.07] bg-black/20 p-1">
-            {(['ACTIVE', 'DELIVERED'] as const).map((item) => <button key={item} onClick={() => setFilter(item)} className={`rounded-lg px-4 py-2 text-[10px] font-mono tracking-wider ${filter === item ? 'bg-white/[.08] text-white' : 'text-zinc-600'}`}>{item === 'ACTIVE' ? `ACTIVE ${projects.filter(p => p.is_active && p.phase !== 'DELIVERED').length}` : `DELIVERED ${projects.filter(p => p.phase === 'DELIVERED').length}`}</button>)}
+            {(['ACTIVE', 'DELIVERED'] as const).map((item) => <button key={item} aria-pressed={filter === item} onClick={() => setFilter(item)} className={`rounded-lg px-4 py-2 text-[10px] font-mono tracking-wider ${filter === item ? 'bg-gold/10 text-gold' : 'text-zinc-600 hover:text-white'}`}>{item === 'ACTIVE' ? `ACTIVE ${projects.filter(p => p.is_active && p.phase !== 'DELIVERED').length}` : `DELIVERED ${projects.filter(p => p.phase === 'DELIVERED').length}`}</button>)}
           </div>
         </div>
 
@@ -133,33 +133,36 @@ export default function ArtistProjectsPage() {
           </div>
         ) : (
           <div className="artist-project-layout grid grid-cols-[310px_minmax(0,1fr)] gap-5">
-            <aside className="space-y-2">
+            <aside className="project-workspace-picker space-y-2" aria-label="Your projects">
               {filtered.map((project) => {
                 const active = selected?.id === project.id;
-                return <button key={project.id} onClick={() => setParams({ project: project.id })} className={`w-full rounded-xl border p-4 text-left ${active ? 'border-dome/30 bg-dome/[.07]' : 'border-white/[.06] bg-white/[.015] hover:border-white/[.13]'}`}>
+                return <button key={project.id} aria-pressed={active} onClick={() => setParams({ project: project.id })} className={`w-full rounded-xl border p-4 text-left ${active ? 'border-gold/30 bg-gold/[.07]' : 'border-white/[.06] bg-white/[.015] hover:border-white/[.13]'}`}>
                   <div className="mb-3 flex items-center justify-between"><span className="text-[9px] font-mono uppercase tracking-widest" style={{ color: PHASE_COLORS[project.phase] }}>{PHASE_LABELS[project.phase]}</span><span className="text-[9px] text-zinc-700">{relativeDate(project.updated_at)}</span></div>
                   <p className="truncate text-sm font-semibold text-zinc-100">{project.title}</p>
                   <p className="mt-1 truncate text-[11px] text-zinc-600">{project.producer?.alias ?? project.producer?.name ?? 'Producer to be assigned'}</p>
-                  <div className="meter mt-4"><div className="meter-fill" style={{ width: `${((PHASES.indexOf(project.phase) + 1) / PHASES.length) * 100}%`, '--signal': PHASE_COLORS[project.phase] } as React.CSSProperties} /></div>
                 </button>;
               })}
             </aside>
 
-            {selected && <section className="min-w-0 rounded-2xl border border-white/[.07] bg-[rgba(13,16,18,.72)] p-6 shadow-2xl shadow-black/20">
-              <div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/[.06] pb-6">
-                <div><p className="text-[9px] font-mono uppercase tracking-[.16em]" style={{ color: PHASE_COLORS[selected.phase] }}>{PHASE_LABELS[selected.phase]}</p><h2 className="mt-2 text-3xl">{selected.title}</h2><p className="mt-2 text-xs text-zinc-600">{relativeDate(selected.updated_at)}</p></div>
+            {selected && <section className="project-workspace-detail" aria-label="Selected project">
+              <ProjectWorkspaceHeader
+                title={selected.title}
+                phase={selected.phase}
+                active={selected.is_active}
+                producerName={selected.producer?.alias ?? selected.producer?.name ?? null}
+                updatedLabel={relativeDate(selected.updated_at)}
+                sessions={selected.bookings.length}
+                collaborators={selected.collaborators.length}
+                files={selected.files.length}
+              />
+              <div className="project-workspace-passport">
                 <Link to="/artist/passport" className="rounded-lg border border-gold/20 px-3 py-2 text-[10px] text-gold">{selected.is_public ? 'Visible on your Passport' : 'Add this work to Passport'}</Link>
               </div>
 
-              <div className="my-6 grid grid-cols-3 gap-2">
-                {[{ icon: CalendarDays, value: selected.bookings.length, label: 'Sessions' }, { icon: Users, value: selected.collaborators.length, label: 'Collaborators' }, { icon: FileAudio, value: selected.files.length, label: 'Files' }].map(({ icon: Icon, value, label }) => <div key={label} className="rounded-xl border border-white/[.055] bg-black/20 p-3"><Icon size={14} className="mb-3 text-zinc-600"/><strong className="block text-lg">{value}</strong><span className="text-[10px] text-zinc-600">{label}</span></div>)}
-              </div>
+              {selected.notes && <div className="project-workspace-brief mb-7"><h3 className="text-sm text-gold">Project brief</h3><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-zinc-300">{selected.notes}</p></div>}
 
-              <div className="mb-7"><p className="mb-2 text-[9px] font-mono uppercase tracking-widest text-zinc-600">Production path</p><div className="grid grid-cols-6 gap-1">{PHASES.map((phase, index) => <div key={phase}><div className="h-1 rounded-full" style={{ background: index <= PHASES.indexOf(selected.phase) ? PHASE_COLORS[selected.phase] : 'rgba(255,255,255,.06)' }} /><p className="mt-2 hidden text-[8px] text-zinc-700 xl:block">{PHASE_LABELS[phase]}</p></div>)}</div></div>
-
-              {selected.notes && <div className="mb-7 rounded-xl border border-white/[.06] bg-black/20 p-4"><p className="text-[9px] font-mono uppercase tracking-widest text-zinc-600">Project brief</p><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-zinc-400">{selected.notes}</p></div>}
-
-              <div className="mb-7"><ProjectActionPanel project={selected}/><MessageThread
+              <div id="project-decisions"><ProjectActionPanel project={selected}/></div>
+              <div className="mb-7" id="project-conversation"><MessageThread
                 variant="project"
                 endpoint={`/projects/${selected.id}/messages`}
                 queryKey={['project-messages', selected.id]}
@@ -171,10 +174,10 @@ export default function ArtistProjectsPage() {
                 placeholder="Share an update, reference or decision…"
               /></div>
 
-              <div className="grid gap-6 lg:grid-cols-2">
+              <div id="project-context" className="project-workspace-context grid gap-6 lg:grid-cols-2">
                 <div><h3 className="flex items-center gap-2 text-sm"><Users size={15} className="text-dome"/> Collaborators</h3><div className="mt-3 space-y-2">{selected.collaborators.length ? selected.collaborators.map((person: any) => <div key={`${person.role}-${person.id}`} className="flex items-center gap-3 rounded-lg border border-white/[.05] px-3 py-2.5"><ArtistAvatar src={person.avatar_url} name={person.name} size={32} /><div><p className="text-xs text-zinc-300">{person.name}</p><p className="text-[9px] text-zinc-600">{person.role}</p></div></div>) : <p className="text-xs text-zinc-700">Collaborators will appear when sessions are connected.</p>}</div></div>
                 <div><div className="flex items-center justify-between gap-3"><h3 className="flex items-center gap-2 text-sm"><Clock3 size={15} className="text-dome"/> Linked sessions</h3>{selected.is_active && <button onClick={() => setAttachOpen(open => !open)} className="text-[10px] text-dome">{attachOpen ? 'Cancel' : '+ Attach a session'}</button>}</div>{attachOpen && selected.is_active && <div className="mt-3 rounded-lg border border-dome/15 bg-dome/[.03] p-3"><p className="text-[9px] leading-4 text-zinc-600">Attaching shares the session, its messages and its deliverables with this project’s producer.</p><div className="mt-2 space-y-1.5">{availableSessions === undefined ? <p className="text-[10px] text-zinc-600">Loading your sessions…</p> : availableSessions.length === 0 ? <p className="text-[10px] text-zinc-600">All your sessions are already on a project.</p> : availableSessions.map((booking: any) => <div key={booking.id} className="flex items-center justify-between gap-3 rounded-md border border-white/[.05] px-3 py-2"><p className="text-[10px] text-zinc-400">{new Date(booking.starts_at).toLocaleDateString(undefined, { timeZone: booking.studio?.timezone })} · {booking.service?.name ?? 'Studio session'} · {booking.studio?.name}</p><button onClick={() => attachSession.mutate({ projectId: selected.id, bookingId: booking.id })} disabled={attachSession.isPending} className="rounded-md border border-dome/25 px-2.5 py-1 text-[10px] text-dome disabled:opacity-40">Attach</button></div>)}</div></div>}<div className="mt-3 space-y-2">{selected.bookings.length ? selected.bookings.map((booking: any) => <div key={booking.id} className="flex items-center gap-2"><Link to={`/bookings/${booking.id}`} className="block flex-1 rounded-lg border border-white/[.05] px-3 py-2.5 hover:border-dome/20"><p className="text-xs text-zinc-300">{booking.service?.name ?? 'Studio session'}</p><p className="mt-1 text-[9px] text-zinc-600">{new Date(booking.starts_at).toLocaleDateString(undefined, { timeZone: booking.studio?.timezone })} · {booking.room?.name}</p></Link><button onClick={() => window.confirm('Detach this session? The producer will no longer see it, its messages or its deliverables.') && detachSession.mutate({ projectId: selected.id, bookingId: booking.id })} disabled={detachSession.isPending} className="rounded-md border border-white/[.08] px-2.5 py-1 text-[10px] text-zinc-500 hover:text-red-400 disabled:opacity-40">Detach</button></div>) : <p className="text-xs text-zinc-700">No studio sessions linked yet.</p>}</div></div>
-                <div><h3 className="flex items-center gap-2 text-sm"><FileAudio size={15} className="text-gold"/> Project files</h3><div className="mt-3 space-y-2">{selected.files.length ? selected.files.slice(0,4).map((file: any) => <button key={file.id} onClick={() => openFile(file.id)} className="flex w-full items-center justify-between rounded-lg border border-white/[.05] px-3 py-2.5 text-left"><span className="truncate text-xs text-zinc-400">{file.name}</span><span className="text-[9px] text-zinc-700">OPEN</span></button>) : <p className="text-xs text-zinc-700">Files saved inside a folder matching this project will appear here.</p>}</div></div>
+                <div id="project-files"><h3 className="flex items-center gap-2 text-sm"><FileAudio size={15} className="text-gold"/> Project files</h3><div className="mt-3 space-y-2">{selected.files.length ? selected.files.slice(0,4).map((file: any) => <button key={file.id} onClick={() => openFile(file.id)} className="flex w-full items-center justify-between rounded-lg border border-white/[.05] px-3 py-2.5 text-left"><span className="min-w-0 truncate text-xs text-zinc-400">{file.name}</span><span className="shrink-0 text-[9px] text-zinc-700">OPEN</span></button>) : <p className="text-xs text-zinc-700">Files saved inside a folder matching this project will appear here.</p>}</div></div>
                 <div><h3 className="flex items-center gap-2 text-sm"><MessageSquareText size={15} className="text-gold"/> Creative notes</h3><div className="mt-3 space-y-2">{selected.feedback.length ? selected.feedback.slice(0,3).map((item: any) => <div key={item.id} className="rounded-lg border border-white/[.05] px-3 py-2.5"><p className="line-clamp-2 text-xs leading-5 text-zinc-400">“{item.body}”</p><p className="mt-1 text-[9px] text-zinc-700">{item.source}</p></div>) : <p className="text-xs text-zinc-700">Session notes and collaborator feedback will appear here.</p>}</div></div>
                 <div className="lg:col-span-2"><h3 className="flex items-center gap-2 text-sm"><FileAudio size={15} className="text-dome"/> Project credit sheet</h3><p className="mt-1 text-[9px] text-zinc-700">Credits record contribution, not rights or ownership.</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{selected.credits?.length ? selected.credits.map((credit: any) => <div key={credit.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/[.05] px-3 py-2.5"><div><p className="text-xs text-zinc-300">{credit.credited_name}</p><p className="mt-1 text-[9px] text-zinc-600">{credit.role.replaceAll('_',' ')} · {credit.scope || 'Whole project'}</p></div><span className={`rounded-full border px-2 py-1 text-[8px] font-mono ${credit.status === 'CONFIRMED' ? 'border-emerald-500/15 text-emerald-500' : credit.status === 'DISPUTED' ? 'border-red-500/15 text-red-400' : 'border-white/[.07] text-zinc-600'}`}>{credit.status}</span></div>) : <p className="text-xs text-zinc-700">The producer has not added structured credits yet.</p>}</div></div>
               </div>
