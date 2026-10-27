@@ -15,3 +15,8 @@ T02 and T03 were authorized and implemented on 2026-10-27 (batch 1); T04 has aut
 | T09 | Preserve invitation destination through authentication and professional onboarding | Shared return-destination helper, entry and both onboarding pages, entry-page 401 handling; no schema or account-role changes | Existing role/access guards unchanged | All account roles covered by routing regressions; separate browser sessions cover professional/Artist onboarding and platform MFA; unsafe fallback and API refusal boundaries retained | Implemented locally 2026-10-27; 180 web tests, typecheck/build pass. Desktop and 390px browser rehearsal pass; physical-phone/touch verification pending. [Evidence](../status/2026-10-27-invitation-return-continuity.md) |
 
 Batch 1 (T02, T03, automated T04) is implemented. Next proposed batch is in IMPLEMENTATION_REPORT.md section 9. Keep contributor vocabulary and canonical migration work separate so the reliability fixes remain independently reviewable. Do not commit or deploy product changes under the audit authorization.
+
+**Latest T04 attempt:** studio/booking rehearsal is additionally blocked on local
+API startup/readiness after two bounded attempts; none of those new browser
+journeys ran. Contributor-browser evidence above remains unchanged. Diagnose the
+local runner before resuming; see [startup evidence](../status/2026-10-27-studio-rehearsal-startup-blocker.md).

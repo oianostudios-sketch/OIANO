@@ -3,6 +3,26 @@
 Read README.md first. This file is the current checkpoint; the audit checkpoint it
 replaced is preserved at the end.
 
+## T04 studio/booking attempt - 2026-10-27
+
+The next local studio/booking rehearsal did not reach API readiness within two
+bounded checks, so none of its browser journeys ran. Vite rendered the entry page;
+the local runner applied no new migrations, but API health probes were refused.
+The first attempt later logged an API startup banner without a captured
+successful health response; the second also exceeded its deadline. Root cause
+is not established. Do not treat a banner or prepared replay code as a pass.
+
+Guarded checkout-local synthetic fixtures were prepared, then the project was
+archived, bookings detached, fixture credentials/sessions invalidated and the
+transient manifest removed. Task-owned API/web processes and generated task
+definition were cleaned up. No product change, full-suite rerun, production
+action or participant contact occurred.
+
+Next: diagnose supported local-runner startup, then resume studio scope,
+booking messages and artist attach/detach. The earlier contributor-browser
+checkpoint below remains valid; phone is still owner-deferred.
+See [startup evidence](../status/2026-10-27-studio-rehearsal-startup-blocker.md).
+
 ## T04 contributor browser rehearsal - 2026-10-27
 
 Continued from `bf8caf2` without rerunning the completed full suites. Three
