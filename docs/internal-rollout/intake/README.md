@@ -12,6 +12,10 @@ for history.
 | [CURRENT_SUPPORT.md](CURRENT_SUPPORT.md) | Whoever maps answers | What OIANO does today, per primitive, with code references |
 | [SYNTHESIS.md](SYNTHESIS.md) | Owner and builders | Anonymised patterns and the route for each finding |
 
+Use the [first-five checklist](../FIRST_FIVE_CHECKLIST.md) for the invitation draft,
+account limitations and the evidence required before real use. Intake itself does
+not require an account or approval to start a live pilot.
+
 ## Privacy first
 
 This repository is public. **Completed questionnaires, notes, voice notes and records

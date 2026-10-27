@@ -14,6 +14,7 @@ Recommendation: proceed with a supervised rehearsal, then a limited real-work pi
 - [Creative intake](intake/README.md): how to run the intake round, the questionnaire to send, private records and synthesis. ([Original outline](CREATIVE_INTAKE.md).)
 - [Handoff](HANDOFF.md): current checkpoint and next action.
 - [Implementation report](IMPLEMENTATION_REPORT.md): batch 1 (IR-01, IR-02) results, pilot blockers and the next-step plan.
+- [First-five checklist](FIRST_FIVE_CHECKLIST.md): private invitation draft, account paths, rehearsal steps and real-use blockers. Ready for owner review, not a launch approval.
 
 ## Initial workflows
 

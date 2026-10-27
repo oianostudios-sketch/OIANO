@@ -3,6 +3,33 @@
 Read README.md first. This file is the current checkpoint; the audit checkpoint it
 replaced is preserved at the end.
 
+## Production preflight and first-five preparation - 2026-10-27
+
+Continued on `chore/reviewed-local-checkpoint` without repeating the completed local
+database, application build or unit-suite verification. Reused PR #54's names-only
+configuration diagnostics and isolated tests on this branch; PR #54 and its original
+branch remain unchanged. The production runbook identifies the environment secret
+and two repository Actions variables and explains the trusted-base execution rule.
+No current credentials or production services were accessed.
+
+The [first-five checklist](FIRST_FIVE_CHECKLIST.md) contains an owner-send invitation
+draft, current account paths, private completion checklist, rehearsal and operational
+gates. The approved questionnaire was not changed and nobody was contacted.
+
+New source-confirmed blocker: `EnterPage` preserves invitation `next` only for Artist
+accounts; Creative professional and studio-staff sign-in drops the destination, and
+professional onboarding also drops it. The next recommended implementation is T09
+in [the backlog](BACKLOG.md), with targeted routing tests. Until resolved and rehearsed,
+sign in first and reopen the original private link during supervised onboarding.
+Do not silently assign a false discipline or create a studio to bypass account limits.
+
+Evidence and limits:
+[production preflight](../status/2026-10-27-production-parity-preflight.md) and
+[first-five preparation](../status/2026-10-27-first-five-preparation.md).
+Production parity, intended deployment/recovery evidence and browser/phone rehearsal
+remain outstanding. Intake invitations can be prepared independently of migration;
+real-work reliance still needs the operator and participant gates.
+
 ## Current Git and validation checkpoint - 2026-10-27
 
 The owner authorized checking and committing aligned pending work. The 22 messaging,
