@@ -70,6 +70,26 @@ function chosenDisciplines(value: Prisma.JsonValue): string[] {
 
 type Scope = { userIds?: string[]; legacyIds?: string[] } | 'all';
 
+const PROFILE_SELECT = {
+  id: true,
+  person_id: true,
+  legacy_source: true,
+  handle: true,
+  display_name: true,
+  bio: true,
+  avatar_url: true,
+  city: true,
+  city_public: true,
+  availability: true,
+  open_to_work: true,
+  person: { select: { id: true, user_id: true, display_name: true } },
+} satisfies Prisma.CreativeProfileSelect;
+
+const PERSON_SELECT = { id: true, user_id: true, display_name: true } satisfies Prisma.PersonSelect;
+
+type CanonicalProfile = Prisma.CreativeProfileGetPayload<{ select: typeof PROFILE_SELECT }>;
+type PersonPreimage = Prisma.PersonGetPayload<{ select: typeof PERSON_SELECT }>;
+
 async function loadLegacy(db: PrismaClient, scope: Scope): Promise<LegacyIdentity[]> {
   const where = (field: 'user_id') => scope === 'all' ? {} : {
     OR: [
@@ -115,6 +135,75 @@ async function loadLegacy(db: PrismaClient, scope: Scope): Promise<LegacyIdentit
   return rows.sort((a, b) => rank[a.source] - rank[b.source]
     || (a.created_at?.getTime() ?? 0) - (b.created_at?.getTime() ?? 0)
     || a.id.localeCompare(b.id));
+}
+
+async function resolveIdentityScope(scope: Exclude<Scope, 'all'>, db: PrismaClient) {
+  const requestedUserIds = new Set(scope.userIds ?? []);
+  const requestedLegacyIds = new Set(scope.legacyIds ?? []);
+  const userIds = new Set(requestedUserIds);
+  const legacyIds = new Set(requestedLegacyIds);
+  const personIds = new Set<string>();
+  let legacy: LegacyIdentity[] = [];
+  let persons: PersonPreimage[] = [];
+  let profiles: CanonicalProfile[] = [];
+
+  while (true) {
+    let expanded = false;
+    legacy = await loadLegacy(db, { userIds: [...userIds], legacyIds: [...legacyIds] });
+    for (const row of legacy) {
+      if (!legacyIds.has(row.id)) {
+        legacyIds.add(row.id);
+        expanded = true;
+      }
+      if (row.user_id && !userIds.has(row.user_id)) {
+        userIds.add(row.user_id);
+        expanded = true;
+      }
+    }
+
+    const personFilters: Prisma.PersonWhereInput[] = [];
+    if (userIds.size) personFilters.push({ user_id: { in: [...userIds] } });
+    if (personIds.size) personFilters.push({ id: { in: [...personIds] } });
+    persons = personFilters.length
+      ? await db.person.findMany({ where: { OR: personFilters }, select: PERSON_SELECT })
+      : [];
+    for (const person of persons) {
+      if (!personIds.has(person.id)) {
+        personIds.add(person.id);
+        expanded = true;
+      }
+      if (person.user_id && !userIds.has(person.user_id)) {
+        userIds.add(person.user_id);
+        expanded = true;
+      }
+    }
+
+    const profileFilters: Prisma.CreativeProfileWhereInput[] = [];
+    if (legacyIds.size) profileFilters.push({ id: { in: [...legacyIds] } });
+    if (personIds.size) profileFilters.push({ person_id: { in: [...personIds] } });
+    if (userIds.size) profileFilters.push({ person: { user_id: { in: [...userIds] } } });
+    profiles = profileFilters.length
+      ? await db.creativeProfile.findMany({ where: { OR: profileFilters }, select: PROFILE_SELECT })
+      : [];
+    for (const profile of profiles) {
+      if (!legacyIds.has(profile.id)) {
+        legacyIds.add(profile.id);
+        expanded = true;
+      }
+      if (!personIds.has(profile.person_id)) {
+        personIds.add(profile.person_id);
+        expanded = true;
+      }
+      if (profile.person.user_id && !userIds.has(profile.person.user_id)) {
+        userIds.add(profile.person.user_id);
+        expanded = true;
+      }
+    }
+
+    if (!expanded) break;
+  }
+
+  return { requestedUserIds, requestedLegacyIds, userIds, personIds, legacy, persons, profiles };
 }
 
 // A user's person is named from their artist, producer or engineer record in that order.
@@ -221,21 +310,21 @@ export async function mirrorIdentities(scope: Scope, db: PrismaClient = prisma):
     personsCreated: 0, personsUpdated: 0, personsRemoved: 0, profilesCreated: 0, profilesUpdated: 0, profilesRemoved: 0,
     disciplinesCreated: 0, disciplinesUpdated: 0, disciplinesRemoved: 0,
   };
-  const legacy = await loadLegacy(db, scope);
+  const resolved = scope === 'all' ? null : await resolveIdentityScope(scope, db);
+  const legacy = resolved?.legacy ?? await loadLegacy(db, 'all');
   assertDistinctIds(legacy);
 
   const userIds = scope === 'all'
     ? (await db.user.findMany({ select: { id: true } })).map((u) => u.id)
-    : [...new Set([...(scope.userIds ?? []), ...legacy.flatMap((row) => row.user_id ? [row.user_id] : [])])];
+    : [...resolved!.userIds];
   const existingUsers = new Set((await db.user.findMany({ where: { id: { in: userIds } }, select: { id: true } })).map((u) => u.id));
   const legacyIds = legacy.map((row) => row.id);
-  const [persons, profiles] = await Promise.all([
-    db.person.findMany({ where: scope === 'all' ? {} : { user_id: { in: userIds } }, select: { id: true, user_id: true, display_name: true } }),
-    db.creativeProfile.findMany({
-      where: scope === 'all' ? {} : { OR: [{ id: { in: [...legacyIds, ...(scope.legacyIds ?? [])] } }, { person: { user_id: { in: userIds } } }] },
-      select: { id: true, person_id: true, legacy_source: true, handle: true, display_name: true, bio: true, avatar_url: true, city: true, city_public: true, availability: true, open_to_work: true, person: { select: { id: true, user_id: true, display_name: true } } },
-    }),
-  ]);
+  const [persons, profiles] = resolved
+    ? [resolved.persons, resolved.profiles]
+    : await Promise.all([
+      db.person.findMany({ where: { user_id: { in: userIds } }, select: PERSON_SELECT }),
+      db.creativeProfile.findMany({ where: {}, select: PROFILE_SELECT }),
+    ]);
   const profileById = new Map(profiles.map((p) => [p.id, p]));
   for (const row of legacy) {
     const existing = profileById.get(row.id);
@@ -293,7 +382,7 @@ export async function mirrorIdentities(scope: Scope, db: PrismaClient = prisma):
   // artist account with no history is deleted, go too, while legacy is the truth.
   const present = new Set(legacyIds);
   const gone = profiles.filter((p) => p.legacy_source && !present.has(p.id)
-    && (scope === 'all' || scope.legacyIds?.includes(p.id) || (p.person.user_id && userIds.includes(p.person.user_id))));
+    && (scope === 'all' || resolved!.requestedLegacyIds.has(p.id) || (p.person.user_id && userIds.includes(p.person.user_id))));
   for (const profile of gone) {
     await db.creativeProfile.delete({ where: { id: profile.id } });
     result.profilesRemoved += 1;
