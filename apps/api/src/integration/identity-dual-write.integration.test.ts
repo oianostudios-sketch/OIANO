@@ -72,6 +72,76 @@ test('routes that write an identity keep its person and profile in step', async 
     await clean('after artist edits');
   });
 
+  await t.test('real Artist routes preserve a Producer sibling on every partial mirror', async () => {
+    const signup = await send('POST', '/auth/signup', null, { email: email('multi-profile'), password, role: 'ARTIST' });
+    assert.equal(signup.status, 201);
+    const userId = signup.body.user.id as string;
+    const artistId = signup.body.user.artist.id as string;
+    const token = signup.body.token as string;
+    const producer = await prisma.producer.create({
+      data: { user_id: userId, name: 'Named Producer', alias: 'Producer Alias', bio: 'Producer sibling biography' },
+    });
+
+    // Establish the two-profile canonical baseline once; every later write is an HTTP route.
+    await mirrorIdentities({ userIds: [userId] }, prisma);
+    const personBefore = await prisma.person.findUniqueOrThrow({ where: { user_id: userId } });
+    assert.equal(personBefore.display_name, 'Named Producer', 'a signup placeholder is not preferred over a named Producer');
+    const initialProfiles = await prisma.creativeProfile.findMany({
+      where: { id: { in: [artistId, producer.id] } },
+      include: { person: { select: { user_id: true } } },
+      orderBy: { id: 'asc' },
+    });
+    const initialById = new Map(initialProfiles.map((profile) => [profile.id, profile]));
+    const initialProducer = initialById.get(producer.id)!;
+
+    const assertProfilesAndParity = async (label: string, expectedArtist: {
+      display_name: string; bio: string | null; city: string | null; city_public: boolean; availability: string;
+    }) => {
+      const current = await prisma.creativeProfile.findMany({
+        where: { id: { in: [artistId, producer.id] } },
+        include: { person: { select: { user_id: true } } },
+        orderBy: { id: 'asc' },
+      });
+      assert.equal(current.length, 2, `${label}: both canonical profiles remain`);
+      const byId = new Map(current.map((profile) => [profile.id, profile]));
+      for (const id of [artistId, producer.id]) {
+        const before = initialById.get(id)!;
+        const after = byId.get(id)!;
+        assert.equal(after.id, before.id, `${label}: profile id remains`);
+        assert.equal(after.person_id, before.person_id, `${label}: Person link remains`);
+        assert.equal(after.person.user_id, userId, `${label}: owner remains`);
+        assert.equal(after.handle, before.handle, `${label}: handle remains`);
+        assert.equal(after.created_at.getTime(), before.created_at.getTime(), `${label}: creation time remains`);
+      }
+      const artist = byId.get(artistId)!;
+      assert.deepEqual(
+        [artist.display_name, artist.bio, artist.city, artist.city_public, artist.availability],
+        [expectedArtist.display_name, expectedArtist.bio, expectedArtist.city, expectedArtist.city_public, expectedArtist.availability],
+        `${label}: Artist fields mirror the route edit`,
+      );
+      assert.deepEqual(byId.get(producer.id), initialProducer, `${label}: unchanged Producer sibling is preserved in full`);
+      const person = await prisma.person.findUniqueOrThrow({ where: { user_id: userId } });
+      assert.equal(person.display_name, expectedArtist.display_name === 'New artist' ? 'Named Producer' : 'Route Artist');
+      await clean(`${label}: full identity parity`);
+    };
+
+    await assertProfilesAndParity('baseline', {
+      display_name: 'New artist', bio: null, city: null, city_public: false, availability: 'AVAILABLE',
+    });
+    assert.equal((await send('PATCH', '/passport/profile', token, { name: 'Route Artist', alias: 'Route Alias', bio: 'Route biography' })).status, 200);
+    await assertProfilesAndParity('after profile PATCH', {
+      display_name: 'Route Alias', bio: 'Route biography', city: null, city_public: false, availability: 'AVAILABLE',
+    });
+    assert.equal((await send('PATCH', '/passport/portfolio', token, { location: 'Takoradi', location_public: true })).status, 200);
+    await assertProfilesAndParity('after portfolio PATCH', {
+      display_name: 'Route Alias', bio: 'Route biography', city: 'Takoradi', city_public: true, availability: 'AVAILABLE',
+    });
+    assert.equal((await send('PATCH', '/artists/me/status', token, { status: 'UNAVAILABLE' })).status, 200);
+    await assertProfilesAndParity('after status PATCH', {
+      display_name: 'Route Alias', bio: 'Route biography', city: 'Takoradi', city_public: true, availability: 'UNAVAILABLE',
+    });
+  });
+
   await t.test('a producer\'s edits reach their profile', async () => {
     const login = await send('POST', '/auth/signup', null, { email: email('producer-edit'), password, name: 'Ato Producer', role: 'PRODUCER' });
     assert.equal((await send('PATCH', '/producer/me', login.body.token, { alias: 'Ato Beats', bio: 'Afrobeats producer' })).status, 200);

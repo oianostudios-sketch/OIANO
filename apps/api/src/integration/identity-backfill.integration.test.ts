@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 
 // Canonical migration steps 1 and 2 (docs/OIANO_SCHEMA_REDESIGN.md §7): the backfill
@@ -10,7 +11,7 @@ test('identity backfill: one person per login, one profile per legacy identity, 
   const database = new URL(process.env.DATABASE_URL!);
   assert.match(`${database.pathname}/${database.searchParams.get('schema') ?? ''}`, /(^|[/_-])test([/_-]|$)/i);
 
-  const [{ prisma }, { backfillIdentity, identityParity, handleBase }] = await Promise.all([
+  const [{ prisma }, { backfillIdentity, identityParity, handleBase, mirrorIdentities }] = await Promise.all([
     import('../lib/prisma'), import('../lib/identity/backfill'),
   ]);
   t.after(() => prisma.$disconnect());
@@ -122,6 +123,262 @@ test('identity backfill: one person per login, one profile per legacy identity, 
     const repaired = await backfillIdentity(prisma);
     assert.deepEqual([repaired.personsCreated, repaired.profilesCreated, repaired.profilesUpdated], [1, 1, 0]);
     assert.deepEqual((await identityParity(prisma)).mismatches, []);
+  });
+
+  await t.test('empty and nonexistent object scopes are no-ops', async () => {
+    const snapshot = async () => ({
+      persons: await prisma.person.findMany({ orderBy: { id: 'asc' } }),
+      profiles: await prisma.creativeProfile.findMany({ orderBy: { id: 'asc' } }),
+    });
+    const before = await snapshot();
+    for (const scope of [{}, { userIds: [] }, { legacyIds: [] }, { userIds: [], legacyIds: [] }, { legacyIds: [randomUUID()] }]) {
+      const result = await mirrorIdentities(scope, prisma);
+      assert.ok(Object.values(result).every((count) => count === 0), 'scope does not create, update or remove identities');
+    }
+    assert.deepEqual(await snapshot(), before);
+  });
+
+  await t.test('mixed partial scopes union users and legacy ids without touching controls', async () => {
+    const controlUser = await prisma.user.create({ data: { email: email('scope-control'), role: 'STUDIO_ADMIN' } });
+    await mirrorIdentities({ userIds: [controlUser.id] }, prisma);
+    const fallbackProducer = await prisma.producer.findUniqueOrThrow({ where: { user_id: unnamedArtistNamedProducer.id } });
+    const snapshot = async () => ({
+      persons: await prisma.person.findMany({
+        where: { user_id: { in: [artist.id, unnamedArtistNamedProducer.id, controlUser.id] } },
+        orderBy: { user_id: 'asc' },
+      }),
+      profiles: await prisma.creativeProfile.findMany({
+        where: { person: { user_id: { in: [artist.id, unnamedArtistNamedProducer.id, controlUser.id] } } },
+        orderBy: { id: 'asc' },
+      }),
+    });
+
+    await prisma.artist.update({ where: { id: artist.artist!.id }, data: { name: 'Scoped Artist Name', alias: 'Scoped Artist Alias' } });
+    await prisma.producer.update({
+      where: { id: fallbackProducer.id },
+      data: { name: 'Scoped Producer Name', alias: 'Scoped Producer Alias' },
+    });
+    const scope = {
+      userIds: [artist.id, artist.id, randomUUID()],
+      legacyIds: [fallbackProducer.id, fallbackProducer.id, randomUUID()],
+    };
+    const first = await mirrorIdentities(scope, prisma);
+    assert.equal(first.personsUpdated, 2, 'both owners from the two parts of the union are recomputed');
+    assert.equal(first.profilesUpdated, 2, 'both changed legacy profiles are mirrored');
+    assert.equal((await prisma.person.findUniqueOrThrow({ where: { user_id: artist.id } })).display_name, 'Scoped Artist Name');
+    assert.equal((await prisma.person.findUniqueOrThrow({ where: { user_id: unnamedArtistNamedProducer.id } })).display_name, 'Scoped Producer Name');
+    assert.equal((await prisma.person.findUniqueOrThrow({ where: { user_id: controlUser.id } })).display_name, null);
+    assert.deepEqual((await identityParity(prisma)).mismatches, []);
+
+    const afterFirst = await snapshot();
+    assert.ok(Object.values(await mirrorIdentities(scope, prisma)).every((count) => count === 0), 'the completed scope is idempotent');
+    assert.deepEqual(await snapshot(), afterFirst, 'repeat preserves target and control rows');
+  });
+
+  await t.test('a deleted linked engineer recomputes its owner while preserving a surviving sibling', async () => {
+    const user = await prisma.user.create({ data: { email: email('removed-engineer'), role: 'ENGINEER' } });
+    const engineer = await prisma.engineer.create({ data: { studio_id: studio.id, user_id: user.id, name: 'Deleted engineer name', specialties: [] } });
+    const sibling = await prisma.producer.create({ data: { user_id: user.id, name: 'Surviving producer name', alias: 'Surviving producer alias' } });
+    await mirrorIdentities({ userIds: [user.id] }, prisma);
+    const personBefore = await prisma.person.findUniqueOrThrow({ where: { user_id: user.id } });
+    const siblingBefore = await prisma.creativeProfile.findUniqueOrThrow({ where: { id: sibling.id } });
+    assert.equal(personBefore.display_name, 'Surviving producer name', 'Artist/Producer records precede Engineers for person naming');
+
+    await prisma.engineer.delete({ where: { id: engineer.id } });
+    const result = await mirrorIdentities({ legacyIds: [engineer.id] }, prisma);
+
+    assert.equal(result.profilesRemoved, 1);
+    assert.equal(await prisma.creativeProfile.findUnique({ where: { id: engineer.id } }), null);
+    const personAfter = await prisma.person.findUniqueOrThrow({ where: { user_id: user.id } });
+    assert.equal(personAfter.id, personBefore.id, 'a linked Person remains the same identity');
+    assert.equal(personAfter.display_name, 'Surviving producer name');
+    assert.deepEqual(await prisma.creativeProfile.findUniqueOrThrow({ where: { id: sibling.id } }), siblingBefore, 'the surviving sibling row is unchanged');
+    assert.deepEqual((await identityParity(prisma)).mismatches, []);
+
+    const afterDelete = {
+      person: personAfter,
+      profiles: await prisma.creativeProfile.findMany({ where: { person_id: personAfter.id }, orderBy: { id: 'asc' } }),
+    };
+    assert.ok(Object.values(await mirrorIdentities({ legacyIds: [engineer.id] }, prisma)).every((count) => count === 0));
+    assert.deepEqual({
+      person: await prisma.person.findUniqueOrThrow({ where: { user_id: user.id } }),
+      profiles: await prisma.creativeProfile.findMany({ where: { person_id: personAfter.id }, orderBy: { id: 'asc' } }),
+    }, afterDelete, 'repeating deleted-id reconciliation changes nothing');
+
+    const canonicalOnly = await prisma.creativeProfile.create({
+      data: { person_id: personAfter.id, legacy_source: null, handle: `canonical-only-${runId}`, display_name: 'Canonical profile' },
+    });
+    await mirrorIdentities({ userIds: [user.id] }, prisma);
+    assert.ok(await prisma.creativeProfile.findUnique({ where: { id: canonicalOnly.id } }), 'canonical-only profiles are never deletion candidates');
+    const afterCanonicalOnly = await prisma.creativeProfile.findMany({ where: { person_id: personAfter.id }, orderBy: { id: 'asc' } });
+    assert.ok(Object.values(await mirrorIdentities({ userIds: [user.id] }, prisma)).every((count) => count === 0));
+    assert.deepEqual(await prisma.creativeProfile.findMany({ where: { person_id: personAfter.id }, orderBy: { id: 'asc' } }), afterCanonicalOnly);
+  });
+
+  await t.test('a deleted linked engineer removes its last profile but retains its Person', async () => {
+    const user = await prisma.user.create({ data: { email: email('last-linked-engineer'), role: 'ENGINEER' } });
+    const engineer = await prisma.engineer.create({ data: { studio_id: studio.id, user_id: user.id, name: 'Last linked engineer', specialties: [] } });
+    await mirrorIdentities({ userIds: [user.id] }, prisma);
+    const personBefore = await prisma.person.findUniqueOrThrow({ where: { user_id: user.id } });
+    assert.ok(await prisma.creativeProfile.findUnique({ where: { id: engineer.id } }));
+
+    await prisma.engineer.delete({ where: { id: engineer.id } });
+    const result = await mirrorIdentities({ legacyIds: [engineer.id] }, prisma);
+
+    assert.equal(result.profilesRemoved, 1);
+    assert.equal(result.personsRemoved, 0, 'a Person linked to a surviving login is retained');
+    assert.equal(await prisma.creativeProfile.findUnique({ where: { id: engineer.id } }), null);
+    const personAfter = await prisma.person.findUniqueOrThrow({ where: { user_id: user.id } });
+    assert.equal(personAfter.id, personBefore.id, 'the linked Person retains its identity');
+    assert.equal(personAfter.created_at.getTime(), personBefore.created_at.getTime(), 'the linked Person retains its creation time');
+    assert.equal(personAfter.display_name, null, 'the deleted legacy record no longer supplies a name');
+    assert.deepEqual((await identityParity(prisma)).mismatches, []);
+
+    const afterDelete = {
+      person: personAfter,
+      profiles: await prisma.creativeProfile.findMany({ where: { person_id: personBefore.id }, orderBy: { id: 'asc' } }),
+    };
+    assert.ok(Object.values(await mirrorIdentities({ legacyIds: [engineer.id] }, prisma)).every((count) => count === 0));
+    assert.deepEqual({
+      person: await prisma.person.findUniqueOrThrow({ where: { user_id: user.id } }),
+      profiles: await prisma.creativeProfile.findMany({ where: { person_id: personBefore.id }, orderBy: { id: 'asc' } }),
+    }, afterDelete, 'repeating deleted-id reconciliation changes nothing');
+  });
+
+  await t.test('a deleted unclaimed engineer removes its final profile and Person', async () => {
+    const engineer = await prisma.engineer.create({ data: { studio_id: studio.id, name: 'Unclaimed engineer', specialties: [] } });
+    await mirrorIdentities({ legacyIds: [engineer.id] }, prisma);
+    const personId = engineer.id;
+    assert.ok(await prisma.person.findUnique({ where: { id: personId } }));
+
+    await prisma.engineer.delete({ where: { id: engineer.id } });
+    const result = await mirrorIdentities({ legacyIds: [engineer.id] }, prisma);
+
+    assert.equal(result.profilesRemoved, 1);
+    assert.equal(result.personsRemoved, 1);
+    assert.equal(await prisma.person.findUnique({ where: { id: personId } }), null);
+    const afterDelete = {
+      person: await prisma.person.findUnique({ where: { id: personId } }),
+      profile: await prisma.creativeProfile.findUnique({ where: { id: engineer.id } }),
+    };
+    assert.ok(Object.values(await mirrorIdentities({ legacyIds: [engineer.id] }, prisma)).every((count) => count === 0));
+    assert.deepEqual({
+      person: await prisma.person.findUnique({ where: { id: personId } }),
+      profile: await prisma.creativeProfile.findUnique({ where: { id: engineer.id } }),
+    }, afterDelete);
+  });
+
+  await t.test('an unclaimed Person remains while a canonical-only profile survives', async () => {
+    const engineer = await prisma.engineer.create({ data: { studio_id: studio.id, name: 'Unclaimed sibling', specialties: [] } });
+    await mirrorIdentities({ legacyIds: [engineer.id] }, prisma);
+    const person = await prisma.person.findUniqueOrThrow({ where: { id: engineer.id } });
+    const canonicalOnly = await prisma.creativeProfile.create({
+      data: { person_id: person.id, legacy_source: null, handle: `unclaimed-canonical-${runId}`, display_name: 'Canonical-only survivor' },
+    });
+    await prisma.engineer.delete({ where: { id: engineer.id } });
+    const result = await mirrorIdentities({ legacyIds: [engineer.id] }, prisma);
+
+    assert.equal(result.profilesRemoved, 1);
+    assert.equal(result.personsRemoved, 0);
+    assert.deepEqual(await prisma.person.findUnique({ where: { id: person.id } }), person);
+    assert.ok(await prisma.creativeProfile.findUnique({ where: { id: canonicalOnly.id } }));
+    assert.deepEqual((await identityParity(prisma)).mismatches, []);
+    const afterDelete = {
+      person: await prisma.person.findUniqueOrThrow({ where: { id: person.id } }),
+      profiles: await prisma.creativeProfile.findMany({ where: { person_id: person.id }, orderBy: { id: 'asc' } }),
+    };
+    assert.ok(Object.values(await mirrorIdentities({ legacyIds: [engineer.id] }, prisma)).every((count) => count === 0));
+    assert.deepEqual({
+      person: await prisma.person.findUniqueOrThrow({ where: { id: person.id } }),
+      profiles: await prisma.creativeProfile.findMany({ where: { person_id: person.id }, orderBy: { id: 'asc' } }),
+    }, afterDelete);
+  });
+
+  await t.test('a moved profile resolves its former owner and recomputes both names', async () => {
+    const previousOwner = await prisma.user.create({
+      data: { email: email('previous-owner'), role: 'ENGINEER' },
+    });
+    const previousEngineer = await prisma.engineer.create({
+      data: { studio_id: studio.id, user_id: previousOwner.id, name: 'Remaining engineer name', specialties: [] },
+    });
+    const movedProducer = await prisma.producer.create({ data: { user_id: previousOwner.id, name: 'Moved producer name' } });
+    const newOwner = await prisma.user.create({
+      data: { email: email('new-owner'), role: 'ARTIST', artist: { create: { name: 'New owner artist name' } } },
+      include: { artist: true },
+    });
+    const controlUser = await prisma.user.create({ data: { email: email('movement-control'), role: 'STUDIO_ADMIN' } });
+    await mirrorIdentities({ userIds: [previousOwner.id, newOwner.id, controlUser.id] }, prisma);
+    const previousPersonBefore = await prisma.person.findUniqueOrThrow({ where: { user_id: previousOwner.id } });
+    const movedProfileBefore = await prisma.creativeProfile.findUniqueOrThrow({ where: { id: movedProducer.id } });
+    const previousSiblingBefore = await prisma.creativeProfile.findUniqueOrThrow({ where: { id: previousEngineer.id } });
+    const newSiblingBefore = await prisma.creativeProfile.findUniqueOrThrow({ where: { id: newOwner.artist!.id } });
+    const controlPersonBefore = await prisma.person.findUniqueOrThrow({ where: { user_id: controlUser.id } });
+
+    await prisma.producer.update({ where: { id: movedProducer.id }, data: { user_id: newOwner.id } });
+    await mirrorIdentities({ userIds: [newOwner.id] }, prisma);
+
+    const previousPersonAfter = await prisma.person.findUniqueOrThrow({ where: { user_id: previousOwner.id } });
+    const newPerson = await prisma.person.findUniqueOrThrow({ where: { user_id: newOwner.id } });
+    const movedProfile = await prisma.creativeProfile.findUniqueOrThrow({ where: { id: movedProducer.id } });
+    assert.equal(previousPersonAfter.id, previousPersonBefore.id);
+    assert.equal(previousPersonAfter.display_name, 'Remaining engineer name');
+    assert.equal(newPerson.display_name, 'New owner artist name');
+    assert.equal(movedProfile.person_id, newPerson.id);
+    assert.deepEqual(await prisma.creativeProfile.findUniqueOrThrow({ where: { id: previousEngineer.id } }), previousSiblingBefore);
+    assert.deepEqual(await prisma.creativeProfile.findUniqueOrThrow({ where: { id: newOwner.artist!.id } }), newSiblingBefore);
+    assert.deepEqual(
+      [movedProfile.id, movedProfile.handle, movedProfile.created_at.getTime(), movedProfile.display_name, movedProfile.bio],
+      [movedProfileBefore.id, movedProfileBefore.handle, movedProfileBefore.created_at.getTime(), movedProfileBefore.display_name, movedProfileBefore.bio],
+      'the moved profile keeps its identity, public handle, creation time and unrelated fields',
+    );
+    assert.deepEqual(await prisma.person.findUniqueOrThrow({ where: { user_id: controlUser.id } }), controlPersonBefore);
+    assert.deepEqual((await identityParity(prisma)).mismatches, []);
+
+    const afterMove = {
+      persons: await prisma.person.findMany({ where: { user_id: { in: [previousOwner.id, newOwner.id, controlUser.id] } }, orderBy: { user_id: 'asc' } }),
+      profiles: await prisma.creativeProfile.findMany({ where: { person: { user_id: { in: [previousOwner.id, newOwner.id, controlUser.id] } } }, orderBy: { id: 'asc' } }),
+    };
+    assert.ok(Object.values(await mirrorIdentities({ userIds: [newOwner.id] }, prisma)).every((count) => count === 0));
+    assert.deepEqual({
+      persons: await prisma.person.findMany({ where: { user_id: { in: [previousOwner.id, newOwner.id, controlUser.id] } }, orderBy: { user_id: 'asc' } }),
+      profiles: await prisma.creativeProfile.findMany({ where: { person: { user_id: { in: [previousOwner.id, newOwner.id, controlUser.id] } } }, orderBy: { id: 'asc' } }),
+    }, afterMove, 'repeating the owner-movement mirror preserves all involved rows');
+  });
+
+  await t.test('scoped collisions and source mismatches abort before writes', async () => {
+    const collisionUser = await prisma.user.create({ data: { email: email('scoped-collision'), role: 'PRODUCER' } });
+    await prisma.producer.create({ data: { id: artist.artist!.id, user_id: collisionUser.id, name: 'Scoped collision' } });
+    const collisionBefore = {
+      persons: await prisma.person.findMany({ orderBy: { id: 'asc' } }),
+      profiles: await prisma.creativeProfile.findMany({ orderBy: { id: 'asc' } }),
+    };
+    await assert.rejects(mirrorIdentities({ legacyIds: [artist.artist!.id] }, prisma), /both ARTIST and PRODUCER/);
+    assert.deepEqual({
+      persons: await prisma.person.findMany({ orderBy: { id: 'asc' } }),
+      profiles: await prisma.creativeProfile.findMany({ orderBy: { id: 'asc' } }),
+    }, collisionBefore, 'a scoped duplicate-id collision performs no canonical writes');
+    await prisma.producer.delete({ where: { id: artist.artist!.id } });
+    await prisma.user.delete({ where: { id: collisionUser.id } });
+
+    const mismatchUser = await prisma.user.create({ data: { email: email('scoped-mismatch'), role: 'PRODUCER' } });
+    const mismatchProducer = await prisma.producer.create({ data: { user_id: mismatchUser.id, name: 'Mismatched producer' } });
+    const mismatchPerson = await prisma.person.create({ data: { user_id: mismatchUser.id, display_name: 'Mismatched producer' } });
+    await prisma.creativeProfile.create({
+      data: { id: mismatchProducer.id, person_id: mismatchPerson.id, legacy_source: 'ARTIST', handle: `wrong-source-${runId}`, display_name: 'Mismatched producer' },
+    });
+    const mismatchBefore = {
+      persons: await prisma.person.findMany({ orderBy: { id: 'asc' } }),
+      profiles: await prisma.creativeProfile.findMany({ orderBy: { id: 'asc' } }),
+    };
+    await assert.rejects(mirrorIdentities({ legacyIds: [mismatchProducer.id] }, prisma), /mirrors ARTIST, not PRODUCER/);
+    assert.deepEqual({
+      persons: await prisma.person.findMany({ orderBy: { id: 'asc' } }),
+      profiles: await prisma.creativeProfile.findMany({ orderBy: { id: 'asc' } }),
+    }, mismatchBefore, 'a scoped source mismatch performs no canonical writes');
+    await prisma.creativeProfile.delete({ where: { id: mismatchProducer.id } });
+    await prisma.person.delete({ where: { id: mismatchPerson.id } });
+    await prisma.producer.delete({ where: { id: mismatchProducer.id } });
+    await prisma.user.delete({ where: { id: mismatchUser.id } });
   });
 
   await t.test('an id found in two legacy tables stops the backfill before it writes', async () => {
