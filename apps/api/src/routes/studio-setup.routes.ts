@@ -18,6 +18,7 @@ import { resolveStaffStudio } from '../middleware/studioScope.middleware';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
 import { writeAdminAudit } from '../lib/adminAudit';
+import { keepIdentityInStep } from '../lib/identity/backfill';
 
 export const studioSetupRouter = Router();
 studioSetupRouter.use(authenticate);
@@ -263,6 +264,7 @@ studioSetupRouter.post('/engineers', async (req: any, res, next) => {
       data: { ...data, specialties: data.specialties ?? [], studio_id: studio.id },
       select: engineerSelect,
     });
+    await keepIdentityInStep({ legacyIds: [engineer.id] });
     await writeAdminAudit(req.userId, 'studio.engineer.listed', req, { studio_id: studio.id, engineer_id: engineer.id, name: engineer.name });
     res.status(201).json(presentEngineer(engineer));
   } catch (error) { next(error); }
@@ -279,6 +281,7 @@ studioSetupRouter.patch('/engineers/:id', async (req: any, res, next) => {
     }
     if (data.name) await assertEngineerNameFree(studio.id, data.name, existing.id);
     const engineer = await prisma.engineer.update({ where: { id: existing.id }, data, select: engineerSelect });
+    await keepIdentityInStep({ legacyIds: [engineer.id] });
     await writeAdminAudit(req.userId, 'studio.engineer.updated', req, { studio_id: studio.id, engineer_id: engineer.id, fields: Object.keys(data) });
     res.json(presentEngineer(engineer));
   } catch (error) { next(error); }
@@ -293,6 +296,7 @@ studioSetupRouter.delete('/engineers/:id', async (req: any, res, next) => {
     const inUse = `${engineer.name} has been booked or requested, so they stay on the studio's record. Edit them instead.`;
     if (Object.values(engineer._count).some((count) => count > 0)) throw new AppError(inUse, 409);
     await deleteUnlessUsed(() => prisma.engineer.delete({ where: { id: engineer.id } }), inUse);
+    await keepIdentityInStep({ legacyIds: [engineer.id] });
     await writeAdminAudit(req.userId, 'studio.engineer.removed', req, { studio_id: studio.id, engineer_id: engineer.id, name: engineer.name });
     res.json({ success: true });
   } catch (error) { next(error); }
