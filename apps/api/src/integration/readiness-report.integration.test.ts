@@ -142,7 +142,7 @@ test('the readiness report counts exactly, reveals no one, and cannot write', as
     assert.equal(after.weave.missingOlder - before.weave.missingOlder, 1);
   });
 
-  await t.test('identity readiness counts every bucket', () => {
+  await t.test('identity readiness counts every bucket', async () => {
     const a = after.identity;
     const b = before.identity;
     assert.equal(a.users - b.users, 10);
@@ -162,7 +162,15 @@ test('the readiness report counts exactly, reveals no one, and cannot write', as
       { primaryUnknown: pd.primaryUnknown - pb.primaryUnknown, listNotArray: pd.listNotArray - pb.listNotArray, listWithUnknown: pd.listWithUnknown - pb.listWithUnknown, listWithNoKnown: pd.listWithNoKnown - pb.listWithNoKnown },
       { primaryUnknown: 1, listNotArray: 1, listWithUnknown: 1, listWithNoKnown: 2 },
     );
-    assert.deepEqual(a.canonicalTables, { persons: false, creative_profiles: false, disciplines: false, person_disciplines: false });
+    // Which canonical tables exist depends on the branch: the Identity migrations add them.
+    const present = await prisma.$queryRaw<Array<{ table_name: string }>>`
+      SELECT table_name FROM information_schema.tables
+      WHERE table_schema = current_schema() AND table_name IN ('persons', 'creative_profiles', 'disciplines', 'person_disciplines')`;
+    const exists = (name: string) => present.some((row) => row.table_name === name);
+    assert.deepEqual(a.canonicalTables, {
+      persons: exists('persons'), creative_profiles: exists('creative_profiles'),
+      disciplines: exists('disciplines'), person_disciplines: exists('person_disciplines'),
+    });
   });
 
   await t.test('each untyped reference is classified by what it names', () => {

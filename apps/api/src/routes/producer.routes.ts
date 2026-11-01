@@ -5,6 +5,7 @@ import fs from 'fs';
 import { z } from 'zod';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { prisma } from '../lib/prisma';
+import { keepIdentityInStep } from '../lib/identity/backfill';
 import { AppError } from '../lib/errors';
 import { isR2Configured, uploadToR2, deleteFromR2 } from '../lib/r2';
 import { getImageUpload, normalizeImageUpload, writeNormalizedImageLocally } from '../lib/imageUpload';
@@ -81,6 +82,7 @@ producerRouter.patch('/avatar', requireRole('PRODUCER'), async (req: any, res, n
         where: { id: producer.id },
         data: { avatar_url: publicUrl },
       });
+      await keepIdentityInStep({ legacyIds: [producer.id] });
 
       res.json({ avatar_url: publicUrl });
     } catch (e) { next(e); }
@@ -114,6 +116,7 @@ producerRouter.post('/setup', requireRole('PRODUCER'), async (req: any, res, nex
       },
       include: { passport: true },
     });
+    await keepIdentityInStep({ userIds: [req.userId] });
     res.status(201).json(producer);
   } catch (err) { next(err); }
 });
@@ -141,6 +144,7 @@ producerRouter.patch('/me', requireRole('PRODUCER'), async (req: any, res, next)
       where: { user_id: req.userId },
       data,
     });
+    await keepIdentityInStep({ userIds: [req.userId] });
     res.json(producer);
   } catch (err) { next(err); }
 });

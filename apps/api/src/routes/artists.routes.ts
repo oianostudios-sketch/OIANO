@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { prisma } from '../lib/prisma';
+import { keepIdentityInStep } from '../lib/identity/backfill';
 import { AppError } from '../lib/errors';
 import { emitActivityEvent } from '../lib/activityEvents';
 import { computeArtistTier } from '../lib/artistTier';
@@ -25,6 +26,7 @@ artistsRouter.patch('/me/status', requireRole('ARTIST'), async (req: any, res, n
 
     const { status } = StatusSchema.parse(req.body);
     const updated = await prisma.artist.update({ where: { id: artist.id }, data: { status } });
+    await keepIdentityInStep({ legacyIds: [artist.id] });
 
     await emitActivityEvent('status.changed', { artist_id: artist.id, status });
 

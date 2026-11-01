@@ -105,7 +105,7 @@ the platform. For a browser preview, start `oiano-local` from `.claude/launch.js
 
 - Monorepo: `apps/api` (Express, Prisma 5.22, PostgreSQL, Zod), `apps/web` (React 18,
   Vite, Tailwind, React Query, Zustand) and `packages/shared`.
-- 59 Prisma models and 21 tracked migrations; 37 API route modules; 52 web pages.
+- 61 Prisma models and 22 tracked migrations; 37 API route modules; 52 web pages.
 - Roles: `ARTIST`, `PRODUCER`, `STUDIO_ADMIN`, `ENGINEER`, `OIANO_ADMIN`.
 - Multi-studio: `StudioStaff` holds one row per user and studio, and
   `User.active_studio_id` selects the studio a staff request is scoped to.
