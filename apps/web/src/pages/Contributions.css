@@ -1,0 +1,148 @@
+.contribution-experience {
+  --contribution-muted: #b1b1aa;
+}
+
+.contribution-experience :is(button, a, textarea) {
+  touch-action: manipulation;
+}
+
+.contribution-experience :is(button, a) {
+  min-height: 44px;
+}
+
+.contribution-experience :is(button, a, textarea, summary):focus-visible {
+  outline: 2px solid #e2c97e;
+  outline-offset: 4px;
+}
+
+.contribution-experience :is(.text-zinc-500, .text-zinc-600, .text-zinc-700) {
+  color: var(--contribution-muted);
+}
+
+.contribution-experience :is(.text-\[7px\], .text-\[8px\], .text-\[9px\], .text-\[10px\]) {
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.contribution-experience :is(.text-violet-300, .text-violet-300\/70) {
+  color: #e2c97e;
+}
+
+.contribution-experience :is(.bg-violet-300) {
+  background-color: #c9a84c;
+}
+
+.contribution-experience :is(div, section, article, aside, header, button, a) {
+  min-width: 0;
+}
+
+.contribution-experience :is(p, h1, h2, h3, b, span) {
+  overflow-wrap: anywhere;
+}
+
+.contribution-experience :is(h1, h2, h3) {
+  text-wrap: balance;
+}
+
+.contribution-experience > div > header {
+  border-color: #685237;
+}
+
+.contribution-experience h1 {
+  max-width: 900px;
+  font: 400 clamp(32px, 4vw, 52px)/1.16 'Playfair Display', serif;
+}
+
+.contribution-workspace > div > header {
+  background: linear-gradient(115deg, #1d1911, #201819 75%, #34241b);
+}
+
+.contribution-context {
+  margin-top: 24px;
+  padding: 24px;
+  border: 1px solid #4d442c;
+  border-radius: 12px;
+  background: #141414;
+}
+
+.contribution-context h2 {
+  margin-top: 8px;
+  font-size: 26px;
+}
+
+.contribution-context p {
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.contribution-context .creative-eyebrow {
+  font-size: 11px;
+}
+
+.contribution-role {
+  margin: 8px 0;
+  color: #e2c97e;
+  text-transform: capitalize;
+}
+
+.contribution-next {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #30312b;
+}
+
+.contribution-next h3 {
+  flex-basis: 100%;
+  font-size: 17px;
+}
+
+.contribution-next p {
+  flex-basis: 100%;
+}
+
+.contribution-sections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 20px;
+  margin-top: 16px;
+}
+
+.contribution-sections a {
+  display: inline-flex;
+  align-items: center;
+  color: #e2c97e;
+  font-size: 13px;
+}
+
+.contribution-workspace [id^="contribution-"] {
+  scroll-margin-top: 100px;
+}
+
+.contribution-team {
+  margin-top: 24px;
+  padding: 24px;
+  background: #141414;
+  border: 1px solid #30312b;
+  border-radius: 12px;
+}
+
+.contribution-team h2 { font-size: 20px; }
+.contribution-team > p { margin-top: 8px; color: #b1b1aa; font-size: 13px; }
+.contribution-team ul { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 12px; margin-top: 18px; }
+.contribution-team li { min-width: 0; padding: 14px; border: 1px solid #30312b; border-radius: 8px; overflow-wrap: anywhere; }
+.contribution-team strong { display: block; font-size: 14px; font-weight: 500; }
+.contribution-team li span { display: block; margin-top: 6px; color: #b1b1aa; font-size: 12px; }
+
+.contribution-experience #contribution-conversation textarea {
+  min-width: 0;
+}
+
+@media (max-width: 480px) {
+  .contribution-experience .contribution-response-actions {
+    grid-template-columns: 1fr;
+  }
+}

@@ -13,7 +13,7 @@ import AccessBoundary from './components/AccessBoundary';
 import EcosystemNetworkPanel from './components/EcosystemNetworkPanel';
 import FeedbackWidget from './components/FeedbackWidget';
 import './styles/artist-experience.css';
-import { accountFamilyForRole } from './lib/accountArchitecture';
+import { accountFamilyForRole, homePathForRole } from './lib/accountArchitecture';
 
 const EnterPage = lazy(() => import('./pages/EnterPage'));
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
@@ -79,10 +79,19 @@ function SmartDashboard() {
   const { user } = useAuthStore();
   const home = user?.role === 'STUDIO_ADMIN' ? <AdminDashboardPage />
     : user?.role === 'ENGINEER' ? <EngineerDashboardPage />
-      : user?.role === 'PRODUCER' ? <ProducerDashboardPage />
+      : user?.role === 'PRODUCER' ? <ProducerDashboardPage home />
         : user?.role === 'OIANO_ADMIN' ? <MaintenancePage />
           : <DashboardPage />;
   return home;
+}
+
+function LegacyProfileRedirect() {
+  const { user } = useAuthStore();
+  const { search, hash } = useLocation();
+  const destination = user?.role === 'ARTIST' ? '/artist/passport'
+    : user?.role === 'PRODUCER' ? '/producer/passport'
+      : homePathForRole(user?.role);
+  return <Navigate to={`${destination}${search}${hash}`} replace />;
 }
 
 function SSEProvider() {
@@ -151,7 +160,7 @@ function AnimatedRoutes() {
         <Route path="/receipt/:id"  element={<RequireAuth><ReceiptPage /></RequireAuth>} />
         <Route path="/artist/passport" element={<RequireAuth role="ARTIST"><PassportPage /></RequireAuth>} />
         <Route path="/projects" element={<RequireAuth role="ARTIST"><ArtistProjectsPage /></RequireAuth>} />
-        <Route path="/passport"     element={<Navigate to="/artist/passport" replace />} />
+        <Route path="/passport"     element={<RequireAuth><LegacyProfileRedirect /></RequireAuth>} />
         <Route path="/calendar"     element={<RequireAuth><CalendarPage /></RequireAuth>} />
         <Route path="/admin"        element={<RequireAuth role="STUDIO_ADMIN"><AdminDashboardPage /></RequireAuth>} />
         <Route path="/facilities"   element={<RequireAuth roles={['STUDIO_ADMIN', 'ENGINEER']}><FacilitiesPage /></RequireAuth>} />
@@ -181,7 +190,7 @@ function AnimatedRoutes() {
         <Route path="/notifications"  element={<Navigate to="/communications?view=priority" replace />} />
         <Route path="/workrooms" element={<Navigate to="/communications?view=projects" replace />} />
         <Route path="/connect/:artistId" element={<RequireAuth role="ARTIST"><ConnectPage /></RequireAuth>} />
-        <Route path="/profile"         element={<Navigate to="/artist/passport" replace />} />
+        <Route path="/profile"         element={<RequireAuth><LegacyProfileRedirect /></RequireAuth>} />
         <Route path="/"             element={<Navigate to="/dashboard" replace />} />
         <Route path="*"             element={<NotFoundPage />} />
       </Routes></ErrorBoundary></Suspense>

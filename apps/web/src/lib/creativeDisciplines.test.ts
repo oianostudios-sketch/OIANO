@@ -12,10 +12,7 @@ describe('creative disciplines', () => {
     }
   });
 
-  // The API's signup and profile schemas validate against this exact vocabulary
-  // (auth.controller.ts). A discipline offered here that the server rejects
-  // fails at submit time with no way for the user to recover, so the ids must
-  // stay SCREAMING_SNAKE and must include the default the server falls back to.
+  // Signup uses this vocabulary; profile updates also accept authored labels.
   it('uses the wire vocabulary the API validates against', () => {
     for (const discipline of CREATIVE_DISCIPLINES) {
       expect(discipline.id, discipline.id).toMatch(/^[A-Z][A-Z_]*$/);
@@ -30,10 +27,14 @@ describe('creative disciplines', () => {
 
   // Producer rows created before disciplines existed have no value, and the UI
   // must not render "undefined" at them.
-  it('falls back to a readable label for missing or unknown values', () => {
+  it('falls back to a readable label only for missing values', () => {
     expect(disciplineLabel(undefined)).toBe('Creative professional');
     expect(disciplineLabel(null)).toBe('Creative professional');
-    expect(disciplineLabel('NOT_A_DISCIPLINE')).toBe('Creative professional');
+    expect(disciplineLabel('  ')).toBe('Creative professional');
+  });
+
+  it('preserves self-authored practice labels', () => {
+    expect(disciplineLabel('  Sound and spatial storytelling  ')).toBe('Sound and spatial storytelling');
   });
 
   it('has a label for every listed discipline', () => {

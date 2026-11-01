@@ -1,8 +1,7 @@
 /**
- * /passport — Shareable artist identity page.
- * Premium full-screen treatment: card hero + stats + creative DNA + strength ring.
+ * /artist/passport — Private profile, existing public visibility and sharing controls.
  */
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../store/auth.store';
@@ -14,6 +13,8 @@ import TrustSignal from '../components/TrustSignal';
 import { useToast } from '../components/Toast';
 import ArtistEmptyState from '../components/ArtistEmptyState';
 import Modal from '../components/Modal';
+import CreativeIdentity from '../components/CreativeIdentity';
+import ProfileEditDrawer from '../components/ProfileEditDrawer';
 import { AtSign, ChevronRight, Copy, Disc3, Download, ExternalLink, FolderKanban, Globe2, Headphones, MoreHorizontal, Music2, Plus, Radio, Share2, Video, X } from 'lucide-react';
 
 const API_ORIGIN = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
@@ -55,6 +56,7 @@ export default function PassportPage() {
   const qc = useQueryClient();
   const toast = useToast();
   const [editingLinks, setEditingLinks] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const socialDockRef = useRef<HTMLDivElement>(null);
   const [socialCanScroll, setSocialCanScroll] = useState(false);
@@ -227,7 +229,6 @@ export default function PassportPage() {
     <div className="pp-shell">
       <style>{`
         .pp-shell {
-          --pp-chrome-offset: 28px;
           --pp-card-sticky-top: 87px;
           min-height: 100vh;
           background: #060606;
@@ -250,20 +251,19 @@ export default function PassportPage() {
           width: calc(100% + 48px); max-width: none;
           display: flex; align-items: center; justify-content: space-between;
           padding: 14px max(24px, calc((100vw - 1040px) / 2));
-          position: sticky; top: var(--pp-chrome-offset); z-index: 30;
+          position: relative; z-index: 1;
           background: rgba(6,6,6,.88); border-bottom: 1px solid rgba(255,255,255,.055);
           backdrop-filter: blur(18px);
-          margin-top: calc(var(--pp-chrome-offset) * -1);
         }
         .pp-topbar-btn {
-          font-size: 11px; color: #777; background: none;
+          font-size: 12px; color: #bbb8ae; background: none; min-height: 44px;
           border: none; cursor: pointer; font-family: inherit;
           letter-spacing: 0.04em; transition: color 0.15s;
         }
         .pp-topbar-btn:hover { color: #ddd; }
         .pp-topbar-actions { display: flex; align-items: center; gap: 14px; }
         .pp-mobile-more { display: none; position: relative; }
-        .pp-mobile-more summary { list-style: none; width: 34px; height: 32px; display: grid; place-items: center; cursor: pointer; color: #888; border: 1px solid #252525; border-radius: 9px; }
+        .pp-mobile-more summary { list-style: none; width: 44px; height: 44px; display: grid; place-items: center; cursor: pointer; color: #bbb8ae; border: 1px solid #252525; border-radius: 9px; }
         .pp-mobile-more summary::-webkit-details-marker { display: none; }
         .pp-mobile-menu { position: absolute; top: 39px; right: 0; width: 190px; padding: 7px; border-radius: 11px; background: #111; border: 1px solid #292929; box-shadow: 0 18px 48px rgba(0,0,0,.55); }
         .pp-mobile-menu button { width: 100%; display: flex; align-items: center; gap: 9px; padding: 10px; border: 0; border-radius: 7px; background: transparent; color: #bbb; font: 11px inherit; text-align: left; cursor: pointer; }
@@ -272,6 +272,9 @@ export default function PassportPage() {
           font-family: 'JetBrains Mono', monospace;
           font-size: 10px; letter-spacing: 0.26em;
           color: #555; text-transform: uppercase;
+        }
+        .pp-topbar :is(button, summary):focus-visible {
+          outline: 2px solid #E2C97E; outline-offset: 3px;
         }
         .pp-body {
           width: 100%; max-width: 1040px;
@@ -454,6 +457,17 @@ export default function PassportPage() {
         </div>
       </div>
 
+      <div style={{ width: '100%', maxWidth: 1040, paddingBlock: 32, position: 'relative' }}>
+        <CreativeIdentity
+          name={artist.name}
+          alias={artist.alias}
+          bio={artist.bio}
+          avatarUrl={artist.avatar_url}
+          interests={passport?.collaboration_interests ?? []}
+          actions={<><button type="button" className="creative-button" onClick={() => setEditingProfile(true)}>Edit profile</button><Link className="creative-text-link" to="/projects">Return to your projects</Link></>}
+        />
+      </div>
+
       {/* Body */}
       <div className="pp-body">
 
@@ -478,16 +492,11 @@ export default function PassportPage() {
           <p className="pp-flip-hint">Select the card to see its reverse</p>
         </div>
 
-        {/* Right: identity */}
         <div className="pp-right">
-
-          {/* Name */}
           <div>
-            <div className="pp-name">{artist.name}</div>
-            {artist.alias && <div className="pp-alias">{artist.alias}</div>}
             {(passport as any)?.location && <div style={{ marginTop: 8, color: '#777', fontSize: 12 }}>{(passport as any).location}</div>}
             <div className="pp-social-wrap">
-              <div className="pp-social-heading"><span className="pp-social-title">Artist links</span><span className="pp-social-count">{connectedSocials.length}/8 connected</span></div>
+              <div className="pp-social-heading"><span className="pp-social-title">Your links</span><span className="pp-social-count">{connectedSocials.length}/8 connected</span></div>
               <div className="pp-social-rail">
                 <div ref={socialDockRef} className="pp-social-dock" aria-label="Artist social and streaming links" onScroll={updateSocialScrollCue}>
                   {SOCIAL_PLATFORMS.map(({ key, label, color, fill, ...platform }) => {
@@ -501,7 +510,7 @@ export default function PassportPage() {
                 {socialCanScroll && <button type="button" className="pp-social-cue" aria-label="Show more artist platforms" onClick={() => socialDockRef.current?.scrollBy({ left: 186, behavior: 'smooth' })}><ChevronRight size={22} strokeWidth={1.7} /></button>}
               </div>
               <button type="button" className="pp-btn" style={{ marginTop: 10, width: '100%' }} onClick={openProfessionalDetails}>
-                {connectedSocials.length ? 'Manage artist links' : 'Connect your artist channels'}
+                {connectedSocials.length ? 'Manage links & collaboration interests' : 'Add links & collaboration interests'}
               </button>
             </div>
           </div>
@@ -552,10 +561,10 @@ export default function PassportPage() {
             <div className="pp-panel-label">Work in progress</div>
             {projects.length ? projects.map((project) => (
               <div key={project.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '10px 0', borderBottom: '1px solid #171717' }}>
-                <span style={{ color: '#ddd', fontSize: 13 }}>{project.title}</span>
+                <Link className="creative-text-link" to={`/projects?project=${encodeURIComponent(project.id)}`}>{project.title}</Link>
                 <span style={{ color: '#5A9BCB', fontSize: 10, fontFamily: 'monospace' }}>{project.phase.replaceAll('_', ' ')}</span>
               </div>
-            )) : <ArtistEmptyState compact icon={FolderKanban} title="Show what you’re building" description="Studio projects can become public proof of your creative momentum." actionLabel="Open Projects" to="/projects" />}
+            )) : <ArtistEmptyState compact icon={FolderKanban} title="Choose what to share" description="Projects you make public appear here. You control project visibility below when projects are available." actionLabel="Open Projects" to="/projects" />}
             {(portfolioData?.project_options?.length ?? 0) > 0 && (
               <details style={{ marginTop: 14 }}>
                 <summary style={{ color: '#777', fontSize: 11, cursor: 'pointer' }}>Manage project visibility</summary>
@@ -652,6 +661,11 @@ export default function PassportPage() {
 
         </div>
       </div>
+
+      <ProfileEditDrawer open={editingProfile} onClose={() => setEditingProfile(false)} initialData={{
+        bio: artist.bio ?? '', alias: artist.alias ?? '', genres, vocal_type: vocalType ?? '',
+        energy_profile: energy ?? '', key_themes: themes, profile_strength: strength,
+      }} />
 
       {shareOpen && (
         <div className="pp-share-backdrop" role="presentation" onClick={() => setShareOpen(false)}>

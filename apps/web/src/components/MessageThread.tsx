@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Send } from 'lucide-react';
+import { RefreshCw, Send } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
 
@@ -77,15 +77,21 @@ export default function MessageThread({ variant, endpoint, queryKey, sseMatch, t
   const bottomRef = useRef<HTMLDivElement>(null);
   const t = THEME[variant];
 
-  const { data: messages = [], isLoading } = useQuery<ThreadMessage[]>({
+  // A failed read used to fall through to the empty state, telling people a
+  // conversation with messages in it had none. Loading, failed, empty and
+  // populated are now four different screens.
+  const { data, isPending, isError, isFetching, refetch } = useQuery<ThreadMessage[]>({
     queryKey,
     queryFn: async () => (await api.get(endpoint)).data,
   });
+  const messages = data ?? [];
 
+  // The draft is cleared only once the server has the message, and only if it is
+  // still what was sent — a failed send keeps it for another try.
   const send = useMutation({
     mutationFn: (text: string) => api.post(endpoint, { body: text }),
-    onSuccess: () => {
-      setBody('');
+    onSuccess: (_response, sent) => {
+      setBody((current) => (current.trim() === sent ? '' : current));
       qc.invalidateQueries({ queryKey });
     },
   });
@@ -114,12 +120,26 @@ export default function MessageThread({ variant, endpoint, queryKey, sseMatch, t
           <p className={t.title}>{title}</p>
           {subtitle && <p className="mt-0.5 text-[9px] text-zinc-600">{subtitle}</p>}
         </div>
-        <span className={t.count}>{messages.length} message{messages.length !== 1 ? 's' : ''}</span>
+        {data && <span className={t.count}>{messages.length} message{messages.length !== 1 ? 's' : ''}</span>}
       </div>
 
       <div className={t.list}>
-        {isLoading && <p className="py-4 text-center text-xs text-zinc-600">Loading thread…</p>}
-        {!isLoading && messages.length === 0 && (
+        {isPending && <p className="py-4 text-center text-xs text-zinc-600">Loading conversation…</p>}
+        {isError && (
+          <div role="alert" className={`rounded-xl border border-amber-400/20 bg-amber-400/[.03] text-center ${data ? 'px-3 py-2' : 'p-5'}`}>
+            <p className="text-xs text-amber-100">{data ? "We couldn't refresh this conversation." : "We couldn't load this conversation."}</p>
+            {!data && <p className="mt-1 text-[11px] text-zinc-500">Your messages are safe. This is a problem reaching OIANO.</p>}
+            <button
+              type="button"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-amber-300/30 px-3 py-1.5 text-xs text-amber-100 disabled:opacity-40"
+            >
+              <RefreshCw size={12} /> {isFetching ? 'Trying…' : 'Try again'}
+            </button>
+          </div>
+        )}
+        {data && messages.length === 0 && (
           <div className="py-6 text-center">
             <p className="text-sm text-zinc-500">{emptyTitle}</p>
             <p className="mt-1 text-xs text-zinc-700">{emptySubtitle}</p>
@@ -141,6 +161,15 @@ export default function MessageThread({ variant, endpoint, queryKey, sseMatch, t
         })}
         <div ref={bottomRef} />
       </div>
+
+      {send.isError && (
+        <div role="alert" className="flex items-center justify-between gap-3 border-t border-red-500/20 bg-red-500/10 px-4 py-2">
+          <p className="text-xs text-red-300">Your message wasn't sent. It's still in the box below.</p>
+          <button type="button" onClick={submit} disabled={!body.trim() || send.isPending} className="shrink-0 text-xs text-red-200 underline underline-offset-2 disabled:opacity-40">
+            Try again
+          </button>
+        </div>
+      )}
 
       <div className={t.inputRow}>
         {variant === 'booking' ? (

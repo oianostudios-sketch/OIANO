@@ -320,8 +320,9 @@ export default function ProfileEditDrawer({ open, onClose, initialData }: Props)
 
           {/* Alias */}
           <div>
-            <label className="label-mono block mb-2">Artist alias</label>
+            <label htmlFor="profile-alias" className="label-mono block mb-2">Artist alias</label>
             <input
+              id="profile-alias"
               type="text"
               value={alias}
               onChange={(e) => setAlias(e.target.value)}
@@ -333,10 +334,11 @@ export default function ProfileEditDrawer({ open, onClose, initialData }: Props)
 
           {/* Bio */}
           <div>
-            <label className="label-mono block mb-2">
+            <label htmlFor="profile-bio" className="label-mono block mb-2">
               Bio
             </label>
             <textarea
+              id="profile-bio"
               value={bio}
               onChange={(e) => setBio(e.target.value)}
               maxLength={2000}

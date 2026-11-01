@@ -7,6 +7,54 @@ This workflow does not merge PRs, change product decisions, or enable Render mig
 
 ## One-time setup
 
+### Parity-only configuration preflight
+
+The inspected PR #54 comparison run `39732802275` received three empty inputs.
+That is evidence about that run, not proof of today's GitHub configuration or
+production schema. A failed configuration check is not a schema-drift result.
+
+| Required input | Classification and configured location | Approved source and purpose | Impact when absent |
+|---|---|---|---|
+| `PRODUCTION_READONLY_DATABASE_URL` | **Secret**, in the GitHub environment `Production read-only` | Operator-held direct PostgreSQL connection for the dedicated read-only role below, with `sslmode=require`. It authenticates schema inspection; never substitute the writer URL, a Neon API key or a URL from a repository `.env`. | No database connection is attempted; parity fails. |
+| `NEON_PRODUCTION_HOST` | **Non-secret repository Actions variable** | Operator verifies the hostname of the actual production branch's direct endpoint in Neon. Hostname only, no protocol, port or pooler suffix. It pins the allowed host rather than trusting whichever host the secret names. | Target cannot be validated; parity fails before connection. |
+| `NEON_DATABASE_NAME` | **Non-secret repository Actions variable** | Operator verifies the actual database name on that production branch. It must match the decoded database path in the read-only URL. It prevents comparison against another database on the same endpoint. | Target cannot be validated; parity fails before connection. |
+
+These are not interchangeable. `GH_TOKEN`, supplied by the workflow's
+`github.token`, is separate; the parity-only check does not need `NEON_API_KEY`,
+the production writer secret, or migration-rehearsal settings.
+
+Operator checklist (requires separate authorization; not performed by preparing
+this documentation):
+
+1. Confirm the repository, intended production branch/database and direct endpoint
+   privately. Never paste connection strings into issues, chat, logs or this file.
+2. Verify the dedicated role already has the documented read-only grants and
+   defaults. If it does not exist or is too privileged, stop for authorization;
+   creating roles or changing grants is a production change.
+3. Check the exact secret name in `Production read-only`, the environment's
+   `main` deployment restriction, and both repository Actions variable names.
+   Check for environment-level variables with the same names that would override
+   repository values. Do not copy secret values into variables.
+4. Configure missing values only with owner authorization. Use GitHub's protected
+   settings or approved secret management, not tracked files or command arguments
+   containing credentials.
+5. After authorization, run **Production schema parity** from trusted `main` for
+   the intended same-repository open PR targeting `main`. Record the run link,
+   exact checked head SHA, and final explicit parity check result. A green local
+   drift check or a successful job on a different commit is not a substitute.
+
+The checker reports only missing names from a fixed allowlist in its annotation,
+job summary and failed PR check. Missing, empty or whitespace-only values fail
+before URL parsing or database access. Other failures remain generic so database
+errors and credentials are not published. The job summary is written even if
+updating the PR check fails; that failure still makes the workflow fail.
+
+**Trusted-base behavior:** `pull_request_target` checks out the PR's base commit,
+not the candidate code. The diagnostic improvement from PR #54 is reused on the
+local checkpoint branch; it cannot change the remote workflow's behavior until
+reviewed code reaches its trusted base. Do not check out PR code in this privileged
+workflow to make it test itself. PR #54 and its original branch remain separate.
+
 First merge the infrastructure PR containing these workflows. GitHub dispatches
 use the trusted workflow on `main`; a migration PR supplies only its pinned
 candidate commit. No secrets are needed to review or merge the infrastructure.

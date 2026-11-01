@@ -1,0 +1,41 @@
+/* Shared creator navigation keeps the existing role-aware destinations. */
+.creator-navigation {
+  display: flex; align-items: center; justify-content: center; flex-wrap: wrap;
+  gap: var(--experience-space-2); padding: var(--experience-space-3) var(--experience-space-4);
+  background: rgb(var(--experience-canvas));
+  border-bottom: 1px solid rgb(var(--experience-border));
+  font-family: var(--experience-font);
+}
+.creator-destinations, .creator-tools { display: flex; align-items: center; gap: var(--experience-space-2); }
+.creator-navigation a {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: var(--experience-target); padding: 10px 14px;
+  color: rgb(var(--experience-secondary)); text-decoration: none;
+  border: 1px solid transparent; border-radius: var(--experience-radius-control);
+  font-size: 12px; font-weight: 500; line-height: 1.4;
+  transition: background var(--experience-duration), color var(--experience-duration);
+}
+.creator-navigation a:hover { color: rgb(var(--experience-text)); background: rgb(var(--experience-raised)); }
+.creator-navigation a[aria-current="page"] {
+  color: rgb(var(--experience-gold)); border-color: rgb(var(--experience-gold) / .45);
+  background: linear-gradient(135deg, rgb(var(--experience-gold) / .16), rgb(var(--experience-surface)));
+}
+.creator-navigation a:focus-visible { outline: 2px solid rgb(var(--experience-blue)); outline-offset: 3px; }
+.creator-tools { border-left: 1px solid rgb(var(--experience-border)); padding-left: var(--experience-space-2); }
+@media (max-width: 767px) {
+  .creator-navigation { display: block; padding: var(--experience-space-2); }
+  .creator-destinations {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 0;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .creator-destinations::-webkit-scrollbar { display: none; }
+  .creator-navigation a { flex: 0 0 auto; min-width: max-content; padding: 10px 8px; font-size: 11px; white-space: nowrap; }
+  .creator-tools { justify-content: center; gap: var(--experience-space-6); border-left: 0; border-top: 1px solid rgb(var(--experience-border)); margin-top: var(--experience-space-2); padding: 0; }
+  .creator-tools a { font-size: 12px; padding: 10px 12px; }
+}

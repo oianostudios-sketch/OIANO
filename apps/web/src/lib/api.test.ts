@@ -50,15 +50,27 @@ describe('shared api instance', () => {
     useAuthStore.setState({ token: 'token-abc', user: null });
     const assigned = setLocation('/dashboard');
 
-    await reject({ response: { status: 401 } });
+    await reject({ config: { headers: { Authorization: 'Bearer token-abc' } }, response: { status: 401 } });
 
     expect(useAuthStore.getState().token).toBeNull();
     expect(assigned).toContain('/login');
   });
 
+  it('keeps sign-in and MFA failures on /enter so the caller can show the error without losing next', async () => {
+    useAuthStore.setState({ token: 'stale-session', user: null });
+    const assigned = setLocation('/enter');
+    const error = { config: { headers: { Authorization: 'Bearer stale-session' } }, response: { status: 401, data: { error: 'Invalid authenticator code' } } };
+
+    await expect(responseRejected(error)).rejects.toBe(error);
+
+    expect(useAuthStore.getState().token).toBeNull();
+    expect(assigned).toEqual([]);
+  });
+
   it('redirects to studio selection only for that specific 409', async () => {
+    useAuthStore.setState({ token: 'token-abc', user: null });
     const assigned = setLocation('/dashboard');
-    await reject({ response: { status: 409, data: { error: 'Active studio selection required' } } });
+    await reject({ config: { headers: { Authorization: 'Bearer token-abc' } }, response: { status: 409, data: { error: 'Active studio selection required' } } });
     expect(assigned).toContain('/select-studio');
   });
 
@@ -72,8 +84,21 @@ describe('shared api instance', () => {
   });
 
   it('does not redirect when already on the studio selection page', async () => {
+    useAuthStore.setState({ token: 'token-abc', user: null });
     const assigned = setLocation('/select-studio');
-    await reject({ response: { status: 409, data: { error: 'Active studio selection required' } } });
+    await reject({ config: { headers: { Authorization: 'Bearer token-abc' } }, response: { status: 409, data: { error: 'Active studio selection required' } } });
+    expect(assigned).toEqual([]);
+  });
+
+  it.each([401, 409])('an old session response (%s) cannot expire or redirect the new account', async status => {
+    useAuthStore.setState({ token: 'previous-session', user: null });
+    const config = requestHandler({ headers: {} as Record<string, string> });
+    useAuthStore.setState({ token: 'current-session', user: { id: 'current', email: 'current@example.test', role: 'PRODUCER' } });
+    const assigned = setLocation('/producer/passport');
+    const error = { config, response: { status, data: { error: status === 409 ? 'Active studio selection required' : 'Unauthorized' } } };
+    await expect(responseRejected(error)).rejects.toBe(error);
+    expect(useAuthStore.getState().token).toBe('current-session');
+    expect(useAuthStore.getState().user?.id).toBe('current');
     expect(assigned).toEqual([]);
   });
 

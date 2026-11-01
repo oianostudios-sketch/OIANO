@@ -7,7 +7,7 @@ export function creatorNavigation(role?: UserRole) {
     { label: 'Home', path: '/dashboard', matches: ['/dashboard'] },
     { label: 'Projects', path: role === 'ARTIST' ? '/projects' : '/producer', matches: role === 'ARTIST' ? ['/projects', '/book', '/bookings', '/calendar'] : ['/producer', '/producer/projects'] },
     { label: 'Contributions', path: '/contributions', matches: ['/contributions'] },
-    { label: 'People', path: '/discover', matches: ['/discover', '/producers', '/artists', '/connect'] },
+    { label: 'People', path: '/discover', matches: ['/discover', '/producers', '/artists', '/connect', '/network'] },
     { label: 'Passport', path: role === 'ARTIST' ? '/artist/passport' : '/producer/passport', matches: ['/artist/passport', '/producer/passport'] },
   ];
 }

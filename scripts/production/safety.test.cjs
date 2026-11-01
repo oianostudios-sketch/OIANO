@@ -178,3 +178,94 @@ test('ambiguous creation failures are not retried', async () => {
   await assert.rejects(() => f.neon.request('branches', 'POST', {}));
   assert.equal(count, 1);
 });
+
+// Run the real checker with isolated dependencies: no GitHub or database network
+// access, even when a regression accidentally reaches the database path.
+function parityFixture(overrides = {}, options = {}) {
+  const fs = require('node:fs');
+  const vm = require('node:vm');
+  const path = require('node:path');
+  const common = require('./common.cjs');
+  const env = { PR_NUMBER: '52', GITHUB_REPOSITORY: 'owner/repo',
+    PRODUCTION_READONLY_DATABASE_URL: 'postgresql://private-host.example/private-db?sslmode=require',
+    NEON_PRODUCTION_HOST: 'private-host.example', NEON_DATABASE_NAME: 'private-db', ...overrides };
+  const calls = [], logs = [], summaries = [], queries = [];
+  let connections = 0, parses = 0, comparisons = 0;
+  const request = async (route, args) => {
+    calls.push({ route, args });
+    if (route === 'pulls/52') return { state: 'open', base: { ref: 'main' },
+      head: { sha: 'a'.repeat(40), repo: { full_name: env.GITHUB_REPOSITORY } } };
+    if (route === 'check-runs') return { id: 7 };
+    if (route === 'check-runs/7') {
+      if (options.patchFails) throw new Error('private-api-error');
+      return {};
+    }
+    if (route.startsWith('contents/')) return { type: 'file', encoding: 'base64', size: 1, content: 'eA==' };
+    throw new Error('Unexpected request');
+  };
+  const fakeModule = { exports: {} };
+  const load = name => {
+    if (name === 'pg') return { Client: class {
+      async connect() { connections++; if (options.connectFails) throw new Error('private-database-error'); }
+      async query(sql) { queries.push(sql); return { rows: [{ readonly: true, unsafe: false }] }; }
+      async end() {}
+    } };
+    if (name === './common.cjs') return { ...common, github: request,
+      databaseUrl: (...args) => { parses++; return common.databaseUrl(...args); },
+      summary: text => summaries.push(text), schemaParity: () => { comparisons++; } };
+    return require(name);
+  };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'check-pr.cjs'), 'utf8'), {
+    require: load, module: fakeModule, __dirname, Buffer,
+    console: { error: text => logs.push(text) },
+  });
+  return { run: () => fakeModule.exports.checkPr(env), calls, logs, summaries, queries,
+    counts: () => ({ connections, parses, comparisons }) };
+}
+
+const parityRequired = ['PRODUCTION_READONLY_DATABASE_URL', 'NEON_PRODUCTION_HOST', 'NEON_DATABASE_NAME'];
+for (const value of [undefined, '', ' \t\r\n ']) {
+  for (const name of parityRequired) test(`parity names missing ${name} (${JSON.stringify(value)}) before database access`, async () => {
+    const f = parityFixture({ [name]: value });
+    await assert.rejects(f.run, error => error.message.includes(`Missing required configuration: ${name}.`));
+    assert.deepEqual(f.counts(), { connections: 0, parses: 0, comparisons: 0 });
+    const completed = f.calls.find(call => call.route === 'check-runs/7').args.body;
+    assert.equal(completed.conclusion, 'failure');
+    assert.ok(f.logs[0].startsWith('::error::'));
+    for (const text of [f.logs.join('\n'), f.summaries.join('\n'), completed.output.summary]) {
+      assert.ok(text.includes(`Missing required configuration: ${name}.`));
+      assert.doesNotMatch(text, /private-host|private-db|postgresql:|private-.*-error/);
+    }
+  });
+}
+
+test('parity reports all missing names together, even if updating the GitHub check fails', async () => {
+  const f = parityFixture(Object.fromEntries(parityRequired.map(name => [name, ' '])), { patchFails: true });
+  await assert.rejects(f.run);
+  for (const text of [f.logs.join('\n'), f.summaries.join('\n')]) {
+    assert.ok(text.includes(`Missing required configuration: ${parityRequired.join(', ')}.`));
+    assert.doesNotMatch(text, /private-api-error/);
+  }
+  assert.deepEqual(f.counts(), { connections: 0, parses: 0, comparisons: 0 });
+});
+
+test('configured parity continues through read-only safeguards and exact-head comparison', async () => {
+  const f = parityFixture();
+  await f.run();
+  assert.deepEqual(f.counts(), { connections: 1, parses: 1, comparisons: 1 });
+  assert.equal(f.queries[0], 'BEGIN READ ONLY');
+  assert.match(f.queries[1], /has_table_privilege/);
+  assert.equal(f.queries[2], 'ROLLBACK');
+  assert.equal(f.calls.filter(call => call.route === 'pulls/52').length, 2);
+  assert.equal(f.calls.find(call => call.route === 'check-runs/7').args.body.conclusion, 'success');
+  assert.deepEqual(f.logs, []);
+});
+
+test('configured parity still fails closed and keeps raw database errors private', async () => {
+  const f = parityFixture({}, { connectFails: true });
+  await assert.rejects(f.run);
+  const completed = f.calls.find(call => call.route === 'check-runs/7').args.body;
+  assert.equal(completed.conclusion, 'failure');
+  assert.equal(f.counts().comparisons, 0);
+  assert.doesNotMatch(JSON.stringify([f.logs, f.summaries, completed.output]), /private-host|private-db|private-database-error|postgresql:/);
+});

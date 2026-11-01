@@ -14,6 +14,7 @@ nobody works from an expired brief.
 | [OIANO_EVENT_READINESS.md](OIANO_EVENT_READINESS.md) | What it takes to run the full project live at an event, and what blocks it. |
 | [OIANO_SCHEMA_REDESIGN.md](OIANO_SCHEMA_REDESIGN.md) | The designed canonical schema, step by step. |
 | [OIANO_ARCHITECTURE_DELTA.md](OIANO_ARCHITECTURE_DELTA.md) | How today's models map to the target, with contradictions and migration risks. |
+| [OIANO_CANONICAL_ARCHITECTURE_V1_RECONCILIATION.md](OIANO_CANONICAL_ARCHITECTURE_V1_RECONCILIATION.md) | The Canonical V1 brief reconciled with the repository: contradictions, vocabulary, laws, invariants, scenarios, verification and migration order. Evidence and proposals for owner decisions; not frozen. |
 | [ARCHITECTURE_AUDIT_2026_09_06.md](ARCHITECTURE_AUDIT_2026_09_06.md) | Findings A01–A11. Check implementation status before reopening one. |
 | [OIANO_EXPERIENCE_MISMATCH_2026_09_13.md](OIANO_EXPERIENCE_MISMATCH_2026_09_13.md) | Where today's screens contradict the target, and what may change before the migration. |
 | [OIANO_DIRECTION.md](OIANO_DIRECTION.md) | Who owns which truth, how projections rebuild, how work is verified. Its §1 and §8 are history. |
