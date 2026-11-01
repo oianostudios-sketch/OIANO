@@ -93,6 +93,71 @@ They amend the laws above and govern the migration.
    and error contracts, and never changing production data outside a deliberate,
    verified migration.
 
+## Owner amendment - 2026-10-30: universal Node, expression and Weave
+
+OIANO is a networked creative environment in which participants define themselves.
+It provides infrastructure for their descriptions, intentions, offerings and
+activities to become actionable; it does not prescribe creative identities.
+
+The owner adopted the following principles and confirmed that **Node is a shared
+network reference, not a replacement authoritative entity model**:
+
+1. **Universal reference, distinct domain truth.** Nodes may reference people,
+   collectives, organizations, places, service entities or other supported
+   participants. Preserve distinct domain records and appropriate ownership,
+   representation and lifecycle rules. A network reference alone grants no
+   authority to act for its subject. Structural types protect technical integrity;
+   they must not impose a creative identity.
+2. **Expression, offering and intention are separate.** Expression describes what
+   a participant represents; offering describes what they explicitly make
+   available; intention describes what they want to accomplish. Each can change
+   without destroying historical work or relationships. A service offering does
+   not become an authentication account merely because it has a network reference.
+3. **Intelligence assists, not defines.** AI interpretation is optional for basic
+   participation and remains distinguishable from self-authored information and
+   verified records.
+4. **Capabilities follow authorized actions.** Access depends on the action, its
+   requirements and authorization, not solely on a professional label. Multiple
+   capabilities must not require duplicate accounts or artificial identity changes.
+   This is a target rule, not permission to remove existing access checks before
+   their replacements are implemented and verified.
+5. **Relationships have work context.** Projects, bookings, services,
+   collaborations and deliverables provide context. Proposed, accepted, completed,
+   disputed and verified participation remain distinct. A connection alone is not
+   trust, endorsement or proof of completed work.
+6. **Evidence is governed.** Identify its source, subject, context, status and
+   visibility rules. Distinguish self-declarations, interpretations, recorded
+   actions and confirmed outcomes. Respect consent, confidentiality and rights;
+   preserve appropriate provenance through corrections and historical changes.
+7. **Weave is shared, not an opaque ranking.** It connects network references,
+   work contexts, relationships and evidence, supporting different journeys
+   without exposing private information or manufacturing relationships. Retain
+   separate explainable signals rather than one professional-strength score.
+8. **Experiences are perspectives, not stages.** NOW organizes attention and
+   responsibilities; MAKE supports creation, coordination and delivery; SKY
+   discovers relevant possibilities; ME supports self-expression, representation
+   and continuity. They interoperate over shared information, not a mandatory
+   sequence. Their implementation still follows the migration prerequisites below.
+9. **Keep participation simple.** Open-ended, editable self-description must not
+   require a mandatory professional classification, personality score or
+   AI-generated creative identity. Complexity belongs in the infrastructure, not
+   unnecessary participant decisions.
+10. **Extend with evidence, not speculative rewrites.** Inspect code, schemas,
+    permissions, workflows and tests before design changes; reuse existing
+    contracts and avoid duplicate entity models. Validate through multi-participant
+    journeys, changing roles, incomplete work, declined invitations, disputes and
+    accepted contributions.
+
+**Self-defined existence + open expression + actionable intention + authorized
+capability + contextual work + governed evidence = an evolving creative network.**
+
+This amendment refines the earlier person-or-organization entry direction:
+technical distinctions may remain, but they must not become mandatory creative
+self-classifications. It does not declare universal references or these
+capabilities implemented, prescribe a new Node table, waive the stabilization
+gate, change the ledger's ownership of money or authorize production changes.
+The existing migration order remains in force.
+
 ## Migration principles
 
 A strangler migration, not a rewrite. Do not delete Artist, Producer, Engineer,

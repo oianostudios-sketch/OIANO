@@ -1,5 +1,18 @@
 # OIANO — stabilization gate
 
+## Configuration recheck - 2026-10-30
+
+**Still blocked.** GitHub metadata shows no secret in `Production read-only`,
+no repository Actions variables, and no required reviewer on `Production`.
+The read-only environment is restricted to `main`. The local workflow safety suite
+passes 37/37, but no new production comparison was run.
+
+The owner will configure the read-only settings privately, then request the
+configuration recheck and exact-baseline-PR parity run. Migration approval and
+rehearsal configuration remain separate prerequisites for apply. See
+[the current inspection and handoff](status/2026-10-30-migration-gate-configuration-check.md).
+Nothing in this recheck authorizes canonical migration or waives production parity.
+
 ## Current checkpoint - 2026-10-27
 
 **Local schema parity passes; canonical migration remains blocked on production
