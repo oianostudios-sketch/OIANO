@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { resolveStaffStudio } from '../middleware/studioScope.middleware';
 import { Prisma } from '@prisma/client';
 import { checkoutEligibility, planCheckout } from '../lib/checkoutEligibility';
+import { isWalletEnabled } from '../lib/walletFreeze';
 
 export const paymentsRouter = Router();
 paymentsRouter.use(authenticate);
@@ -25,7 +26,8 @@ const TopUpSchema = z.object({
 
 function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY;
-  if (!key) throw new AppError('Stripe is not configured', 503);
+  // A key alone does not switch card payments on; STRIPE_ENABLED does.
+  if (process.env.STRIPE_ENABLED !== 'true' || !key) throw new AppError('Stripe is not configured', 503);
   return new Stripe(key, { apiVersion: '2026-06-24.dahlia' });
 }
 
@@ -130,6 +132,7 @@ paymentsRouter.post('/stripe/checkout-session', async (req: any, res, next) => {
 paymentsRouter.post('/wallet/top-up', async (req: any, res, next) => {
   try {
     const userId = req.userId as string;
+    if (!isWalletEnabled()) throw new AppError('Wallet top-ups are not available', 409);
     const { amount_usd } = TopUpSchema.parse(req.body);
 
     const amt = Math.round(Number(amount_usd) * 100) / 100; // round to cents

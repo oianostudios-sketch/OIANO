@@ -34,6 +34,9 @@ const env = {
   MFA_ENCRYPTION_KEY: process.env.MFA_ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
   STRIPE_ENABLED: 'false',
+  // The suites still hold wallet behaviour for when the freeze lifts;
+  // pilot-unpaid-booking.integration.test.ts covers the frozen path.
+  WALLET_ENABLED: 'true',
   OIANO_AI_ENABLED: 'false',
   SENDGRID_API_KEY: '',
 };

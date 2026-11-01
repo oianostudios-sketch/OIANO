@@ -578,7 +578,8 @@ test('auth, booking payment, and rights operate through real database transactio
   assert.equal(contextUrgent.body.progress.hours >= 0, true, 'studio hours come from performed work only');
 
   // Remove the time pressure and money becomes the most useful thing to do.
-  await prisma.booking.update({ where: { id: imminentBooking.id }, data: { status: 'CANCELLED' } });
+  const later = new Date(Date.now() + 60 * 86_400_000);
+  await prisma.booking.update({ where: { id: imminentBooking.id }, data: { starts_at: later, ends_at: new Date(later.getTime() + 2 * 60 * 60 * 1000) } });
   const contextMoney = await request('/context', { headers: { authorization: `Bearer ${artistToken}` } });
   assert.equal(contextMoney.body.next.kind, 'BALANCE_DUE', 'with no imminent session, the balance leads');
 

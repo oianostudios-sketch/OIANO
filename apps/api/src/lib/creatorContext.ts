@@ -217,7 +217,8 @@ export async function buildCreatorContext(userId: string, role: string): Promise
         },
       }),
       prisma.payment.findMany({
-        where: { booking: { artist_id: artist.id }, status: { in: ['UNPAID', 'FAILED'] } },
+        // A session that will not happen is owed nothing.
+        where: { booking: { artist_id: artist.id, status: { notIn: ['CANCELLED', 'NO_SHOW'] } }, status: { in: ['UNPAID', 'FAILED'] } },
         select: { amount_usd: true, booking_id: true },
       }),
       prisma.deliverable.findMany({

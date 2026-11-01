@@ -34,7 +34,8 @@ async function financeStudio(userId: string) {
 
 function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY;
-  if (!key) throw new AppError('Stripe is not configured', 503);
+  // A key alone does not switch payouts on; STRIPE_ENABLED does.
+  if (process.env.STRIPE_ENABLED !== 'true' || !key) throw new AppError('Stripe is not configured', 503);
   return new Stripe(key, { apiVersion: '2026-06-24.dahlia' });
 }
 
@@ -116,12 +117,14 @@ payoutsRouter.post('/', requireRole('STUDIO_ADMIN'), async (req: any, res, next)
       throw new AppError('Connect a payout account before requesting a payout', 409);
     }
 
+    // Before anything is reserved: with card payments off there is no rail to try.
+    const stripe = getStripe();
     const { payout, outstanding, connectAccountId } = await reserveStudioPayout({
       studioId: studio.id,
       requestedBy: req.userId,
     });
 
-    const paid = await transferReservedPayout(payout.id, () => getStripe().transfers.create(
+    const paid = await transferReservedPayout(payout.id, () => stripe.transfers.create(
       {
         amount: Math.round(outstanding * 100),
         currency: (payout.currency ?? 'USD').toLowerCase(),

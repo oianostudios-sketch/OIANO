@@ -16,6 +16,18 @@
 - The four-surface reference image (NOW, MAKE, SKY, ME) is a target experience, not
   evidence of existing features; its music examples do not limit who OIANO serves.
 
+## Confirmed by the owner, 2026-11-01
+
+Accepted from the readiness audit's recommendations:
+
+- The first pilot moves no money through OIANO. It records what is owed, and people
+  settle at the studio.
+- The wallet is frozen: no top-ups or spending until counsel advises. Existing balances
+  stay as they are.
+- The canonical migration waits for pilot evidence. PRs #16 and #39 stay parked, and
+  the production parity setup is still finished. This sequences work; it does not change
+  the frozen architecture or the stabilization gate.
+
 ## Existing repository direction
 
 The frozen architecture controls migration order, identity and contribution semantics. The reference image illustrates NOW, MAKE, SKY and ME as intended surfaces. It does not authorize bypassing the migration gates or prove that those surfaces exist today. The owner's broader expansion of the OIANO name does not by itself replace the Creative Work Network product description.

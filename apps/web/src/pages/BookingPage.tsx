@@ -6,6 +6,7 @@ import { useAuthStore } from '../store/auth.store';
 import { useToast } from '../components/Toast';
 import TrustSignal from '../components/TrustSignal';
 import { studioDate, studioTimeToIso } from '../lib/fmt';
+import { WALLET_ENABLED } from '../lib/walletFreeze';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Step = 'studio' | 'engineer' | 'service' | 'room' | 'datetime' | 'confirm';
@@ -190,7 +191,7 @@ export default function BookingPage() {
   // Prefer live meData; fall back to auth store while loading
   const walletBalance = Number(meData?.artist?.wallet?.balance_usd ?? user?.artist?.wallet?.balance_usd ?? 0);
   const afterBalance  = walletBalance - grandTotal;
-  const canAfford     = !walletError && walletBalance >= grandTotal;
+  const canAfford     = !WALLET_ENABLED || (!walletError && walletBalance >= grandTotal);
 
   const [walletGateDismissed, setWalletGateDismissed] = useState(false);
   const stepIndex = visibleSteps.indexOf(step);
@@ -272,7 +273,7 @@ export default function BookingPage() {
   // ── UI ─────────────────────────────────────────────────────────────────────
   // ── Wallet gate — intercept zero-balance artists before they waste time ──────
   // Only gate after /me resolves — avoids flash for funded artists during load
-  const showWalletGate = !walletGateDismissed && !loadingMe && !walletError && !studioError && walletBalance === 0;
+  const showWalletGate = WALLET_ENABLED && !walletGateDismissed && !loadingMe && !walletError && !studioError && walletBalance === 0;
 
   if (!loadingStudio && showWalletGate) {
     return (
@@ -374,17 +375,19 @@ export default function BookingPage() {
       <header className="border-b border-studio-border px-6 py-4 flex items-center gap-4 sticky top-0 bg-studio-bg z-10">
         <Link to="/dashboard" className="text-zinc-500 hover:text-white text-sm transition-colors">← Back</Link>
         <h1 className="font-display text-xl text-dome font-semibold">Plan your studio session</h1>
-        <div className="ml-auto flex items-center gap-2">
-          <span className="text-zinc-600 text-xs font-mono">Balance</span>
-          <span className={`text-sm font-semibold font-mono ${walletBalance < 50 ? 'text-yellow-400' : 'text-white'}`}>
-            ${walletBalance.toFixed(2)}
-          </span>
-        </div>
+        {WALLET_ENABLED && (
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-zinc-600 text-xs font-mono">Balance</span>
+            <span className={`text-sm font-semibold font-mono ${walletBalance < 50 ? 'text-yellow-400' : 'text-white'}`}>
+              ${walletBalance.toFixed(2)}
+            </span>
+          </div>
+        )}
       </header>
 
       <main className="max-w-2xl mx-auto px-6 py-10">
 
-        {walletError && (
+        {WALLET_ENABLED && walletError && (
           <div role="alert" className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-yellow-900/40 bg-yellow-950/20 px-4 py-3">
             <p className="text-sm text-yellow-200">Your latest wallet balance could not be verified. Confirming is disabled until it refreshes.</p>
             <button type="button" onClick={() => refetchWallet()} className="shrink-0 rounded-lg border border-yellow-700/50 px-3 py-1.5 text-xs text-yellow-100">Retry</button>
@@ -925,28 +928,30 @@ export default function BookingPage() {
               </div>
 
               {/* Wallet balance check */}
-              <div className={`rounded-xl px-5 py-4 mb-5 ${
-                canAfford
-                  ? 'bg-green-900/10 border border-green-900/30'
-                  : 'bg-red-900/10 border border-red-900/30'
-              }`}>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className={`text-sm font-medium ${canAfford ? 'text-green-400' : 'text-red-400'}`}>
-                      {canAfford ? 'Studio Credit ready' : 'More Studio Credit needed'}
-                    </p>
-                    <p className="text-zinc-500 text-xs mt-0.5">
-                      ${walletBalance.toFixed(2)} balance
-                      {canAfford
-                        ? ` → $${afterBalance.toFixed(2)} after booking`
-                        : ` — need $${(grandTotal - walletBalance).toFixed(2)} more`}
-                    </p>
+              {WALLET_ENABLED && (
+                <div className={`rounded-xl px-5 py-4 mb-5 ${
+                  canAfford
+                    ? 'bg-green-900/10 border border-green-900/30'
+                    : 'bg-red-900/10 border border-red-900/30'
+                }`}>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className={`text-sm font-medium ${canAfford ? 'text-green-400' : 'text-red-400'}`}>
+                        {canAfford ? 'Studio Credit ready' : 'More Studio Credit needed'}
+                      </p>
+                      <p className="text-zinc-500 text-xs mt-0.5">
+                        ${walletBalance.toFixed(2)} balance
+                        {canAfford
+                          ? ` → $${afterBalance.toFixed(2)} after booking`
+                          : ` — need $${(grandTotal - walletBalance).toFixed(2)} more`}
+                      </p>
+                    </div>
+                    <span className={`text-lg ${canAfford ? 'text-green-400' : 'text-red-400'}`}>
+                      {canAfford ? '✓' : '✕'}
+                    </span>
                   </div>
-                  <span className={`text-lg ${canAfford ? 'text-green-400' : 'text-red-400'}`}>
-                    {canAfford ? '✓' : '✕'}
-                  </span>
                 </div>
-              </div>
+              )}
 
               {/* Session goal */}
               {selected.intent && (
@@ -957,7 +962,10 @@ export default function BookingPage() {
               )}
 
               <div className="bg-dome/5 border border-dome/10 rounded-xl px-5 py-3 text-xs text-zinc-500 leading-relaxed">
-                Credits are deducted when you submit this booking. The session remains <span className="text-zinc-400">pending</span> until the studio team confirms the schedule.
+                {WALLET_ENABLED
+                  ? 'Credits are deducted when you submit this booking.'
+                  : 'Nothing is charged here. You pay the studio directly.'}{' '}
+                The session remains <span className="text-zinc-400">pending</span> until the studio team confirms the schedule.
               </div>
               <div className="mt-3"><TrustSignal kind="studio" compact /></div>
 
