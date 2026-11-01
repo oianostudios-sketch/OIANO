@@ -23,6 +23,7 @@ import { findRoomClash, isRoomClash } from '../lib/roomSchedule';
 import { studioDate, studioTime, studioWhenLabel, weeklyOccurrences } from '../lib/studioClock';
 import { addDeliverableVersion, recordDeliverableReview } from '../lib/deliverableVersions';
 import { applyWalletDelta } from '../lib/walletLedger';
+import { isWalletEnabled } from '../lib/walletFreeze';
 import { recordBookingPayment } from '../lib/financialLedger';
 import { getNextAction, getSessionSummary } from '../intelligence/intelligence.service';
 import { buildNextActionContext, buildSessionSummaryContext } from '../intelligence/context/context-builder';
@@ -431,10 +432,13 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
       orderBy: { priority: 'asc' },
     });
     const endHour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: studio.timezone, hour: '2-digit', hourCycle: 'h23' }).format(new Date(data.ends_at)));
+    const walletPays = isWalletEnabled();
     const policyDecisions = evaluateStudioPolicies(activePolicies as unknown as PolicyContract[], {
       service: { id: service.id, category: service.category, unit: service.unit }, room: { id: room.id, capacity: room.capacity }, artist: { id: artist.id },
     }, {
-      payment: { deposit_percent: 100, timing: 'UPFRONT', method: 'WALLET' },
+      payment: walletPays
+        ? { deposit_percent: 100, timing: 'UPFRONT', method: 'WALLET' }
+        : { deposit_percent: 0, timing: 'AT_STUDIO', method: 'CASH' },
       pricing: { hourly_rate: service.unit === 'hour' ? Number(service.min_price_usd) : total },
       booking: { end_hour: endHour, duration_hours: hours, repeat_weeks: data.repeat_weeks ?? 1 },
     });
@@ -448,17 +452,22 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
     const missingOverrides = policyDecisions.filter(decision => decision.result === 'OVERRIDE_REQUIRED' && !approvedPolicyIds.has(decision.policy_id));
     if (missingOverrides.length) throw new AppError(`Studio policy exception required: ${missingOverrides.map(item => item.policy_name).join(', ')}`, 409);
 
-    const wallet = await prisma.wallet.findUnique({ where: { artist_id: artist.id } });
-    if (!wallet || Number(wallet.balance_usd) < total) {
-      throw new AppError('Insufficient wallet balance', 402);
-    }
-
     const repeatWeeks = data.repeat_weeks ?? 1;
     const totalCost = total * repeatWeeks;
 
-    // Re-check wallet for full recurring cost
-    if (!wallet || Number(wallet.balance_usd) < totalCost) {
-      throw new AppError(`Insufficient wallet balance for ${repeatWeeks} week(s)`, 402);
+    // While the wallet is frozen a booking takes no money. It is settled at the studio,
+    // and staff record that through POST /api/admin/bookings/:id/cash-payment, which is
+    // what posts to the ledger.
+    const wallet = walletPays ? await prisma.wallet.findUnique({ where: { artist_id: artist.id } }) : null;
+    if (walletPays) {
+      if (!wallet || Number(wallet.balance_usd) < total) {
+        throw new AppError('Insufficient wallet balance', 402);
+      }
+
+      // Re-check wallet for full recurring cost
+      if (Number(wallet.balance_usd) < totalCost) {
+        throw new AppError(`Insufficient wallet balance for ${repeatWeeks} week(s)`, 402);
+      }
     }
 
     // Build list of (starts_at, ends_at) for each occurrence, at the same
@@ -490,7 +499,7 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
         throw new AppError(`Time slot not available on ${clash} (${studio.timezone})`, 409);
       }
 
-      await applyWalletDelta(tx, wallet.id, -totalCost, 'debit', txLabel);
+      if (wallet) await applyWalletDelta(tx, wallet.id, -totalCost, 'debit', txLabel);
 
       const created = [];
       for (const occ of occurrences) {
@@ -508,17 +517,14 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
             notes: data.notes,
             status: 'PENDING',
             payment: {
-              create: {
-                provider: 'wallet',
-                amount_usd: total,
-                status: 'PAID',
-                paid_at: new Date(),
-              },
+              create: walletPays
+                ? { provider: 'wallet', amount_usd: total, status: 'PAID', paid_at: new Date() }
+                : { provider: 'cash', amount_usd: total, status: 'UNPAID' },
             },
           },
           include: { room: true, service: true, payment: true },
         });
-        await recordBookingPayment(tx, { paymentId: createdBooking.payment!.id, provider: 'wallet', amountUsd: total, platformFeeBps: studio.platform_fee_bps, artistId: artist.id, studioId: studio.id, bookingId: createdBooking.id });
+        if (walletPays) await recordBookingPayment(tx, { paymentId: createdBooking.payment!.id, provider: 'wallet', amountUsd: total, platformFeeBps: studio.platform_fee_bps, artistId: artist.id, studioId: studio.id, bookingId: createdBooking.id });
         created.push(createdBooking);
       }
 

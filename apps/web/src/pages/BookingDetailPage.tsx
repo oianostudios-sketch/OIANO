@@ -434,10 +434,15 @@ export default function BookingDetailPage() {
           </div>
 
           {/* Stripe pay button — shown to artist when booking is unpaid/partial */}
-          {user?.role === 'ARTIST' && booking.payment?.status !== 'PAID' && (
+          {user?.role === 'ARTIST' && booking.payment?.status !== 'PAID' && booking.payment?.provider !== 'cash' && (
             <div className="mt-5 pt-5 border-t border-studio-border">
               <StripePayButton bookingId={booking.id} />
             </div>
+          )}
+          {user?.role === 'ARTIST' && booking.payment?.status === 'UNPAID' && booking.payment?.provider === 'cash' && (
+            <p className="mt-5 pt-5 border-t border-studio-border text-sm text-zinc-400">
+              Pay the studio directly. OIANO takes no payment for this session, and the studio records it once they have been paid.
+            </p>
           )}
         </div>
 

@@ -19,6 +19,7 @@ import OianoNow from '../components/OianoNow';
 import NextAction from '../components/NextAction';
 import CreativeIdentity from '../components/CreativeIdentity';
 import CurrentWork from '../components/CurrentWork';
+import { WALLET_ENABLED } from '../lib/walletFreeze';
 import UpcomingSessions, { type UpcomingBooking } from '../components/UpcomingSessions';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -464,10 +465,10 @@ export default function DashboardPage() {
             <Pencil size={18} strokeWidth={1.65} aria-hidden="true" />
             <span>Edit profile</span>
           </button>
-          <button className="db-action-tile" type="button" onClick={() => setTopUpOpen(true)} style={{ minHeight: 66, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 7, color: '#898d90', background: 'transparent', border: '1px solid transparent', borderRadius: 11, fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>
+          {WALLET_ENABLED && <button className="db-action-tile" type="button" onClick={() => setTopUpOpen(true)} style={{ minHeight: 66, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 7, color: '#898d90', background: 'transparent', border: '1px solid transparent', borderRadius: 11, fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>
               <Wallet size={18} strokeWidth={1.65} aria-hidden="true" />
               <span>{balance > 0 ? `Studio credit · $${balance.toFixed(2)}` : 'Add credit'}</span>
-          </button>
+          </button>}
         </nav>
 
         <div className="db-fade db-fade-1 db-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
