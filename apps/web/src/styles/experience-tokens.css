@@ -1,0 +1,31 @@
+/* Reference-derived visual foundation. Surface names describe experiences, not domain state.
+   Opt in by consuming these tokens; legacy global styles remain independent. */
+:root {
+  --experience-canvas: 8 11 13;
+  --experience-surface: 17 21 24;
+  --experience-raised: 25 30 34;
+  --experience-border: 51 59 64;
+  --experience-text: 245 244 240;
+  --experience-secondary: 184 193 200;
+  --experience-gold: 242 208 140;
+  --experience-blue: 143 197 238;
+  --experience-error: 240 196 189;
+  --experience-font: 'DM Sans', sans-serif;
+  --experience-radius-card: 16px;
+  --experience-radius-control: 10px;
+  --experience-space-1: 4px;
+  --experience-space-2: 8px;
+  --experience-space-3: 12px;
+  --experience-space-4: 16px;
+  --experience-space-6: 24px;
+  --experience-target: 44px;
+  --experience-duration: 160ms;
+  --experience-shadow: 0 12px 32px rgb(0 0 0 / .18);
+  --experience-now-accent: var(--experience-gold);
+  --experience-make-accent: var(--experience-gold);
+  --experience-sky-accent: var(--experience-blue);
+  --experience-me-accent: var(--experience-gold);
+}
+@media (prefers-reduced-motion: reduce) {
+  :root { --experience-duration: 0ms; }
+}

@@ -16,5 +16,5 @@ export const CREATIVE_DISCIPLINES = [
 export type CreativeDiscipline = typeof CREATIVE_DISCIPLINES[number]['id'];
 
 export function disciplineLabel(id?: string | null) {
-  return CREATIVE_DISCIPLINES.find((item) => item.id === id)?.label ?? 'Creative professional';
+  return CREATIVE_DISCIPLINES.find((item) => item.id === id)?.label ?? (id?.trim() || 'Creative professional');
 }

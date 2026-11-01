@@ -1,11 +1,15 @@
 // apps/web/src/pages/ProducerDashboardPage.tsx
 import { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { isAxiosError } from 'axios';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { ProducerNav } from '../components/ProducerNav';
 import { initials } from '../components/ArtistAvatar';
 import { disciplineLabel } from '../lib/creativeDisciplines';
+import CreativeIdentity from '../components/CreativeIdentity';
+import CurrentWork from '../components/CurrentWork';
+import NextAction from '../components/NextAction';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Phase =
@@ -468,13 +472,12 @@ function DNAStrip({ passport }: { passport: ProducerProfile['passport'] }) {
 }
 
 // ── Main dashboard ────────────────────────────────────────────────────────────
-export default function ProducerDashboardPage() {
+export default function ProducerDashboardPage({ home = false }: { home?: boolean }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [showNewProject, setShowNewProject] = useState(false);
-  const [setupDone, setSetupDone] = useState(false);
 
-  const { data: producer, isLoading, error } = useQuery<ProducerProfile>({
+  const { data: producer, isLoading, error, refetch, isFetching } = useQuery<ProducerProfile>({
     queryKey: ['producer', 'me'],
     queryFn: async () => (await api.get('/producer/me')).data,
     retry: false,
@@ -518,15 +521,41 @@ export default function ProducerDashboardPage() {
   }
 
   // 404 → producer profile doesn't exist yet
-  const is404 = (error as any)?.response?.status === 404 || (!isLoading && !producer && !setupDone);
+  const is404 = isAxiosError(error) && error.response?.status === 404;
   if (is404) {
-    return <ProducerSetupGate onSetup={() => { setSetupDone(true); qc.invalidateQueries({ queryKey: ['producer', 'me'] }); }} />;
+    return <ProducerSetupGate onSetup={() => { qc.invalidateQueries({ queryKey: ['producer', 'me'] }); }} />;
   }
 
-  if (!producer) return null;
+  if (!producer) return <main className="creative-professional-home">
+    <div role="alert">
+      <h1>We couldn’t load your professional workspace</h1>
+      <p className="creative-muted">Your profile could not be checked. Try again before making changes.</p>
+      <button type="button" className="creative-button" disabled={isFetching} onClick={() => void refetch()}>{isFetching ? 'Checking…' : 'Try again'}</button>
+    </div>
+  </main>;
 
   if (!producer.onboarding_complete) {
     return <div className="min-h-screen bg-studio-bg px-5 py-20 text-white"><div className="mx-auto max-w-xl rounded-3xl border border-white/[.07] bg-studio-surface p-8"><p className="font-mono text-[9px] uppercase tracking-[.2em] text-dome">Creative professional identity</p><h1 className="mt-4 font-display text-3xl">Tell OIANO what you do.</h1><p className="mt-3 text-sm leading-6 text-zinc-500">Your workspace, discovery profile and contribution language are shaped by your disciplines—not by a generic producer label.</p><button type="button" onClick={()=>navigate('/professional/onboarding')} className="mt-7 rounded-xl bg-dome px-5 py-3 text-xs font-semibold text-black">Complete professional setup</button></div></div>;
+  }
+
+  if (home) {
+    return <main className="creative-professional-home">
+      {error && <div role="alert" className="creative-read-error">
+        <p>We couldn’t refresh your profile. Showing the last available update.</p>
+        <button type="button" className="creative-button" disabled={isFetching} onClick={() => void refetch()}>{isFetching ? 'Checking…' : 'Try again'}</button>
+      </div>}
+      <CreativeIdentity name={producer.name} alias={producer.alias} bio={producer.bio} avatarUrl={producer.avatar_url}
+        greeting="Your creative home" compact
+        actions={<><Link className="creative-button" to="/producer/passport">View your Passport</Link><Link className="creative-text-link" to="/professional/onboarding">Edit creative practice</Link></>} />
+      <NextAction />
+      <CurrentWork />
+      <nav className="creative-home-shortcuts" aria-label="Work shortcuts">
+        <Link className="creative-button" to="/producer">Manage projects</Link>
+        <Link className="creative-button" to="/contributions">Review contributions</Link>
+        <Link className="creative-button" to="/communications">Open messages</Link>
+        <Link className="creative-button" to="/discover">Find people</Link>
+      </nav>
+    </main>;
   }
 
   const activeProjects = (producer.projects ?? []).filter(p => p.is_active);

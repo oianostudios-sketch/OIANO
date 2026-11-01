@@ -20,7 +20,9 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401) {
+    const token = useAuthStore.getState().token;
+    const belongsToCurrentSession = Boolean(token && err.config?.headers?.Authorization === `Bearer ${token}`);
+    if (belongsToCurrentSession && err.response?.status === 401) {
       useAuthStore.getState().logout();
       // Entry handles rejected credentials/MFA itself; reloading it loses next
       // and the pending MFA challenge before its error can be shown.
@@ -33,6 +35,7 @@ api.interceptors.response.use(
     // elsewhere (e.g. a booking time-slot clash), which must NOT redirect
     // the user away from whatever they were doing.
     if (
+      belongsToCurrentSession &&
       err.response?.status === 409 &&
       err.response?.data?.error === 'Active studio selection required' &&
       window.location.pathname !== '/select-studio'

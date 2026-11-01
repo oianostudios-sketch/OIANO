@@ -88,6 +88,19 @@ describe('attaching a session from the artist\'s side', () => {
     }
   });
 
+  it('keeps long file names intact and gives the open action a descriptive accessible name', async () => {
+    const fileName = 'final-vocal-comp-with-approved-harmonies-and-alternate-ending.wav';
+    vi.mocked(api.get).mockImplementation(async (url: string) => ({
+      data: url === '/artist-projects' ? [{ ...project, files: [{ id: 'file-1', name: fileName }] }] : [],
+    }) as never);
+    await render();
+
+    const fileButton = host.querySelector<HTMLButtonElement>('.project-file-row');
+    expect(fileButton?.getAttribute('aria-label')).toBe(`Open ${fileName}`);
+    expect(fileButton?.textContent).toContain(fileName);
+    expect(fileButton?.querySelector('[aria-hidden="true"]')).not.toBeNull();
+  });
+
   it('shows a project read failure with a retry instead of an empty workspace', async () => {
     vi.mocked(api.get).mockRejectedValue(new Error('Unavailable'));
     await render();

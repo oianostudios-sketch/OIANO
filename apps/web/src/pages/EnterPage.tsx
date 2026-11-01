@@ -133,9 +133,9 @@ export default function EnterPage() {
           <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:'clamp(.52rem,1.1vw,.68rem)',letterSpacing:'.24em',color:'rgba(201,168,76,.46)',textTransform:'uppercase',margin:'16px 0 0'}}>A Creative Work Network</p>
         </div>
         <div className="enter-trust">
-          <div className="enter-trust-item"><CalendarDays size={15} color="#C9A84C"/><strong>Create together</strong><span>Bring people and places together around a project.</span></div>
-          <div className="enter-trust-item"><ShieldCheck size={15} color="#C9A84C"/><strong>Make the terms clear</strong><span>Review rights proposals and sharing permissions.</span></div>
-          <div className="enter-trust-item"><Sparkles size={15} color="#C9A84C"/><strong>Carry the work forward</strong><span>Keep projects, session history and credits in view.</span></div>
+          <div className="enter-trust-item"><CalendarDays size={15} color="#C9A84C" aria-hidden="true"/><strong>Find your people</strong><span>Discover collaborators, studios and creative services.</span></div>
+          <div className="enter-trust-item"><ShieldCheck size={15} color="#C9A84C" aria-hidden="true"/><strong>Make something together</strong><span>Join a project, agree your part and keep the conversation with the work.</span></div>
+          <div className="enter-trust-item"><Sparkles size={15} color="#C9A84C" aria-hidden="true"/><strong>Carry your work forward</strong><span>Build your Passport with projects, session history and confirmed credits.</span></div>
         </div>
         {converging && <div className="enter-converge-flash" />}
       </section>
@@ -144,9 +144,9 @@ export default function EnterPage() {
         <div className="login-form-inner">
           <div className="enter-mobile-brand" style={{marginBottom:42}}><OianoBrand variant="compact" size={27}/></div>
           <header style={{marginBottom:28}}>
-            <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,letterSpacing:'.22em',color:'#5a5a60',textTransform:'uppercase',marginBottom:12}}>{returningToBooking ? 'Continue your booking' : 'Creative Work Network'}</p>
+            <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,letterSpacing:'.22em',color:'#a1a1aa',textTransform:'uppercase',marginBottom:12}}>{returningToBooking ? 'Continue your booking' : 'Creative people. Places. Possibilities.'}</p>
             <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:28,fontWeight:600,color:'#f0ede8',letterSpacing:'-.01em',lineHeight:1.18,margin:0}}>{mfa ? <>Protecting OIANO<br/>starts here</> : returningToBooking ? <>Your session is<br/>waiting</> : mode === 'signup' ? <>Make something<br/>together</> : <>Welcome back<br/>to your work</>}</h1>
-            <p style={{color:'#707070',fontSize:12,lineHeight:1.6,margin:'12px 0 0'}}>{mfa ? (mfa.setup?'Add this account to your authenticator app, then enter the current six-digit code.':'Enter the current code from your authenticator app.') : returningToBooking ? 'Sign in and return directly to your studio selection.' : mode === 'signup' ? 'Choose the account tools you need today. Projects and contribution invitations connect the work.' : 'Return to your projects, people and the decisions that move your work forward.'}</p>
+            <p style={{color:'#a1a1aa',fontSize:12,lineHeight:1.6,margin:'12px 0 0'}}>{mfa ? (mfa.setup?'Add this account to your authenticator app, then enter the current six-digit code.':'Enter the current code from your authenticator app.') : returningToBooking ? 'Sign in and return directly to your studio selection.' : mode === 'signup' ? 'Your practice can cross disciplines. Choose the tools you need today; your role belongs to each project.' : 'Find your people. Make the work. A network for creative people, studios and creative services, connected through projects.'}</p>
           </header>
           {mfa ? <>
             {mfa.setup&&<div style={{padding:14,border:'1px solid #272727',borderRadius:11,background:'#0d0d0d',marginBottom:16}}><p style={{fontSize:9,color:'#666',textTransform:'uppercase',letterSpacing:'.12em',margin:'0 0 8px'}}>Authenticator setup key</p><code style={{fontSize:13,color:'#C9A84C',wordBreak:'break-all',letterSpacing:'.08em'}}>{mfa.secret}</code><p style={{fontSize:9,color:'#444',lineHeight:1.5,margin:'9px 0 0'}}>In Google Authenticator, Microsoft Authenticator or 1Password, choose “enter setup key”.</p></div>}
@@ -178,8 +178,8 @@ export default function EnterPage() {
               <p style={{fontSize:9,color:'#505050',lineHeight:1.5,margin:'9px 0 0'}}>The first choice becomes your primary discipline. For now, running a studio or working on a studio’s staff needs a separate studio account.</p>
             </fieldset>}
             <div className="enter-account-note" aria-label="Managed account access">
-              <div><Building2 size={13}/><span><b>Studio</b><br/>Verified operator onboarding</span></div>
-              <div><Wrench size={13}/><span><b>OIANO Platform</b><br/>Invite-only system access</span></div>
+              <div><Building2 size={13} aria-hidden="true"/><span><b>Studios &amp; creative organizations</b><br/>Studio operator onboarding is managed</span></div>
+              <div><Wrench size={13} aria-hidden="true"/><span><b>OIANO Platform</b><br/>Invite-only system access</span></div>
             </div>
           </>}
           <form onSubmit={(event) => { event.preventDefault(); if (!loading && email && password) handleEnter(); }}>

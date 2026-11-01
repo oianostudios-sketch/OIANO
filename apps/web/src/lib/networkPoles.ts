@@ -20,7 +20,7 @@ export const NETWORK_POLES: Record<NetworkPoleId, NetworkPole> = {
     contributes: 'Talent, projects, bookings and reputation',
     receives: 'Studio access, verified credits, identity, rights records and opportunities',
     connectsTo: ['STUDIO', 'CREATIVE', 'COLLABORATOR'],
-    actions: [{ label: 'Discover studios', path: '/discover' }, { label: 'Start a booking', path: '/book' }, { label: 'Open projects', path: '/projects' }],
+    actions: [{ label: 'Discover artists', path: '/discover' }, { label: 'Start a booking', path: '/book' }, { label: 'Open projects', path: '/projects' }],
     measure: 'Sessions completed · credits confirmed · relationships created', accent: '#5A9BCB',
   },
   STUDIO: {

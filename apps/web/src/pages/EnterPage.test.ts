@@ -71,6 +71,18 @@ async function credentials() {
 }
 
 describe('invitation return through authentication', () => {
+  it('welcomes creative people and service organizations without offering unsupported signup', async () => {
+    await render(null);
+    expect(host.textContent).toContain('Creative people. Places. Possibilities.');
+    expect(host.textContent).toContain('Find your people. Make the work.');
+    expect(host.textContent).toContain('studios and creative services');
+    await act(async () => (host.querySelectorAll('[role="tab"]')[1] as HTMLButtonElement).click());
+    expect(host.textContent).toContain('Your practice can cross disciplines.');
+    expect(host.querySelectorAll('[role="radio"]')).toHaveLength(2);
+    expect(host.querySelector('.enter-account-note')?.textContent).toContain('Studios & creative organizations');
+    expect(host.querySelector('.enter-account-note')?.textContent).toContain('Studio operator onboarding is managed');
+  });
+
   it.each<UserRole>(['ARTIST', 'PRODUCER', 'STUDIO_ADMIN', 'ENGINEER', 'OIANO_ADMIN'])('returns a signed-in %s to the complete invitation', async (role) => {
     vi.mocked(api.post).mockResolvedValue(login(role));
     await render();

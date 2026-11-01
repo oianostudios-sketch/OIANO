@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/auth.store';
@@ -19,6 +19,7 @@ import OianoNow from '../components/OianoNow';
 import NextAction from '../components/NextAction';
 import CreativeIdentity from '../components/CreativeIdentity';
 import CurrentWork from '../components/CurrentWork';
+import UpcomingSessions, { type UpcomingBooking } from '../components/UpcomingSessions';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -44,27 +45,6 @@ function minsUntil(iso: string) {
 // totalHours() lived here and summed booking durations in the browser. Studio
 // hours are now counted once on the server, from performed work only, so the
 // dashboard and the passport cannot report different totals.
-
-// ── Animated counter ──────────────────────────────────────────────────────────
-
-function useCounter(target: number, duration = 1000) {
-  const [val, setVal] = useState(0);
-  const prev = useRef(0);
-  useEffect(() => {
-    if (target === prev.current) return;
-    const start = prev.current; const diff = target - start;
-    const t0 = performance.now();
-    function step(now: number) {
-      const t = Math.min((now - t0) / duration, 1);
-      const ease = 1 - Math.pow(1 - t, 3);
-      setVal(start + diff * ease);
-      if (t < 1) requestAnimationFrame(step);
-      else { prev.current = target; setVal(target); }
-    }
-    requestAnimationFrame(step);
-  }, [target, duration]);
-  return val;
-}
 
 // ── Countdown to next session ─────────────────────────────────────────────────
 
@@ -248,9 +228,12 @@ export default function DashboardPage() {
     staleTime: 60_000,
   });
 
-  const { data: bookings = [], isLoading: loadingBookings, isError: bookingsError, refetch: refetchBookings } = useQuery({
+  const { data: bookings = [], isLoading: loadingBookings, isError: bookingsError, isFetching: fetchingBookings, refetch: refetchBookings } = useQuery<UpcomingBooking[]>({
     queryKey: ['bookings'],
-    queryFn: async () => (await api.get('/bookings')).data,
+    queryFn: async () => {
+      const { data } = await api.get<UpcomingBooking[] | { data?: UpcomingBooking[] }>('/bookings');
+      return Array.isArray(data) ? data : data.data ?? [];
+    },
   });
 
   const { data: portfolioData } = useQuery({
@@ -263,11 +246,6 @@ export default function DashboardPage() {
     queryKey: ['artist-activity'],
     queryFn: async () => (await api.get('/artist-activity')).data,
     enabled: user?.role === 'ARTIST',
-  });
-
-  const { data: studio } = useQuery({
-    queryKey: ['studio'],
-    queryFn: async () => (await api.get('/studio/current')).data,
   });
 
   // The server's account of this creator's situation. What is next, what is
@@ -302,7 +280,7 @@ export default function DashboardPage() {
   const balance  = Number(context?.money?.wallet_balance_usd ?? artist?.wallet?.balance_usd ?? 0);
 
   const profileScore = portfolioData?.score ?? (passport as any)?.profile_strength ?? 0;
-  const allBookings = Array.isArray(bookings) ? bookings : (bookings as any)?.data ?? [];
+  const allBookings = bookings;
 
   // The booking list is still fetched — the strip below renders real rows — but
   // the page no longer decides from it which session is next or what counts as
@@ -312,25 +290,8 @@ export default function DashboardPage() {
     .sort((a: any, b: any) => new Date(b.starts_at).getTime() - new Date(a.starts_at).getTime())
     .slice(0, 5);
 
-  const completedCount = context?.progress?.sessions ?? allBookings.filter((b: any) => b.status === 'COMPLETED').length;
-  const nextSession = context?.next_session ?? null;
-  const activeProjectCount = context?.in_motion?.active_projects
-    ?? (portfolioData?.project_options ?? []).filter((p: any) => p.is_active && p.phase !== 'DELIVERED').length;
   const activeProjects = (portfolioData?.project_options ?? [])
     .filter((project: any) => project.is_active && project.phase !== 'DELIVERED');
-  const nextProject = activeProjects[0] ?? null;
-  const primaryAction = nextSession
-    ? { to: `/bookings/${nextSession.id}`, eyebrow: 'Upcoming session', label: 'Prepare for your session', detail: `${fmtDateShort(nextSession.starts_at, nextSession.studio?.timezone)} at ${fmtTime(nextSession.starts_at, nextSession.studio?.timezone)}`, cta: 'Prepare for session' }
-    : activeProjectCount > 0
-      ? { to: '/projects', eyebrow: 'Keep the momentum', label: 'Review your active work', detail: `${activeProjectCount} project${activeProjectCount === 1 ? '' : 's'} currently moving`, cta: 'Review project' }
-      : { to: '/contributions', eyebrow: 'Make something together', label: 'Find your place in the work', detail: 'Review project invitations and the contributions you can make', cta: 'Open contributions' };
-
-  // Animated stats
-  const cSessions  = useCounter(allBookings.length);
-  // Studio hours are counted from performed work only, the same rule the passport
-  // uses — a booked-but-unplayed session is not time spent in a studio.
-  const cHours     = useCounter(context?.progress?.hours ?? 0);
-  const cCompleted = useCounter(completedCount);
 
   const creativeDNA  = (passport as any)?.creative_dna ?? {};
   const genres       = creativeDNA.genres ?? [];
@@ -341,9 +302,14 @@ export default function DashboardPage() {
   function handleLogout() { logout(); navigate('/enter'); }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#f5f5f5' }}>
+    <div className="dashboard-home">
       <style>{`
         body.artist-dashboard { padding-top: 0; }
+        .dashboard-home {
+          min-height: 100vh;
+          background: rgb(var(--experience-canvas));
+          color: rgb(var(--experience-text));
+        }
         @keyframes db-pulse { 0%,100%{opacity:1}50%{opacity:0.4} }
         @keyframes db-fade-in { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
         @keyframes db-ticker-in { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
@@ -352,10 +318,22 @@ export default function DashboardPage() {
         .db-fade-2 { animation-delay: 0.12s; }
         .db-fade-3 { animation-delay: 0.2s; }
         .db-fade-4 { animation-delay: 0.28s; }
+        .db-main {
+          display: flex;
+          max-width: 1240px;
+          flex-direction: column;
+          gap: 24px;
+          margin: 0 auto;
+          padding: 32px 24px 48px;
+        }
+        .dashboard-home-grid {
+          display: grid;
+          grid-template-columns: minmax(0, 1.45fr) minmax(300px, .8fr);
+          align-items: start;
+          gap: 20px;
+        }
+        .dashboard-home-main { display: grid; min-width: 0; gap: 20px; }
         .db-session-row:hover { background: #141414 !important; }
-        .db-primary-action:hover { background: #74add4 !important; color: #000 !important; }
-        .db-focus-card:hover { border-color: rgba(106,169,210,.34) !important; transform: translateY(-2px); }
-        .db-signal-card:hover { border-color: rgba(255,255,255,.13) !important; transform: translateY(-1px); }
         .db-action-tile:hover { color: #f3f1eb !important; background: rgba(106,169,210,.08) !important; border-color: rgba(106,169,210,.2) !important; }
         .db-legacy-session-history, .db-legacy-profile-nudge { display: none !important; }
         .db-two-col { grid-template-columns: 1fr !important; }
@@ -365,10 +343,9 @@ export default function DashboardPage() {
         .db-header { display: flex; }
         @media (max-width: 768px) {
           .db-header { display: none; }
-          .db-main { padding: 20px 16px 100px !important; }
+          .db-main { gap: 20px; padding: 20px 16px 100px; }
           .db-hero { flex-direction: column !important; align-items: flex-start !important; gap: 16px !important; }
-          .db-hero-stats { flex-direction: row !important; gap: 20px !important; }
-          .db-hero-stats > div { text-align: left !important; }
+          .dashboard-home-grid { grid-template-columns: minmax(0, 1fr); gap: 16px; }
           .db-two-col { grid-template-columns: 1fr !important; }
           .db-col-left { order: 2; }
           .db-col-right { order: 1; }
@@ -376,15 +353,13 @@ export default function DashboardPage() {
           .db-topup-grid { grid-template-columns: 1fr 1fr !important; }
           .db-welcome h1 { font-size: 24px !important; }
           .db-mobile-status { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-          .db-briefing { grid-template-columns: 1fr 1fr !important; }
-          .db-focus-card { grid-column: 1 / -1; min-height: 210px !important; }
           .db-action-dock { grid-template-columns: repeat(2, 1fr) !important; }
         }
         @media (max-width: 520px) {
-          .db-briefing { grid-template-columns: 1fr !important; }
-          .db-focus-card { grid-column: auto; }
-          .db-hero-stats { width: 100%; justify-content: space-between; }
           .db-action-dock { grid-template-columns: repeat(2, 1fr) !important; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .db-fade { animation: none; }
         }
       `}</style>
 
@@ -412,103 +387,45 @@ export default function DashboardPage() {
             <span style={{ fontSize: 12, fontWeight: 600, color: '#5A9BCB' }}>{latestAnnouncement.title}</span>
             <span style={{ fontSize: 12, color: '#888', marginLeft: 10 }}>{latestAnnouncement.body}</span>
           </div>
-          <button onClick={() => setAnnouncementDismissed(latestAnnouncement.id)}
-            style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: 16, padding: '0 4px', lineHeight: 1 }}>
+          <button type="button" aria-label="Dismiss studio announcement" onClick={() => setAnnouncementDismissed(latestAnnouncement.id)}
+            style={{ background: 'none', border: 'none', color: 'rgb(var(--experience-secondary))', cursor: 'pointer', fontSize: 16, minWidth: 44, minHeight: 44, padding: '0 4px', lineHeight: 1 }}>
             ×
           </button>
         </div>
       )}
 
-      {bookingsError && (
-        <div role="alert" style={{ maxWidth: 1100, margin: '16px auto 0', padding: '12px 16px', background: '#1a0d0d', border: '1px solid #5f2828', borderRadius: 10, color: '#fca5a5', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <span style={{ fontSize: 13 }}>We couldn't load your sessions. Your profile and wallet are still available.</span>
-          <button type="button" onClick={() => refetchBookings()} style={{ color: '#fff', background: '#7f1d1d', border: 'none', borderRadius: 6, padding: '7px 12px', cursor: 'pointer' }}>Try again</button>
-        </div>
-      )}
-
-      <main className="db-main" style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 24px', display: 'flex', flexDirection: 'column', gap: 28, paddingBottom: 'calc(32px + 68px)' }}>
-        <div className="db-mobile-status">
-          <StudioBar />
-          <ArtistStatusToggle inline />
-        </div>
-
-        {/* ── Welcome hero ── */}
+      <main className="db-main">
         <div className="db-fade db-hero" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <CreativeIdentity
             name={artist?.name ?? 'Your workspace'}
             alias={artist?.alias}
             bio={artist?.bio}
             avatarUrl={artist?.avatar_url}
-            interests={passport?.collaboration_interests ?? []}
             greeting={greeting()}
             actions={<><Link className="creative-button" to="/artist/passport">View your Passport</Link><button className="creative-text-link" type="button" onClick={() => setEditOpen(true)}>Edit profile</button></>}
+            compact
           />
-
-          {/* Micro stats */}
-          <div className="db-hero-stats" style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-            {[
-              { label: 'Sessions', value: Math.round(cSessions) },
-              { label: 'Hours at OIANO', value: Math.round(cHours) },
-              { label: 'Completed', value: Math.round(cCompleted) },
-            ].map((s, i) => (
-              <div key={s.label} className="metric-enter" style={{ textAlign: 'right', animationDelay: `${i * 80}ms` }}>
-                <p style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, color: '#5A9BCB', fontWeight: 700, lineHeight: 1 }}>
-                  {loadingBookings ? '—' : s.value}
-                </p>
-                <p style={{ fontSize: 11, color: '#777', fontFamily: 'monospace', marginTop: 3 }}>{s.label}</p>
-              </div>
-            ))}
-          </div>
         </div>
 
-        <NextAction />
-        <CurrentWork />
+        <div className="db-mobile-status">
+          <StudioBar />
+          <ArtistStatusToggle inline />
+          <NotificationBell />
+        </div>
 
-        {/* Existing project and session context, below pending decisions. */}
-        <section className="db-fade db-fade-1" aria-labelledby="today-heading">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
-            <p id="today-heading" style={{ fontSize: 10, color: '#777', fontFamily: 'monospace', letterSpacing: '0.14em', textTransform: 'uppercase' }}>Today at OIANO</p>
-            <span style={{ fontSize: 10, color: '#3f454a', fontFamily: 'monospace' }}>{studio?.name ?? 'OIANO Network'}</span>
+        <div className="dashboard-home-grid">
+          <div className="dashboard-home-main">
+            <NextAction />
+            <CurrentWork />
           </div>
-          <div className="db-briefing" style={{ display: 'grid', gridTemplateColumns: `minmax(280px, 1.65fr) repeat(${balance > 0 ? 4 : 3}, minmax(0, 1fr))`, gap: 12 }}>
-            <Link className="db-focus-card" to={primaryAction.to} style={{ minHeight: 180, position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: 22, borderRadius: 16, textDecoration: 'none', background: '#0a0f13', border: '1px solid rgba(106,169,210,.2)', boxShadow: '0 24px 70px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.04)' }}>
-              <img src="/images/mock/oiano-studio-editorial-v1.png" alt="" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: '62% center', opacity: .78 }} />
-              <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(5,8,11,.98) 0%, rgba(5,9,12,.9) 43%, rgba(5,9,12,.25) 100%), linear-gradient(0deg, rgba(4,7,9,.65), transparent 70%)' }} />
-              <div style={{ position: 'relative' }}>
-                <p style={{ margin: 0, fontSize: 9, color: '#83b8d8', fontFamily: 'monospace', letterSpacing: '0.16em', textTransform: 'uppercase' }}>{primaryAction.eyebrow}</p>
-                <h2 style={{ margin: '12px 0 7px', maxWidth: 340, color: '#f4f2ed', fontFamily: "'Playfair Display', serif", fontSize: 25, lineHeight: 1.15, fontWeight: 500 }}>{primaryAction.label}</h2>
-                <p style={{ margin: 0, color: '#7f8990', fontSize: 11 }}>{primaryAction.detail}</p>
-              </div>
-              <span style={{ position: 'relative', alignSelf: 'flex-start', color: '#0a0d0f', background: '#6aa9d2', padding: '8px 13px', borderRadius: 8, fontSize: 11, fontWeight: 700 }}>{primaryAction.cta} →</span>
-            </Link>
-
-            <Link className="db-signal-card" to={nextSession ? `/bookings/${nextSession.id}` : '/book'} style={{ minHeight: 180, display: 'flex', flexDirection: 'column', padding: 17, borderRadius: 16, textDecoration: 'none', background: 'linear-gradient(145deg, rgba(18,21,24,.94), rgba(10,12,14,.92))', border: '1px solid rgba(255,255,255,.075)' }}>
-              <span style={{ fontSize: 9, color: '#596168', fontFamily: 'monospace', letterSpacing: '0.12em' }}>NEXT SESSION</span>
-              <strong style={{ marginTop: 'auto', color: nextSession ? '#f1efe9' : '#8a8a86', fontFamily: "'Playfair Display', serif", fontWeight: 500, fontSize: 21 }}>{nextSession ? fmtDateShort(nextSession.starts_at, nextSession.studio?.timezone) : 'Not booked'}</strong>
-              <span style={{ marginTop: 5, color: '#6aa9d2', fontFamily: 'monospace', fontSize: 10 }}>{nextSession ? `${fmtTime(nextSession.starts_at, nextSession.studio?.timezone)} · ${nextSession.room?.name ?? 'Room TBA'}` : 'Find a studio time →'}</span>
-            </Link>
-
-            <Link className="db-signal-card" to="/projects" style={{ minHeight: 180, display: 'flex', flexDirection: 'column', padding: 17, borderRadius: 16, textDecoration: 'none', background: 'linear-gradient(145deg, rgba(18,21,24,.94), rgba(10,12,14,.92))', border: '1px solid rgba(255,255,255,.075)' }}>
-              <span style={{ fontSize: 9, color: '#596168', fontFamily: 'monospace', letterSpacing: '0.12em' }}>ACTIVE WORK</span>
-              <strong style={{ marginTop: 'auto', color: '#d3b35c', fontFamily: "'Playfair Display', serif", fontWeight: 500, fontSize: 25 }}>{activeProjectCount}</strong>
-              <span style={{ marginTop: 4, color: '#7d7a72', fontSize: 10, lineHeight: 1.4 }}>{nextProject?.title ?? 'Start building your catalogue'}</span>
-            </Link>
-
-            <Link className="db-signal-card" to="/artist/passport" style={{ minHeight: 180, display: 'flex', flexDirection: 'column', padding: 17, borderRadius: 16, textDecoration: 'none', background: 'linear-gradient(145deg, rgba(18,21,24,.94), rgba(10,12,14,.92))', border: '1px solid rgba(255,255,255,.075)' }}>
-              <span style={{ fontSize: 9, color: '#596168', fontFamily: 'monospace', letterSpacing: '0.12em' }}>PASSPORT</span>
-              <strong style={{ marginTop: 'auto', color: '#E2C97E', fontFamily: "'Playfair Display', serif", fontWeight: 500, fontSize: 25 }}>Your record</strong>
-              <span style={{ marginTop: 4, color: '#7d7a72', fontSize: 10 }}>Projects, sessions and credits →</span>
-            </Link>
-
-            {balance > 0 && (
-              <button className="db-signal-card" type="button" onClick={() => setTopUpOpen(true)} style={{ minHeight: 180, display: 'flex', flexDirection: 'column', textAlign: 'left', padding: 17, borderRadius: 16, cursor: 'pointer', background: 'linear-gradient(145deg, rgba(18,21,24,.94), rgba(10,12,14,.92))', border: '1px solid rgba(255,255,255,.075)' }}>
-                <span style={{ fontSize: 9, color: '#596168', fontFamily: 'monospace', letterSpacing: '0.12em' }}>STUDIO CREDIT</span>
-                <strong style={{ marginTop: 'auto', color: '#f1efe9', fontFamily: "'Playfair Display', serif", fontWeight: 500, fontSize: 23 }}>${balance.toFixed(2)}</strong>
-                <span style={{ marginTop: 4, color: '#6aa9d2', fontSize: 10 }}>Ready to invest in studio time</span>
-              </button>
-            )}
-          </div>
-        </section>
+          <UpcomingSessions
+            bookings={allBookings}
+            isLoading={loadingBookings}
+            isError={bookingsError}
+            isFetching={fetchingBookings}
+            onRetry={() => { void refetchBookings(); }}
+          />
+        </div>
 
         {/* ── MY SIGNAL · MY ORBIT · OIANO NOW ──────────────────────────────
             ME → MY WORK are the hero + briefing grid above. This section is
@@ -516,7 +433,9 @@ export default function DashboardPage() {
             to, and the wider network it sits inside. Every number here is
             real (network-metrics.routes.ts / network-pulse.routes.ts) —
             nothing here is fabricated to look alive. */}
-        <section className="db-fade db-fade-1" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <details className="db-fade db-fade-1" style={{ border: '1px solid rgb(var(--experience-border))', borderRadius: 16, padding: 20 }}>
+          <summary style={{ cursor: 'pointer', color: 'rgb(var(--experience-secondary))', minHeight: 44 }}>Your wider network — activity and connections</summary>
+        <section aria-label="Network activity and connections" style={{ display: 'flex', flexDirection: 'column', gap: 20, marginTop: 16 }}>
           {/* Answered by GET /api/context in one call, rather than reconstructed
               from the eight queries this page already runs. It leads because a
               dashboard that reports state without naming an action leaves the
@@ -528,8 +447,9 @@ export default function DashboardPage() {
             <OianoNow />
           </div>
         </section>
+        </details>
 
-        <nav className="db-action-dock db-fade db-fade-1" aria-label="Work shortcuts" style={{ display: 'grid', gridTemplateColumns: `repeat(${balance === 0 ? 5 : 4}, 1fr)`, gap: 8, padding: 8, borderRadius: 16, background: 'rgba(14,17,19,.72)', border: '1px solid rgba(255,255,255,.07)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.025)' }}>
+        <nav className="db-action-dock db-fade db-fade-1" aria-label="Work shortcuts" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 8, padding: 8, borderRadius: 16, background: 'rgba(14,17,19,.72)', border: '1px solid rgba(255,255,255,.07)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.025)' }}>
           {[
             { label: 'Projects', to: '/projects', Icon: FolderKanban },
             { label: 'Contributions', to: '/contributions', Icon: Handshake },
@@ -544,17 +464,10 @@ export default function DashboardPage() {
             <Pencil size={18} strokeWidth={1.65} aria-hidden="true" />
             <span>Edit profile</span>
           </button>
-          {/* Zero-balance case: the studio-credit hero tile above disappears
-              entirely rather than showing "$0.00" — this keeps the "add
-              credit" action reachable at the smaller, less prominent depth
-              a not-yet-relevant action belongs at (Section 5 / HOME MIGRATION:
-              "become contextual" rather than "always visible"). */}
-          {balance === 0 && (
-            <button className="db-action-tile" type="button" onClick={() => setTopUpOpen(true)} style={{ minHeight: 66, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 7, color: '#898d90', background: 'transparent', border: '1px solid transparent', borderRadius: 11, fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>
+          <button className="db-action-tile" type="button" onClick={() => setTopUpOpen(true)} style={{ minHeight: 66, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 7, color: '#898d90', background: 'transparent', border: '1px solid transparent', borderRadius: 11, fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>
               <Wallet size={18} strokeWidth={1.65} aria-hidden="true" />
-              <span>Add credit</span>
-            </button>
-          )}
+              <span>{balance > 0 ? `Studio credit · $${balance.toFixed(2)}` : 'Add credit'}</span>
+          </button>
         </nav>
 
         <div className="db-fade db-fade-1 db-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
@@ -617,8 +530,8 @@ export default function DashboardPage() {
           <div className="db-col-right" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
             {/* Creative identity */}
-            <div style={{ background: '#111', border: '1px solid #1a1a1a', borderRadius: 12, padding: '16px 20px' }}>
-              <p style={{ fontSize: 10, color: '#3a3a3a', fontFamily: 'monospace', letterSpacing: '0.1em', marginBottom: 14 }}>CREATIVE IDENTITY</p>
+            <details style={{ background: '#111', border: '1px solid rgb(var(--experience-border))', borderRadius: 12, padding: '16px 20px' }}>
+              <summary style={{ cursor: 'pointer', minHeight: 44, color: 'rgb(var(--experience-secondary))', fontSize: 12 }}>Your creative profile details</summary>
 
               {genres.length > 0 && (
                 <div style={{ marginBottom: 12 }}>
@@ -651,13 +564,13 @@ export default function DashboardPage() {
 
               {!genres.length && !vocalType && !energyProfile && (
                 <div style={{ textAlign: 'center', padding: '12px 0' }}>
-                  <p style={{ fontSize: 11, color: '#2a2a2a' }}>No creative profile yet</p>
-                  <button onClick={() => setEditOpen(true)} style={{ marginTop: 8, fontSize: 11, color: '#5A9BCB', background: 'none', border: 'none', cursor: 'pointer' }}>
-                    Build your creative DNA →
+                  <p style={{ fontSize: 12, color: 'rgb(var(--experience-secondary))' }}>Add more about your practice whenever you’re ready.</p>
+                  <button type="button" className="creative-text-link" onClick={() => setEditOpen(true)} style={{ marginTop: 8, background: 'none', border: 'none', cursor: 'pointer' }}>
+                    Edit creative profile →
                   </button>
-                </div>
+                    </div>
               )}
-            </div>
+                </details>
 
           </div>
         </div>

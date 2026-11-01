@@ -1,17 +1,12 @@
 import React, { useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import AccountQueryProvider from './components/AccountQueryProvider';
 import App from './App';
 import { ToastProvider } from './components/Toast';
 import SplashScreen from './components/SplashScreen';
 import './index.css';
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: { staleTime: 30_000, retry: 1 },
-  },
-});
+import './styles/experience-tokens.css';
 
 function Root() {
   // Show splash once per browser session
@@ -36,12 +31,12 @@ function Root() {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+    <BrowserRouter>
+      <AccountQueryProvider>
         <ToastProvider>
           <Root />
         </ToastProvider>
-      </BrowserRouter>
-    </QueryClientProvider>
+      </AccountQueryProvider>
+    </BrowserRouter>
   </React.StrictMode>
 );

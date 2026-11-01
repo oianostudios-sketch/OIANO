@@ -4,6 +4,16 @@ export default {
   theme: {
     extend: {
       colors: {
+        experience: {
+          canvas: 'rgb(var(--experience-canvas) / <alpha-value>)',
+          surface: 'rgb(var(--experience-surface) / <alpha-value>)',
+          raised: 'rgb(var(--experience-raised) / <alpha-value>)',
+          border: 'rgb(var(--experience-border) / <alpha-value>)',
+          text: 'rgb(var(--experience-text) / <alpha-value>)',
+          secondary: 'rgb(var(--experience-secondary) / <alpha-value>)',
+          accent: 'rgb(var(--experience-gold) / <alpha-value>)',
+          focus: 'rgb(var(--experience-blue) / <alpha-value>)',
+        },
         gold: {
           DEFAULT: '#C9A84C',
           light: '#E2C97E',
