@@ -304,24 +304,31 @@ async function handleRefund(charge: Stripe.Charge) {
   const paymentIntentId = charge.payment_intent as string | null;
   if (!paymentIntentId) return;
 
-  const payment = await prisma.payment.findFirst({
-    where: { payment_intent_id: paymentIntentId, status: { in: ['PAID', 'PARTIALLY_REFUNDED'] } },
-    include: { booking: { include: { studio: true } } },
-  });
-  if (!payment) return;
   const cumulativeRefund = Number(charge.amount_refunded ?? 0) / 100;
-  const delta = Math.round((cumulativeRefund - Number(payment.refunded_usd)) * 100) / 100;
-  if (delta <= 0) return;
   await prisma.$transaction(async tx => {
-    const claimed = await tx.payment.updateMany({
-      where: { id: payment.id, refunded_usd: payment.refunded_usd },
+    // Serialize refunds for this payment before reading the cumulative amount.
+    // A failed optimistic claim used to acknowledge a newer refund without
+    // posting it. The lock lasts through both the state update and ledger write.
+    const [locked] = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM payments
+      WHERE payment_intent_id = ${paymentIntentId} AND status IN ('PAID', 'PARTIALLY_REFUNDED')
+      LIMIT 1 FOR UPDATE`;
+    if (!locked) return;
+    const payment = await tx.payment.findUniqueOrThrow({
+      where: { id: locked.id },
+      include: { booking: { include: { studio: true } } },
+    });
+    if (payment.status !== 'PAID' && payment.status !== 'PARTIALLY_REFUNDED') return;
+    const delta = Math.round((cumulativeRefund - Number(payment.refunded_usd)) * 100) / 100;
+    if (delta <= 0) return;
+    await tx.payment.update({
+      where: { id: payment.id },
       data: {
         refunded_usd: cumulativeRefund,
         refund_ref: charge.id,
         status: cumulativeRefund >= Number(payment.amount_usd) ? 'REFUNDED' : 'PARTIALLY_REFUNDED',
       },
     });
-    if (claimed.count !== 1) return;
     const allocation = bookingAllocation(delta, payment.booking.studio.platform_fee_bps);
     const lines: Array<{ account_code: string; direction: 'DEBIT'|'CREDIT'; amount_usd: number; owner_type?: string; owner_id?: string }> = [{ account_code: 'CASH_CLEARING', direction: 'CREDIT', amount_usd: allocation.gross }];
     if (allocation.studioNet > 0) lines.push({ account_code: 'STUDIO_PAYABLE', direction: 'DEBIT', amount_usd: allocation.studioNet, owner_type: 'STUDIO', owner_id: payment.booking.studio_id });
