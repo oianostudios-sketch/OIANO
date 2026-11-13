@@ -8,6 +8,7 @@ import { attachStudioScope } from '../middleware/studioScope.middleware';
 import { Prisma } from '@prisma/client';
 import { CASH_PLATFORM_FEE_BPS, recordBookingPayment, recordStudioCollectedCash } from '../lib/financialLedger';
 import { transitionBookingStatus } from '../lib/bookingTransitions';
+import { cashPaymentEligibility } from '../lib/cashPaymentEligibility';
 import { writeAdminAudit } from '../lib/adminAudit';
 import { addCalendarDays, studioDate, studioDateBounds } from '../lib/studioClock';
 import { findRoomClash, isRoomClash } from '../lib/roomSchedule';
@@ -183,7 +184,7 @@ adminRouter.get('/runsheet', async (req, res, next) => {
         room:     { select: { id: true, name: true } },
         engineer: { select: { id: true, name: true } },
         service:  { select: { id: true, name: true } },
-        payment:  { select: { status: true } },
+        payment:  { select: { status: true, provider_ref: true, payment_intent_id: true } },
       },
       orderBy: { starts_at: 'asc' },
     });
@@ -226,6 +227,7 @@ adminRouter.get('/runsheet', async (req, res, next) => {
         status: b.status,
         payment_status: b.payment?.status ?? 'UNPAID',
         total_usd: Number(b.total_usd ?? 0),
+        can_record_cash: cashPaymentEligibility(b.status, Number(b.total_usd ?? 0), b.payment).eligible,
         notes: b.notes ?? '',
         conflict: conflictIds.has(b.id),
       };
@@ -357,8 +359,6 @@ adminRouter.post('/walkin', async (req, res, next) => {
 // studio-policy.routes.ts; lib/staffPermission.ts). VIEW_FINANCE reads money; it
 // does not record it.
 const CashPaymentSchema = z.object({}).strict();
-const PAYABLE_IN_CASH = new Set(['UNPAID']);
-
 adminRouter.post('/bookings/:id/cash-payment', async (req, res, next) => {
   try {
     // Nothing the caller sends decides the payment; an amount is refused, not ignored.
@@ -377,18 +377,23 @@ adminRouter.post('/bookings/:id/cash-payment', async (req, res, next) => {
       if (!locked) throw new AppError('Booking not found', 404);
       const booking = await tx.booking.findUniqueOrThrow({ where: { id: locked.id }, include: { payment: true } });
 
-      if (booking.status === 'CANCELLED' || booking.status === 'NO_SHOW') {
-        throw new AppError(`This booking is ${booking.status === 'CANCELLED' ? 'cancelled' : 'marked no-show'}; no payment can be recorded for it`, 409);
-      }
       const existing = booking.payment;
-      if (existing && existing.status === 'PAID') throw new AppError('This booking is already paid', 409);
-      // A payment that was ever sent to a checkout may still be paid there, and one
-      // that was refunded has its own history; neither becomes a cash payment.
-      if (existing && (!PAYABLE_IN_CASH.has(existing.status) || existing.provider_ref || existing.payment_intent_id)) {
-        throw new AppError('This booking has a payment in another state; it cannot be recorded as cash', 409);
-      }
       const amountUsd = Number(booking.total_usd);
-      if (!Number.isFinite(amountUsd) || amountUsd <= 0) throw new AppError('This booking has no amount to pay', 409);
+      const eligibility = cashPaymentEligibility(booking.status, amountUsd, existing);
+      if (!eligibility.eligible) {
+        switch (eligibility.reason) {
+          case 'cancelled':
+            throw new AppError('This booking is cancelled; no payment can be recorded for it', 409);
+          case 'no-show':
+            throw new AppError('This booking is marked no-show; no payment can be recorded for it', 409);
+          case 'already-paid':
+            throw new AppError('This booking is already paid', 409);
+          case 'other-payment-state':
+            throw new AppError('This booking has a payment in another state; it cannot be recorded as cash', 409);
+          case 'no-amount':
+            throw new AppError('This booking has no amount to pay', 409);
+        }
+      }
 
       const paidAt = new Date();
       let paymentId: string;

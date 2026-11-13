@@ -225,6 +225,27 @@ test('a studio records a cash payment once, through the ledger', async (t) => {
     assert.equal(transactions.filter((tx) => tx.source_type === 'BOOKING_PAYMENT').length, 1);
   });
 
+  await t.test('runsheet offers cash recording only when the payment is eligible', async () => {
+    const at = await makeStudio('runsheet-eligibility');
+    const staff = await staffAt(at.studio.id, ['MANAGE_BOOKINGS']);
+    const eligible = await plainBooking(at, 'CONFIRMED');
+    const inFlight = await plainBooking(at, 'CONFIRMED');
+    await prisma.payment.create({
+      data: { booking_id: inFlight.id, provider: 'stripe', provider_ref: unique('checkout'), amount_usd: 50, status: 'PROCESSING' },
+    });
+
+    const runsheetDate = (startsAt: Date) =>
+      new Intl.DateTimeFormat('en-CA', { timeZone: at.studio.timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(startsAt);
+    const runsheetBooking = async (bookingId: string, startsAt: Date) => {
+      const result = await request(`/admin/runsheet?date=${runsheetDate(startsAt)}`, staff, 'GET');
+      assert.equal(result.status, 200, JSON.stringify(result.body));
+      return result.body.bookings.find((booking: { id: string }) => booking.id === bookingId);
+    };
+
+    assert.equal((await runsheetBooking(eligible.id, eligible.starts_at)).can_record_cash, true);
+    assert.equal((await runsheetBooking(inFlight.id, inFlight.starts_at)).can_record_cash, false);
+  });
+
   await t.test('a second recording is refused and changes nothing', async () => {
     const at = await makeStudio('twice');
     const staff = await staffAt(at.studio.id, ['MANAGE_BOOKINGS']);

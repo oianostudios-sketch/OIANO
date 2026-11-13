@@ -6,6 +6,7 @@ import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { AppError } from '../lib/errors';
 import { resolveStaffStudio } from '../middleware/studioScope.middleware';
 import { studioDate, studioDateBounds } from '../lib/studioClock';
+import { cashPaymentEligibility } from '../lib/cashPaymentEligibility';
 
 export const engineersRouter = Router();
 
@@ -121,7 +122,7 @@ engineersRouter.get('/runsheet', authenticate, requireRole('ENGINEER', 'STUDIO_A
         room:     { select: { id: true, name: true } },
         engineer: { select: { id: true, name: true } },
         service:  { select: { id: true, name: true } },
-        payment:  { select: { status: true } },
+        payment:  { select: { status: true, provider_ref: true, payment_intent_id: true } },
       },
       orderBy: { starts_at: 'asc' },
     });
@@ -163,6 +164,7 @@ engineersRouter.get('/runsheet', authenticate, requireRole('ENGINEER', 'STUDIO_A
         status: b.status,
         payment_status: b.payment?.status ?? 'UNPAID',
         total_usd: Number(b.total_usd ?? 0),
+        can_record_cash: cashPaymentEligibility(b.status, Number(b.total_usd ?? 0), b.payment).eligible,
         notes: b.notes ?? '',
         conflict: conflictIds.has(b.id),
       };
