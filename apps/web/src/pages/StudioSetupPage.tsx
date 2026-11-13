@@ -7,8 +7,8 @@ import { useToast } from '../components/Toast';
 import { WALLET_ENABLED } from '../lib/walletFreeze';
 import { studioServicePricingCopy } from '../lib/studioServicePricingCopy';
 
-// A studio's rooms and services: what artists can book, and the price each booking is
-// charged. A booking needs one of each, so a studio with neither cannot be booked.
+// A studio's rooms and services: what artists can book, and the price shown for
+// each booking. A booking needs one of each, so a studio with neither cannot be booked.
 
 type Room = { id: string; name: string; capacity: number | null; description: string | null; hourly_rate: number | null; amenities: string[]; booking_count: number };
 type Service = { id: string; name: string; category: string; description: string | null; unit: string; min_price_usd: number; max_price_usd: number; booking_count: number };
@@ -133,7 +133,7 @@ export default function StudioSetupPage() {
           <p className="text-[10px] text-zinc-400">{serviceEditing ? 'Edit service' : 'Add a service'}</p>
           <label className={`${caption} mt-3`}>Name<input value={service.name} onChange={(e) => setService({ ...service, name: e.target.value })} maxLength={120} className={field}/></label>
           <div className="mt-3 grid grid-cols-2 gap-3"><label className={caption}>Kind<select value={service.category} onChange={(e) => setService({ ...service, category: e.target.value })} className={`${field} bg-[#0a0b0c]`}>{CATEGORIES.map((c) => <option key={c} value={c}>{label(c)}</option>)}</select></label>
-            <label className={caption}>Charged<select value={service.unit} onChange={(e) => setService({ ...service, unit: e.target.value })} className={`${field} bg-[#0a0b0c]`}>{Object.entries(UNITS).map(([u, text]) => <option key={u} value={u}>{text}</option>)}</select></label></div>
+            <label className={caption}>Price unit<select value={service.unit} onChange={(e) => setService({ ...service, unit: e.target.value })} className={`${field} bg-[#0a0b0c]`}>{Object.entries(UNITS).map(([u, text]) => <option key={u} value={u}>{text}</option>)}</select></label></div>
           <div className="mt-3 grid grid-cols-2 gap-3"><label className={caption}>Price (USD)<input value={service.price} onChange={(e) => setService({ ...service, price: e.target.value })} inputMode="decimal" placeholder="50" className={`${field} font-mono`}/></label>
             <label className={caption}>Up to (optional)<input value={service.upper} onChange={(e) => setService({ ...service, upper: e.target.value })} inputMode="decimal" className={`${field} font-mono`}/></label></div>
           <p className="mt-2 text-[10px] text-zinc-600">{studioServicePricingCopy({ unit: service.unit, walletEnabled: WALLET_ENABLED })}</p>
