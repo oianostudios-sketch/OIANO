@@ -6,6 +6,7 @@ import { useAuthStore } from '../store/auth.store';
 import { useToast } from '../components/Toast';
 import TrustSignal from '../components/TrustSignal';
 import { studioDate, studioTimeToIso } from '../lib/fmt';
+import { bookingRequestLabel } from '../lib/bookingCopy';
 import { WALLET_ENABLED } from '../lib/walletFreeze';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -980,7 +981,13 @@ export default function BookingPage() {
                 disabled={!canAfford || selectionConflicts || availabilityError || createBooking.isPending}
                 className="w-full mt-6 bg-dome text-black font-semibold py-3.5 rounded-xl hover:bg-dome-light transition-colors disabled:opacity-40 disabled:cursor-not-allowed font-display text-sm tracking-wide"
               >
-                {createBooking.isPending ? 'Securing your session…' : `Request ${repeatEnabled ? `${repeatWeeks} sessions` : 'this session'} · $${grandTotal.toFixed(2)} studio credit →`}
+                {bookingRequestLabel({
+                  pending: createBooking.isPending,
+                  repeatEnabled,
+                  repeatWeeks,
+                  total: grandTotal,
+                  walletEnabled: WALLET_ENABLED,
+                })}
               </button>
             </div>
           )}

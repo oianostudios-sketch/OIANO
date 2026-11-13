@@ -9,9 +9,12 @@ import MessageThread from '../components/MessageThread';
 import ArtistReviewForm from '../components/ArtistReviewForm';
 import SessionCompletionModal from '../components/SessionCompletionModal';
 import SessionInsightCard from '../components/SessionInsightCard';
+import CancellationPolicyDetails from '../components/CancellationPolicyDetails';
 import { useToast } from '../components/Toast';
 import { BookingStatus, STATUS_TAILWIND, STATUS_HEX, STATUS_MESSAGE } from '../lib/bookingStatus';
 import { mayClaimPaymentReceived, settlementView } from '../lib/paymentReturn';
+import { WALLET_ENABLED } from '../lib/walletFreeze';
+import { bookingPaymentCopy } from '../lib/bookingPaymentCopy';
 
 
 // ── Stripe pay button ─────────────────────────────────────────────────────────
@@ -174,6 +177,11 @@ export default function BookingDetailPage() {
 
   const paymentState: string = booking?.payment?.status ?? 'UNPAID';
   const paymentSettled = mayClaimPaymentReceived(paymentState);
+  const paymentCopy = bookingPaymentCopy({
+    walletEnabled: WALLET_ENABLED,
+    provider: booking?.payment?.provider,
+    status: booking?.payment?.status,
+  });
   const settlementState = settlementView({
     returned: settlement === 'checking' ? 'success' : settlement === 'cancelled' ? 'cancelled' : null,
     recorded: booking?.payment?.status,
@@ -415,20 +423,20 @@ export default function BookingDetailPage() {
 
         {/* Payment */}
         <div className="bg-studio-surface border border-studio-border rounded-xl p-6 animate-surface-2">
-          <p className="label-mono mb-5 flex items-center gap-2"><CreditCard size={12} strokeWidth={2} /> Payment</p>
+          <p className="label-mono mb-5 flex items-center gap-2"><CreditCard size={12} strokeWidth={2} /> {paymentCopy.section}</p>
           <div className="flex justify-between items-end">
             <div>
-              <p className="text-zinc-500 text-xs">Total</p>
+              <p className="text-zinc-500 text-xs">{paymentCopy.amount}</p>
               <p className="metric-number animate-metric text-3xl text-white mt-1">${Number(booking.total_usd ?? 0).toFixed(2)}</p>
             </div>
             <div className="text-right">
-              <p className="text-zinc-500 text-xs">Payment status</p>
+              <p className="text-zinc-500 text-xs">{paymentCopy.status}</p>
               <span className={`inline-flex items-center gap-2 text-sm font-medium font-mono ${
                 booking.payment?.status === 'PAID' ? 'text-green-400' :
                 booking.payment?.status === 'PARTIAL' ? 'text-yellow-400' : 'text-zinc-400'
               }`}>
                 <span className="signal-dot" style={{ '--signal': booking.payment?.status === 'PAID' ? '#4ade80' : booking.payment?.status === 'PARTIAL' ? '#facc15' : '#71717a' } as React.CSSProperties} />
-                {booking.payment?.status ?? 'UNPAID'}
+                {paymentCopy.value}
               </span>
             </div>
           </div>
@@ -644,26 +652,7 @@ export default function BookingDetailPage() {
           </button>
           {policyOpen && (
             <div className="px-5 pb-5 space-y-3 text-sm text-zinc-500 border-t border-studio-border pt-4">
-              <p>We know life as an artist is unpredictable. Here's how we handle changes:</p>
-              <div className="space-y-2">
-                <div className="flex gap-3">
-                  <span className="text-dome font-mono text-xs mt-0.5">72h+</span>
-                  <span>Cancel or reschedule with no fee. Your credits are returned in full.</span>
-                </div>
-                <div className="flex gap-3">
-                  <span className="text-dome font-mono text-xs mt-0.5">48h</span>
-                  <span>50% of session credits are retained. The rest return to your wallet.</span>
-                </div>
-                <div className="flex gap-3">
-                  <span className="text-dome font-mono text-xs mt-0.5">24h</span>
-                  <span>Last-minute cancellations retain the full session cost. Reach out to the studio if there's an emergency — we're human.</span>
-                </div>
-                <div className="flex gap-3">
-                  <span className="text-dome font-mono text-xs mt-0.5">Now</span>
-                  <span>Use the Reschedule button above to move to a new slot at no extra charge (72h+ notice). The studio is always on your side.</span>
-                </div>
-              </div>
-              <p className="text-zinc-600 text-xs pt-1">Rescheduling is always free with sufficient notice. Contact the studio directly for anything not covered here.</p>
+              <CancellationPolicyDetails walletEnabled={WALLET_ENABLED} />
             </div>
           )}
         </div>
@@ -683,7 +672,7 @@ export default function BookingDetailPage() {
               to={`/receipt/${booking.id}`}
               className="flex-1 text-center py-3 rounded-xl border border-studio-border text-zinc-400 text-sm hover:border-zinc-600 hover:text-white transition-colors"
             >
-              View receipt
+              {WALLET_ENABLED ? 'View receipt' : 'Booking summary'}
             </Link>
           )}
         </div>

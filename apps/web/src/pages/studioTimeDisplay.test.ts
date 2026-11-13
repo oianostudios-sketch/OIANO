@@ -9,6 +9,7 @@ import { ToastProvider } from '../components/Toast';
 import { isoAngle } from '../components/SmartClock/smartClockModel';
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
+import { WALLET_ENABLED } from '../lib/walletFreeze';
 
 vi.mock('../lib/api', () => ({ api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() } }));
 
@@ -19,7 +20,7 @@ vi.mock('../lib/api', () => ({ api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(
 const booking = {
   id: 'booking-1', status: 'CONFIRMED',
   starts_at: '2026-10-06T02:00:00.000Z', ends_at: '2026-10-06T05:00:00.000Z',
-  total_usd: '300', project_id: null, project: null, deliverables: [], payment: null, session_log: null, engineer: null,
+  total_usd: '300',   project_id: null, project: null, deliverables: [], payment: { status: 'UNPAID', provider: 'cash' }, session_log: null, engineer: null,
   studio: { id: 'studio-akl', name: 'Harbour Room', timezone: 'Pacific/Auckland' },
   room: { name: 'Room A' }, service: { name: 'Tracking' },
   artist: { id: 'artist-1', name: 'Ada', alias: null, user_id: 'artist-user', user: { id: 'artist-user', email: 'ada@example.test' } },
@@ -75,6 +76,8 @@ describe('session times on booking pages, for a viewer outside the studio zone',
     expect(text()).toContain('Tuesday, October 6, 2026');
     expect(text()).toContain('03:00 PM → 06:00 PM GMT+13 (3h)');
     expect(text()).not.toContain('07:00 PM');
+    expect(text()).toContain(WALLET_ENABLED ? 'Payment status' : 'Settlement status');
+    expect(text()).toContain(WALLET_ENABLED ? 'UNPAID' : 'Due at studio');
   });
 
   it('reschedule starts from, and sends, the studio wall clock', async () => {
@@ -94,6 +97,7 @@ describe('session times on booking pages, for a viewer outside the studio zone',
     expect(text()).toContain('Tuesday, October 6, 2026');
     expect(text()).toContain('03:00 PM → 06:00 PM GMT+13 (3.0h)');
     expect(text()).not.toContain('07:00 PM');
+    expect(text()).toContain(WALLET_ENABLED ? 'STUDIO RECEIPT' : 'STUDIO BOOKING SUMMARY');
   });
 });
 

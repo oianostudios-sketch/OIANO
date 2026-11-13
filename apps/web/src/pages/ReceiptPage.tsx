@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import OianoBrand from '../components/OianoBrand';
 import { fmtDateLong, fmtTime, zoneName } from '../lib/fmt';
+import { bookingDocumentLabels } from '../lib/bookingDocument';
+import { WALLET_ENABLED } from '../lib/walletFreeze';
 
 export default function ReceiptPage() {
   const { id } = useParams<{ id: string }>();
@@ -48,6 +50,11 @@ export default function ReceiptPage() {
   const zone = tz ? ` ${zoneName(booking.starts_at, tz)}` : '';
 
   const total = Number(booking.total_usd ?? 0);
+  const documentLabels = bookingDocumentLabels({
+    walletEnabled: WALLET_ENABLED,
+    paymentStatus: booking.payment?.status,
+    paymentProvider: booking.payment?.provider,
+  });
 
   return (
     <>
@@ -102,12 +109,12 @@ export default function ReceiptPage() {
           <div>
             <OianoBrand variant="compact" size={22} />
             <p style={{ color: '#666', fontSize: 11, margin: '4px 0 0', letterSpacing: 1 }}>
-              {(booking.studio?.name ?? 'Studio').toUpperCase()} · STUDIO RECEIPT
+              {(booking.studio?.name ?? 'Studio').toUpperCase()} · {documentLabels.title}
             </p>
           </div>
           <div style={{ textAlign: 'right' }}>
             <p style={{ color: '#555', fontSize: 11, margin: 0, fontFamily: "'JetBrains Mono', monospace" }}>
-              Receipt #{booking.id?.slice(0, 8).toUpperCase()}
+              {documentLabels.reference} #{booking.id?.slice(0, 8).toUpperCase()}
             </p>
             <p style={{ color: '#333', fontSize: 11, margin: '4px 0 0', fontFamily: "'JetBrains Mono', monospace" }}>
               {new Date().toLocaleDateString('en-US')}
@@ -124,7 +131,7 @@ export default function ReceiptPage() {
           {/* Artist + session title */}
           <div style={{ marginBottom: 32 }}>
             <p style={{ fontSize: 11, color: '#999', textTransform: 'uppercase', letterSpacing: 2, margin: '0 0 4px' }}>
-              Billed to
+              {documentLabels.party}
             </p>
             <p style={{ fontSize: 18, fontWeight: 600, color: '#111', margin: 0 }}>
               {booking.artist?.name ?? 'Artist'}
@@ -209,7 +216,7 @@ export default function ReceiptPage() {
                       letterSpacing: 0.5,
                     }}
                   >
-                    {booking.payment?.status ?? 'UNPAID'}
+                    {documentLabels.payment}
                   </span>
                 </td>
               </tr>
