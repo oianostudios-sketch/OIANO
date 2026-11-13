@@ -24,6 +24,7 @@ interface RunsheetBooking {
   service: string;
   status: string;
   payment_status: string;
+  can_record_cash: boolean;
   total_usd: number;
   notes: string;
   conflict: boolean;
@@ -269,7 +270,7 @@ export default function RunsheetPage() {
           </td>
           <td style={{ padding: '10px 8px' }}>
             <Pill label={b.payment_status} color={PAY_COLOR[b.payment_status] ?? '#6b7280'} />
-            {isAdmin && canManageBookings && b.payment_status === 'UNPAID' && b.status !== 'CANCELLED' && b.status !== 'NO_SHOW' && b.total_usd > 0 && (
+            {isAdmin && canManageBookings && b.can_record_cash && (
               <div style={{ marginTop: 2 }}>
                 <button className="no-print" disabled={recordCash.isPending}
                   onClick={() => { if (window.confirm(`Record ${usd(b.total_usd)} received in cash from ${b.artist_name}?`)) recordCash.mutate(b.id); }}
