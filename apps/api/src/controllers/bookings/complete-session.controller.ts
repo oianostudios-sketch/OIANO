@@ -98,8 +98,8 @@ export async function completeSession(req: Request, res: Response, next: NextFun
       if (share.holder_type === 'ARTIST' && share.holder_ref_id === booking.artist_id) {
         holderUserId = booking.artist?.user_id ?? null;
       }
-      if (share.holder_type === 'PRODUCER' && share.holder_ref_id === booking.project?.producer.id) {
-        holderUserId = booking.project?.producer.user_id ?? null;
+      if (share.holder_type === 'PRODUCER' && booking.project?.producer && share.holder_ref_id === booking.project.producer.id) {
+        holderUserId = booking.project.producer.user_id;
       }
       if (share.holder_type === 'PARTICIPANT' && share.holder_ref_id) {
         holderUserId = booking.project?.participants.find(participant => participant.id === share.holder_ref_id)?.participant_ref_id ?? null;

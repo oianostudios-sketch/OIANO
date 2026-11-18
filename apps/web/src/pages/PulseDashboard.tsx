@@ -59,7 +59,7 @@ interface CircleData {
 interface WorkPerson { id: string; name: string; alias?: string | null; avatar_url?: string | null }
 interface CurrentWorkProject {
   id: string; title: string; phase: string; last_session_at?: string | null;
-  artist?: WorkPerson | null; producer: WorkPerson;
+  artist?: WorkPerson | null; producer?: WorkPerson | null;
   bookings: Array<{ id: string; starts_at: string; ends_at: string; status: string; room: { name: string }; engineer?: WorkPerson | null }>;
 }
 interface CurrentWorkSession {
@@ -1015,17 +1015,17 @@ export default function PulseDashboard() {
                       const latest = project.bookings[0];
                       const primary = project.artist;
                       const primaryName = primary ? (primary.alias ?? primary.name) : project.title;
-                      const producerName = project.producer.alias ?? project.producer.name;
+                      const producerName = project.producer ? (project.producer.alias ?? project.producer.name) : null;
                       return (
                         <button key={project.id} className="work-face-card" onClick={() => latest && navigate(`/bookings/${latest.id}`)} disabled={!latest}>
                           <div className="work-face-stack">
                             <ArtistAvatar src={primary?.avatar_url} name={primaryName} size={45} />
-                            <ArtistAvatar src={project.producer.avatar_url} name={producerName} size={24} />
+                            {project.producer && <ArtistAvatar src={project.producer.avatar_url} name={producerName ?? ''} size={24} />}
                           </div>
                           <div className="work-face-copy">
                             <span className="work-face-kind">Project · {project.phase.replaceAll('_', ' ')}</span>
                             <strong>{project.title}</strong>
-                            <span>{primaryName} · Producer {producerName}</span>
+                            <span>{producerName ? `${primaryName} · Producer ${producerName}` : primaryName}</span>
                             <em>{latest ? `${latest.room.name} · ${fmtTime(latest.starts_at, studioTz)}` : 'No linked session'}</em>
                           </div>
                         </button>

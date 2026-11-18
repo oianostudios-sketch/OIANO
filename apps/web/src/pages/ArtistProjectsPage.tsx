@@ -94,6 +94,37 @@ export default function ArtistProjectsPage() {
     onError: (error: any) => toast.error(error?.response?.data?.error ?? 'Session could not be detached'),
   });
 
+  // An artist starts a project of their own. It has no producer until one is named.
+  const [startOpen, setStartOpen] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newNotes, setNewNotes] = useState('');
+  const startProject = useMutation({
+    mutationFn: () => api.post('/artist-projects', { title: newTitle.trim(), notes: newNotes.trim() || undefined }),
+    onSuccess: ({ data }) => {
+      queryClient.invalidateQueries({ queryKey: ['artist-projects'] });
+      setStartOpen(false); setNewTitle(''); setNewNotes(''); setFilter('ACTIVE');
+      setParams({ project: data.id });
+      toast.success('Project started');
+    },
+    onError: (error: any) => toast.error(error?.response?.data?.error ?? 'Project could not be started'),
+  });
+  const startForm = startOpen && (
+    <form
+      aria-label="Start a project"
+      onSubmit={(event) => { event.preventDefault(); if (newTitle.trim()) startProject.mutate(); }}
+      className="mb-6 rounded-2xl border border-gold/20 bg-gold/[.04] p-5 text-left"
+    >
+      <label htmlFor="new-project-title" className="block text-xs text-zinc-400">Project title</label>
+      <input id="new-project-title" value={newTitle} onChange={(event) => setNewTitle(event.target.value)} maxLength={200} required autoFocus className="mt-1 w-full rounded-lg border border-white/[.1] bg-black/30 px-3 py-2 text-sm text-zinc-100" />
+      <label htmlFor="new-project-notes" className="mt-3 block text-xs text-zinc-400">What are you making? <span className="text-zinc-600">(optional)</span></label>
+      <textarea id="new-project-notes" value={newNotes} onChange={(event) => setNewNotes(event.target.value)} maxLength={2000} rows={3} className="mt-1 w-full rounded-lg border border-white/[.1] bg-black/30 px-3 py-2 text-sm text-zinc-100" />
+      <div className="mt-4 flex gap-2">
+        <button type="submit" disabled={!newTitle.trim() || startProject.isPending} className="rounded-lg bg-dome px-4 py-2 text-xs font-bold text-black disabled:opacity-50">{startProject.isPending ? 'Starting…' : 'Start project'}</button>
+        <button type="button" onClick={() => setStartOpen(false)} className="rounded-lg border border-white/[.1] px-4 py-2 text-xs text-zinc-400">Cancel</button>
+      </div>
+    </form>
+  );
+
   useEffect(() => {
     if (!selectedId && filtered[0]) setParams({ project: filtered[0].id }, { replace: true });
   }, [selectedId, filtered, setParams]);
@@ -101,13 +132,14 @@ export default function ArtistProjectsPage() {
   return (
     <div className="artist-workspace min-h-screen text-zinc-100 pb-28">
       <header className="sticky top-0 z-20 border-b border-white/[.07] px-5 py-4">
-        <div className="mx-auto flex max-w-6xl items-center gap-4">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2">
           <Link to="/dashboard" className="text-xs text-zinc-500 hover:text-white">← Home</Link>
           <div>
             <p className="text-[9px] font-mono uppercase tracking-[.18em] text-gold">Your projects and collaborators</p>
             <h1 className="text-xl font-medium">Projects</h1>
           </div>
-          <Link to="/book" className="ml-auto inline-flex items-center rounded-lg border border-gold/30 bg-gold/10 px-3 py-2 text-xs font-semibold text-gold hover:bg-gold/20">Plan next session</Link>
+          <button type="button" onClick={() => setStartOpen(true)} className="ml-auto inline-flex items-center rounded-lg border border-white/[.12] px-3 py-2 text-xs font-semibold text-zinc-200 hover:border-gold/30">Start a project</button>
+          <Link to="/book" className="inline-flex items-center rounded-lg border border-gold/30 bg-gold/10 px-3 py-2 text-xs font-semibold text-gold hover:bg-gold/20">Plan next session</Link>
         </div>
       </header>
 
@@ -122,14 +154,18 @@ export default function ArtistProjectsPage() {
           </div>
         </div>
 
+        {startForm}
         {isLoading ? <div className="grid min-h-[360px] place-items-center text-xs font-mono text-zinc-600">OPENING PROJECTS…</div> : isError ? (
           <div className="rounded-2xl border border-red-900/40 bg-red-950/15 p-8 text-center"><p className="text-sm text-red-200">Projects could not be loaded.</p><button onClick={() => refetch()} className="mt-4 rounded-lg border border-red-800 px-4 py-2 text-xs">Try again</button></div>
         ) : filtered.length === 0 ? (
           <div className="rounded-2xl border border-white/[.07] bg-white/[.018] px-6 py-16 text-center">
             <FolderKanban className="mx-auto text-zinc-700" size={32} strokeWidth={1.3} />
             <h3 className="mt-5 text-xl">{filter === 'ACTIVE' ? 'Your next record starts here.' : 'No delivered projects yet.'}</h3>
-            <p className="mx-auto mt-2 max-w-md text-sm text-zinc-600">{filter === 'ACTIVE' ? 'Projects linked to you appear here. You can also join a project through a contribution invitation.' : 'Delivered projects stay here alongside their sessions and credits.'}</p>
-            {filter === 'ACTIVE' && <Link to="/contributions" className="mt-6 inline-block rounded-lg bg-dome px-4 py-2.5 text-xs font-bold text-black">Review contribution invitations →</Link>}
+            <p className="mx-auto mt-2 max-w-md text-sm text-zinc-600">{filter === 'ACTIVE' ? 'Start a project of your own, or join one through a contribution invitation.' : 'Delivered projects stay here alongside their sessions and credits.'}</p>
+            {filter === 'ACTIVE' && !startOpen && <div className="mt-6 flex flex-wrap justify-center gap-3">
+              <button type="button" onClick={() => setStartOpen(true)} className="rounded-lg bg-dome px-4 py-2.5 text-xs font-bold text-black">Start a project</button>
+              <Link to="/contributions" className="rounded-lg border border-white/[.12] px-4 py-2.5 text-xs text-zinc-300">Review contribution invitations →</Link>
+            </div>}
           </div>
         ) : (
           <div className="artist-project-layout grid grid-cols-[310px_minmax(0,1fr)] gap-5">
