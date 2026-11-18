@@ -6,6 +6,7 @@ import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
 import { PERFORMED_SESSION_WHERE, summariseVerifiedWork } from '../lib/verifiedWork';
+import { contributorCredits } from '../lib/contributorCredits';
 import { portfolioBreakdown, portfolioScore } from '../lib/passportScore';
 import { isR2Configured, uploadToR2, deleteFromR2 } from '../lib/r2';
 import { getImageUpload, normalizeImageUpload, writeNormalizedImageLocally } from '../lib/imageUpload';
@@ -117,6 +118,9 @@ passportRouter.get('/public/:code', async (req, res, next) => {
         },
         releases: artist.releases,
         projects: artist.projects.map((project) => ({ id: project.id, title: project.title, phase: project.phase, updated_at: project.updated_at })),
+        // Credits on other people's projects, only where both the contributor and the
+        // project's artist have made them public (lib/contributorCredits.ts).
+        credits: await contributorCredits(artist.user_id, 'public'),
       },
       score,
       stats: {
@@ -195,6 +199,8 @@ passportRouter.get('/portfolio', async (req: any, res, next) => {
     const completedProjects = artist.projects.filter((p) => p.phase === 'DELIVERED');
     res.json({
       artist: { ...artist, projects: artist.projects.filter((p) => p.is_public) },
+      // Every credit this artist confirmed, each marked with whether it is public.
+      credits: await contributorCredits(req.userId, 'own'),
       // Same authoritative computation as everywhere else, so the number an
       // artist reads here is the number that is stored.
       score: await recalculatePortfolioScore(artist.id),

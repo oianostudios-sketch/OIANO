@@ -580,6 +580,20 @@ export default function PassportPage() {
             )}
           </div>
 
+          {/* Credits confirmed on other people's projects */}
+          {(portfolioData?.credits?.length ?? 0) > 0 && (
+            <div className="pp-panel">
+              <div className="pp-panel-label">Credits</div>
+              {portfolioData.credits.map((credit: any) => (
+                <div key={credit.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '10px 0', borderBottom: '1px solid #171717' }}>
+                  <span>{credit.project.title} <span style={{ color: '#777', fontSize: 11 }}>· {credit.role.replaceAll('_', ' ').toLowerCase()}</span></span>
+                  <span style={{ color: credit.published ? '#5A9BCB' : '#777', fontSize: 10, fontFamily: 'monospace' }}>{credit.published ? 'ON PASSPORT' : 'PRIVATE'}</span>
+                </div>
+              ))}
+              <p style={{ color: '#777', fontSize: 11, marginTop: 10 }}>A credit appears on your public Passport once the project's artist makes the project public.</p>
+            </div>
+          )}
+
           <details className="pp-details">
             <summary>
               <div className="pp-details-heading"><div className="pp-details-title">Passport details</div><div className="pp-details-subtitle">Strength, Creative DNA, verification, sharing and audience insights</div></div>
