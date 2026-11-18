@@ -880,8 +880,11 @@ model Track {
 
 model Project {
   id                   String               @id @default(uuid())
-  producer_id          String
-  producer             Producer             @relation(fields: [producer_id], references: [id])
+  // Null when an artist started the project themselves (POST /api/artist-projects).
+  // Producer routes scope every read and write by producer_id, so such a project
+  // never reaches a producer until a later step names one.
+  producer_id          String?
+  producer             Producer?            @relation(fields: [producer_id], references: [id])
   artist_id            String?
   artist               Artist?              @relation(fields: [artist_id], references: [id])
   title                String

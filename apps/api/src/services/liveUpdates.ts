@@ -38,7 +38,7 @@ async function bookingReaders(bookingId: string): Promise<string[]> {
     where: { OR: [staff({ studio_id: booking.studio_id }), { role: 'OIANO_ADMIN' }] },
     select: { id: true },
   });
-  return [booking.artist.user_id, booking.project?.producer.user_id, ...staffAndOperators.map((user) => user.id)]
+  return [booking.artist.user_id, booking.project?.producer?.user_id, ...staffAndOperators.map((user) => user.id)]
     .filter((id): id is string => Boolean(id));
 }
 

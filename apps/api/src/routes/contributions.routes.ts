@@ -112,7 +112,9 @@ contributionsRouter.patch('/credits/:creditId/respond', async (req: any, res, ne
     });
     if (claimed.count !== 1) throw new AppError('This credit has already been answered', 409);
     const updated = await prisma.projectCredit.findUniqueOrThrow({ where: { id: credit.id } });
-    await createNotification({
+    // Only a producer drafts credits today, so a credit's project has one; an
+    // artist-started project has none to notify.
+    if (credit.project.producer) await createNotification({
       user_id: credit.project.producer.user_id,
       type: 'CREDIT_RESPONSE', category: 'PROJECT',
       title: `Project credit ${status.toLowerCase()}`,
@@ -190,7 +192,7 @@ contributionsRouter.patch('/:id/respond', async (req: any, res, next) => {
     });
 
     const decisionLabel = data.decision === 'ACCEPT' ? 'accepted' : data.decision === 'DECLINE' ? 'declined' : 'requested a correction to';
-    await createNotification({
+    if (participant.project.producer) await createNotification({
       user_id: participant.project.producer.user_id,
       type: 'CONTRIBUTION_RESPONSE', category: 'PROJECT',
       title: `Contribution invitation ${decisionLabel}`,

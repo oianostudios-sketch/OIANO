@@ -42,7 +42,7 @@ async function conversationMembers(project: NonNullable<Awaited<ReturnType<typeo
   ]);
   return new Set([
     project.artist?.user_id,
-    project.producer.user_id,
+    project.producer?.user_id,
     ...project.participants.map(participant => participant.participant_ref_id),
     ...engineers.map(user => user.id),
     ...admins.map(user => user.id),

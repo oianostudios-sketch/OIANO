@@ -11,6 +11,29 @@ export const artistProjectsRouter = Router();
 artistProjectsRouter.use(authenticate, requireRole('ARTIST'));
 artistProjectsRouter.use(auditSuccessfulMutation);
 
+// ── POST /api/artist-projects — an artist starts a project of their own ──────
+// The project belongs to the artist who starts it and has no producer, so producer
+// routes, which scope by producer_id, never see it. Its sessions, messages and
+// Passport visibility follow the artist routes already in place.
+artistProjectsRouter.post('/', async (req: any, res, next) => {
+  try {
+    const data = z.object({
+      title: z.string().trim().min(1).max(200),
+      phase: z.enum(['PRE_PRODUCTION', 'TRACKING', 'EDITING', 'MIXING', 'MASTERING', 'DELIVERED']).optional(),
+      notes: z.string().trim().max(2000).optional(),
+    }).strict().parse(req.body);
+
+    const artist = await prisma.artist.findUnique({ where: { user_id: req.userId }, select: { id: true } });
+    if (!artist) throw new AppError('Artist profile not found', 404);
+
+    const project = await prisma.project.create({
+      data: { title: data.title, phase: data.phase, notes: data.notes || undefined, artist_id: artist.id, producer_id: null },
+      select: { id: true, title: true, phase: true, notes: true, is_active: true, is_public: true, artist_id: true, producer_id: true, created_at: true, updated_at: true },
+    });
+    res.status(201).json(project);
+  } catch (err) { next(err); }
+});
+
 artistProjectsRouter.get('/', async (req: any, res, next) => {
   try {
     const artist = await prisma.artist.findUnique({
